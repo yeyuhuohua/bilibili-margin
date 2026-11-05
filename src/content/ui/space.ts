@@ -95,7 +95,7 @@ export class SpaceApp {
     s.main.append(hero, barMark, bar, this.list, this.status, this.sentinel);
     new IntersectionObserver(([e]) => { bar.classList.toggle('stuck', !e.isIntersecting && e.boundingClientRect.top < 80); }, { root: s.app, rootMargin: '-72px 0px 0px 0px', threshold: 0 }).observe(barMark);
 
-    spaceInfo(this.mid).then((info) => { this.info = info; hero.replaceWith(this.hero(info)); document.title = `${info.name} · 映间`; this.paintTabs(tabs); })
+    spaceInfo(this.mid).then((info) => { this.info = info; hero.replaceWith(this.hero(info)); this.paintTabs(tabs); })
       .catch((e) => hero.replaceWith(h('section', { class: 'sp-hero' }, h('div', { class: 'sp-banner' }), h('div', { class: 'sp-id' }, h('div', { class: 'sp-who' }, h('h1', {}, `UID ${this.mid}`), h('p', { class: 'sp-sign' }, `资料加载失败：${(e as Error).message}`))))));
     new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) this.load(); }, { root: s.app, rootMargin: '900px 0px' }).observe(this.sentinel);
     this.shell.filter.onChange(() => this.applyFilters());

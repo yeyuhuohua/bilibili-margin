@@ -37,7 +37,6 @@ export class HistoryApp {
 
   constructor(settings: Settings) {
     this.shell = new PageShell(settings, 'hist');
-    document.title = '历史记录 · 映间';
     this.render();
   }
 

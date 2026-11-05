@@ -26,6 +26,7 @@ import { createContextMenu } from './context-menu';
 import { bindCardMenu } from './card-menu';
 import { createLaterDrawer } from './drawer';
 import { reducedMotion } from '../motion';
+import { createBackTop } from './back-top';
 import css from '../styles/index';
 
 type Tab = 'rcmd' | 'popular' | 'classic';
@@ -251,6 +252,7 @@ export class MarginApp {
       later.el,
       cm.el,
     );
+    this.app.append(createBackTop(this.app, main));
     // 侧板开着时背景定格：侧板的毛玻璃（backdrop-filter）只有在底下画面变化时才需要每帧重算（v0.45）
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); this.bg.hold('sheet', on); });
     this.root.append(this.app);

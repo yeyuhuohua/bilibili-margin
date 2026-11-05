@@ -11,7 +11,6 @@ import { cachedTags } from '../tags';
 import { fmtCount, h, icon, ICONS } from './dom';
 import { PageShell } from './shell';
 import { targetOfDyn } from '../filter-targets';
-import { reducedMotion } from '../motion';
 
 const TYPES: [FeedType, string][] = [['all', '全部'], ['video', '视频投稿'], ['pgc', '追番追剧'], ['article', '专栏']];
 const ext = { target: '_blank', rel: 'noopener' };
@@ -38,7 +37,6 @@ export class FeedApp {
 
   constructor(settings: Settings) {
     this.shell = new PageShell(settings, 'feed');
-    document.title = '动态 · 映间';
     const t = new URLSearchParams(location.search).get('tab');
     this.type = t === 'video' || t === 'pgc' || t === 'article' ? t : 'all';
     this.render();
@@ -69,22 +67,11 @@ export class FeedApp {
       h('div', { class: 'bar-row fd-bar' }, this.tabs),
       this.list, this.status, this.sentinel);
     s.main.append(h('div', { class: 'fd' }, left, center, right));
-    const top = h('button', { class: 'fd-top', type: 'button', title: '返回顶部', 'aria-label': '返回顶部', hidden: '' }, icon(ICONS.top));
-    const syncTop = () => {
-      const enough = s.app.scrollHeight > s.app.clientHeight + 1;
-      top.hidden = !enough || s.app.scrollTop < 480;
-    };
-    top.addEventListener('click', () => s.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' }));
-    s.app.append(top);
-    syncTop();
-    const topResize = new ResizeObserver(syncTop);
-    topResize.observe(s.app);
-    topResize.observe(s.main);
     new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) this.load(); }, { root: s.app, rootMargin: '1200px 0px' }).observe(this.sentinel);
     // 动态流同时用 compileDynFilter（含转发内容）和 FilterRuntime，条件变化后重新拉取一次
     this.shell.filter.onChange(() => this.reload());
     let st = 0;
-    s.app.addEventListener('scroll', () => { syncTop(); clearTimeout(st); st = window.setTimeout(() => this.fill(), 160); }, { passive: true });
+    s.app.addEventListener('scroll', () => { clearTimeout(st); st = window.setTimeout(() => this.fill(), 160); }, { passive: true });
 
     this.renderHot(right);
     nav().then((n) => {
