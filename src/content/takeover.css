@@ -373,6 +373,12 @@ html.margin-reduce .sp-menu { animation: none; }
 .fd-tabs { gap: 24px; }
 .fd-tabs .tab { font-size: 20px; }
 .fd-list { max-width: none; margin-top: 0; }
+.fd-top { position: fixed; right: 24px; bottom: 24px; z-index: 35; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: color-mix(in srgb, var(--surface) 82%, transparent); color: var(--ink); box-shadow: var(--ring), var(--sh-sm); backdrop-filter: blur(18px) saturate(1.5); cursor: pointer; transition: transform .2s var(--ease-out), background-color .2s var(--ease-out); }
+.fd-top:hover { transform: translateY(-2px); background: var(--surface); }
+.fd-top:active { transform: translateY(0) scale(.96); }
+.fd-top svg { width: 20px; height: 20px; }
+.fd-top[hidden] { display: none; }
+@media (max-width: 900px) { .fd-top { right: 16px; bottom: 16px; } }
 .fd-hot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .fd-hot-list a { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 8px 0; font-size: 14px; color: var(--ink); border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
 .fd-hot-list li:first-child a { border-top: 0; }

@@ -441,7 +441,7 @@ html.margin-watch .usercard-wrap .btn-box { display: flex !important; gap: 8px; 
 html.margin-watch .usercard-wrap .btn-box a { flex: 1; display: inline-flex !important; align-items: center; justify-content: center; gap: 4px; width: auto !important; height: 36px !important; margin: 0 !important; border-radius: 999px !important; font-size: 14px !important; font-weight: 500 !important; border: 0 !important; transition: transform 150ms cubic-bezier(.23, 1, .32, 1), opacity 150ms; }
 html.margin-watch .usercard-wrap .btn-box a:active { transform: scale(.97); }
 html.margin-watch .usercard-wrap .btn-box .like { background: var(--m-ink) !important; color: var(--m-surface) !important; }
-html.margin-watch .usercard-wrap .btn-box .like .plus i { color: inherit !important; }
+html.margin-watch .usercard-wrap .btn-box .like .plus, html.margin-watch .usercard-wrap .btn-box .like .plus i, html.margin-watch .usercard-wrap .btn-box .like .plus i::before { color: inherit !important; -webkit-text-fill-color: currentColor !important; }
 html.margin-watch .usercard-wrap .btn-box .like.is-followed, html.margin-watch .usercard-wrap .btn-box .liked { background: var(--m-chip) !important; color: var(--m-muted) !important; }
 html.margin-watch .usercard-wrap .btn-box .message { background: var(--m-chip) !important; color: var(--m-ink) !important; box-shadow: inset 0 0 0 1px var(--m-line) !important; }
 html.margin-watch .usercard-wrap .btn-box a:hover { opacity: .88; }

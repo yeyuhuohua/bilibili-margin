@@ -32,26 +32,28 @@ export function createHistoryDrawer(): Panel {
   const panel = h('aside', {
     role: 'dialog', 'aria-modal': 'true', 'aria-label': '历史记录', tabindex: '-1',
     style: `position:fixed;top:0;right:0;height:100vh;width:min(${WIDTH}px,92vw);display:flex;flex-direction:column;`
-      + 'background:var(--card,#1b1d21);color:var(--foreground,#eee);box-shadow:-24px 0 60px rgba(0,0,0,.45);'
+      + 'background:var(--surface,#fff);color:var(--ink,#17181a);box-shadow:-24px 0 60px rgba(0,0,0,.45);'
       + 'transform:translateX(102%);transition:transform .34s cubic-bezier(.22,.61,.36,1);z-index:61',
   }, head, col);
   const scrim = h('div', {
     style: 'position:fixed;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .3s;z-index:60',
   });
-  const el = h('div', { hidden: '' }, scrim, panel);
+  const el = h('div', { hidden: '', style: 'position:fixed;inset:0;z-index:2147483600' }, scrim, panel);
 
   let cursor: Cursor | null = null;
   let loaded = false;
   let loading = false;
   let done = false;
   let returnTo: HTMLElement | null = null;
+  let home: HTMLElement | null = null;
 
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
 
   function open(): void {
     returnTo = document.activeElement as HTMLElement | null;
     el.hidden = false;
-    document.body.append(el);
+    home ??= el.parentElement;
+    (home ?? document.body).append(el);
     requestAnimationFrame(() => { panel.style.transform = 'translateX(0)'; scrim.style.opacity = '1'; scrim.style.pointerEvents = 'auto'; });
     document.addEventListener('keydown', onKey, true);
     scrim.onclick = () => close();

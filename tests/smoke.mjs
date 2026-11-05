@@ -321,6 +321,70 @@ for (const theme of THEMES) {
       return m;
     });
 
+    await feature('space-history-drawer', async () => {
+      await reset();
+      await page.goto('https://space.bilibili.com/1/video', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        return [...(r?.querySelectorAll('.sp-tile') ?? [])].some((e) => e.textContent?.trim() === '历史记录');
+      }, null, { timeout: 15_000 });
+      await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        [...(r?.querySelectorAll('.sp-tile') ?? [])].find((e) => e.textContent?.trim() === '历史记录')?.click();
+      });
+      await page.waitForFunction(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const panels = [...(r?.querySelectorAll('aside[aria-label="历史记录"]') ?? []), ...document.querySelectorAll('aside[aria-label="历史记录"]')];
+        return panels.some((p) => !p.parentElement?.hidden && p.getBoundingClientRect().width > 0);
+      }, null, { timeout: 8000 });
+      await sleep(400);
+      return page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const panels = [...(r?.querySelectorAll('aside[aria-label="历史记录"]') ?? []), ...document.querySelectorAll('aside[aria-label="历史记录"]')];
+        const p = panels.find((x) => !x.parentElement?.hidden && x.getBoundingClientRect().width > 0);
+        const wrap = p?.parentElement;
+        const top = r?.elementFromPoint?.(innerWidth - 20, 100) ?? document.elementFromPoint(innerWidth - 20, 100);
+        const m = [];
+        if (!wrap || getComputedStyle(wrap).zIndex !== '2147483600') m.push('history drawer layer is below the app');
+        if (!p || !(top === p || p.contains(top))) m.push('history drawer is not clickable at the top layer');
+        if (p) {
+          const probe = document.createElement('span');
+          probe.style.cssText = 'color:var(--ink);background:var(--surface)';
+          p.append(probe);
+          const expected = getComputedStyle(probe);
+          const panel = getComputedStyle(p);
+          if (panel.color !== expected.color || panel.backgroundColor !== expected.backgroundColor) m.push('history drawer does not follow the light theme');
+          probe.remove();
+        }
+        return m;
+      });
+    });
+
+    await feature('usercard-plus-contrast', async () => {
+      await reset();
+      await page.goto(WATCH, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.documentElement.classList.contains('margin-watch'), null, { timeout: 15_000 });
+      await page.evaluate(() => {
+        const style = document.createElement('style');
+        style.textContent = '.usercard-wrap .like .plus, .usercard-wrap .like .plus i { color:#fff; -webkit-text-fill-color:#fff; }';
+        document.head.append(style);
+        const card = document.createElement('div');
+        card.className = 'usercard-wrap';
+        card.innerHTML = '<div class="btn-box"><a class="like"><span class="plus"><i></i></span>关注</a></div>';
+        document.body.append(card);
+      });
+      return page.evaluate(() => {
+        const icon = document.querySelector('.usercard-wrap .like .plus i');
+        if (!icon) return ['user card plus icon missing'];
+        const expected = getComputedStyle(icon.closest('.like')).color;
+        const m = [];
+        if (getComputedStyle(icon).color !== expected) m.push('plus icon color mismatch');
+        if (getComputedStyle(icon).webkitTextFillColor !== expected) m.push('plus icon text fill mismatch');
+        if (getComputedStyle(icon, '::before').webkitTextFillColor !== expected) m.push('plus icon pseudo fill mismatch');
+        return m;
+      });
+    });
+
     await feature('native-space-light', async () => {
       await reset();
       await seed({ theme: 'light' });
@@ -432,6 +496,40 @@ for (const theme of THEMES) {
         return m;
       }));
       return miss;
+    });
+
+    await feature('feed-back-top', async () => {
+      await reset();
+      await page.goto('https://t.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-top'), null, { timeout: 15_000 });
+      const m = [];
+      if (await page.evaluate(() => !document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-top')?.hidden)) m.push('back-top visible before scrolling');
+      await page.evaluate(() => {
+        const app = document.getElementById('margin-root')?.shadowRoot?.querySelector('.app');
+        if (app) { app.scrollTop = 600; app.dispatchEvent(new Event('scroll')); }
+      });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-top')?.hidden === false, null, { timeout: 3000 }).catch(() => {});
+      await page.evaluate(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-top')?.click());
+      await page.waitForFunction(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const app = r?.querySelector('.app');
+        return app?.scrollTop === 0 && r?.querySelector('.fd-top')?.hidden;
+      }, null, { timeout: 5000 }).catch(() => {});
+      const after = await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        return { top: r?.querySelector('.app')?.scrollTop, hidden: r?.querySelector('.fd-top')?.hidden };
+      });
+      if (after.top !== 0 || !after.hidden) m.push('back-top did not return to the top and hide');
+      const short = await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const app = r?.querySelector('.app');
+        const main = r?.querySelector('main');
+        if (main) main.style.display = 'none';
+        app?.dispatchEvent(new Event('scroll'));
+        return { insufficient: app ? app.scrollHeight <= app.clientHeight + 1 : false, hidden: r?.querySelector('.fd-top')?.hidden };
+      });
+      if (!short.insufficient || !short.hidden) m.push('back-top remains visible when content is too short');
+      return m;
     });
 
     await feature('tag-filter-home', async () => {
