@@ -53,6 +53,6 @@
 
 ## 验证
 
-- `npm run build` 通过。
+- `pnpm run build` 通过。
 - smoke 新增 `yt-home`：顶栏 / 侧栏 / chips / 三列网格 / 卡片头像行存在。
 - 原有 smoke 全量通过（默认仍是映间首页）。

@@ -4,10 +4,11 @@
   "private": true,
   "description": "映间 MARGIN — 一个重新设计的 B 站首页浏览器扩展",
   "type": "module",
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
   "scripts": {
     "build": "tsc --noEmit && node scripts/build.mjs",
-    "pack": "npm run build && cd dist && rm -f ../margin.zip && zip -qrX ../margin.zip .",
-    "pack:firefox": "npm run pack && node scripts/firefox.mjs",
+    "pack": "pnpm run build && cd dist && rm -f ../margin.zip && zip -qrX ../margin.zip .",
+    "pack:firefox": "pnpm run pack && node scripts/firefox.mjs",
     "test:smoke": "node tests/smoke.mjs",
     "test:unit": "vitest run",
     "fonts": "python3 scripts/slice-fonts.py"

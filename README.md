@@ -110,14 +110,15 @@
 
 ## 开发与贡献
 
-使用 Node.js 22 安装依赖并构建：
+使用 Node.js 22 和 pnpm 安装依赖并构建：
 
 ```bash
-npm ci
-npm run build
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run build
 ```
 
-构建结果在 `dist/`，可直接作为解压扩展加载。在提供 `zip` 命令的环境中运行 `npm run pack`，会生成 `margin.zip`。
+构建结果在 `dist/`，可直接作为解压扩展加载。在提供 `zip` 命令的环境中运行 `pnpm run pack`，会生成 `margin.zip`。
 
 页面使用原生 TypeScript、CSS 和 Shadow DOM；Vite 按路由拆分页面模块，后台 service worker 负责合并足迹计时，中文字体按字符范围分包。
 

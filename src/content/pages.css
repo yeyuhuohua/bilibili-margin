@@ -44,7 +44,7 @@ html.margin-search .search-input-wrap {
 }
 html.margin-search[data-margin-theme="dark"] .search-input-wrap { box-shadow: inset 0 1px 0 rgb(255 255 255 / .08), var(--sh-sm) !important; }
 html.margin-search .search-input-wrap:focus-within { background: var(--m-surface) !important; border-color: color-mix(in srgb, var(--m-ink) 18%, transparent) !important; }
-html.margin-search .search-input-el { flex: 1 !important; padding: 0 !important; margin: 0 !important; text-align: left !important; font: 400 14px/1 "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif !important; color: var(--m-ink) !important; letter-spacing: 0; }
+html.margin-search .search-input-el { flex: 1 !important; padding: 0 !important; margin: 0 !important; text-align: left !important; font: 400 14px/1 "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", system-ui, sans-serif !important; color: var(--m-ink) !important; letter-spacing: 0; }
 html.margin-search .search-input-el::placeholder { color: var(--m-faint) !important; }
 html.margin-search .search-input-wrap svg, html.margin-search .search-input-wrap .search-input-icon { color: var(--m-faint) !important; width: 18px; height: 18px; }
 html.margin-search .search-button { display: none !important; }
@@ -148,9 +148,21 @@ html.margin-space-native .nav-tab__item--active .nav-tab__item-num, html.margin-
 html.margin-space-native .nav-tab-cursor { background: var(--m-ink) !important; }
 html.margin-space-native .vui_sidebar-item { border-radius: 12px !important; }
 html.margin-space-native .vui_sidebar-item--active, html.margin-space-native .playall-btn, html.margin-space-native .action-btn.blue,
-html.margin-space-native .radio-filter__item--active, html.margin-space-native .vui_button--active-blue,
+html.margin-space-native .radio-filter__item--active, html.margin-space-native .vui_button--blue:not(.vui_button--plain), html.margin-space-native .vui_button--active-blue,
 html.margin-space-native .vui_pagenation--btn.vui_button--active { background: var(--m-ink) !important; border-color: var(--m-ink) !important; color: var(--m-canvas) !important; }
 html.margin-space-native .vui_sidebar-item--active *, html.margin-space-native .playall-btn *, html.margin-space-native .radio-filter__item--active * { color: var(--m-canvas) !important; }
+html.margin-space-native .space-follow-btn, html.margin-space-native .space-follow-btn:hover { color: var(--m-canvas) !important; background-color: var(--m-ink) !important; border-color: var(--m-ink) !important; }
+html.margin-space-native .space-follow-btn .space-follow-btn-icon { color: var(--m-canvas) !important; }
+html.margin-skin .usercard-wrap .btn-box .like, html.margin-skin .usercard-wrap .btn-box .like:hover { background: var(--m-ink) !important; color: var(--m-canvas) !important; }
+html.margin-skin .usercard-wrap .btn-box .like .plus i { color: inherit !important; }
+html.margin-skin button#follow, html.margin-skin button#follow:hover { color: var(--m-canvas) !important; background: var(--m-ink) !important; border-color: var(--m-ink) !important; }
+html.margin-skin button#follow > span, html.margin-skin button#follow bili-icon { color: inherit !important; }
+html.margin-space-native .follow-btn__trigger.unfollow, html.margin-space-native .follow-btn__trigger.unfollow:hover { color: var(--m-canvas) !important; background-color: var(--m-ink) !important; }
+html.margin-space-native .vui_checkbox--checked .vui_checkbox--input-box::after { border-color: var(--m-canvas) !important; }
 html.margin-space-native .playall-btn, html.margin-space-native .radio-filter__item, html.margin-space-native .vui_pagenation--btn { border-radius: 999px !important; }
 html.margin-space-native .bili-video-card__cover, html.margin-space-native .bili-cover-card, html.margin-space-native .bili-video-card__image,
 html.margin-space-native .favlist-info-cover, html.margin-space-native .bili-video-card__image img { border-radius: 12px !important; }
+html.margin-space-native .upinfo-detail__top .nickname { color: var(--m-ink) !important; text-shadow: none !important; }
+html.margin-space-native :is(.view-switcher__trigger, .toutu-editor-trigger) { color: var(--m-ink) !important; background-color: var(--m-chip) !important; border-color: var(--m-line) !important; }
+html.margin-space-native :is(.view-switcher__trigger, .toutu-editor-trigger):hover { background-color: color-mix(in srgb, var(--m-ink) 10%, var(--m-surface)) !important; }
+html.margin-space-native .nav-bar { background-color: color-mix(in srgb, var(--m-canvas) 88%, transparent) !important; box-shadow: 0 1px 0 var(--m-line) !important; backdrop-filter: blur(18px) saturate(1.4); }

@@ -21,9 +21,9 @@ html.margin-skin[data-margin-theme="dark"] {
 html.margin-skin {
   --m-canvas: #f5f4f1; --m-surface: #ffffff; --m-ink: #17181a; --m-muted: #5f6167; --m-faint: #66686d;
   --m-line: rgb(23 24 26 / .09); --m-chip: rgb(23 24 26 / .05); --m-accent: #00aeec;
-  --m-serif: var(--margin-title, "Instrument Serif", "Margin Serif SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif);
-  --m-mono: var(--margin-mono, "Geist Mono", "Margin Sans SC", ui-monospace, SFMono-Regular, Menlo, monospace);
-  --m-sans: var(--margin-sans, "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+  --m-serif: var(--margin-title, "Instrument Serif", "Margin Serif SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", serif);
+  --m-mono: var(--margin-mono, "Geist Mono", "Margin Sans SC", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", ui-monospace, SFMono-Regular, Menlo, monospace);
+  --m-sans: var(--margin-sans, "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", system-ui, sans-serif);
   --m-radius: calc(16px * var(--margin-rk, 1));
 
   --bg1: #ffffff; --bg2: #f5f4f1; --bg3: #efeeea; --bg1_float: #ffffff; --bg2_float: #f1f0ec;

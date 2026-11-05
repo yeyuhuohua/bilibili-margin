@@ -25,12 +25,18 @@ function feedItem(i, kind) {
   if (kind === 'av') { d.desc = { text: '新视频上线：这期把三家播放器的进度条拆开来看。' }; d.major = { archive: { bvid: v.bvid, title: v.title, cover: v.pic, duration_text: mmss(v.dur), stat: { play: `${(v.play / 1e4).toFixed(1)}万` }, desc: v.desc } }; }
   if (kind === 'draw') d.major = { opus: { title: '这周的字体笔记', summary: { text: '霞鹜新致宋的标点挤压做得很舒服。' }, pics: [0, 1, 2].map((j) => ({ url: P[i + j].pic })) } };
   if (kind === 'word') d.major = { opus: { summary: { text: '有人问映间为什么没有 logo。因为页面本身就是名片。' } } };
-  return { id_str: String(900000 + i), type: kind, modules: m };
+  return { id_str: String(900000 + i), type: kind, modules: m, basic: { comment_type: 1, comment_id_str: String(800000 + i) } };
 }
 function feedItems() {
   const items = [feedItem(1, 'av'), feedItem(2, 'draw'), feedItem(3, 'word'), feedItem(4, 'av')];
   const fw = feedItem(5, 'word');
-  fw.modules.module_dynamic.desc = { text: '转给大家看看' };
+  fw.modules.module_dynamic.major.opus.summary = {
+    text: '转给大家看看[给心心][给心心][给心心]',
+    rich_text_nodes: [
+      { orig_text: '转给大家看看', text: '转给大家看看', type: 'RICH_TEXT_NODE_TYPE_TEXT' },
+      { orig_text: '[给心心]', text: '[给心心]', type: 'RICH_TEXT_NODE_TYPE_EMOJI', emoji: { icon_url: P[2].pic, text: '[给心心]', size: 1 } },
+    ],
+  };
   fw.orig = feedItem(6, 'av');
   items.splice(2, 0, fw);
   return items;
@@ -82,6 +88,8 @@ export function apiBody(u) {
   if (u.includes('web-dynamic/v1/feed/all')) return { code: 0, data: { update_baseline: '1000', items: feedItems(), has_more: false, offset: '' } };
   if (u.includes('web-dynamic/v1/feed/space')) return { code: 0, data: { items: feedItems(), offset: '', has_more: false } };
   if (u.includes('web-dynamic/v1/portal')) return { code: 0, data: { up_list: { items: P.slice(0, 12).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, has_update: i % 3 === 0 })) }, live_users: { count: 2, items: P.slice(12, 14).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, title: ['今晚通宵剪片', '字体设计直播'][i], room_id: 1000 + i })) } } };
+  if (u.includes('/x/relation/followings?')) return { code: 0, data: { total: 12, list: P.slice(0, 12).map((v) => ({ mid: v.mid, uname: v.name, face: v.face })) } };
+  if (u.includes('/x/v2/reply')) return { code: 0, data: { page: { acount: 1 }, replies: [{ rpid: 1, mid: P[1].mid, member: { uname: P[1].name, avatar: P[1].face }, content: { message: '前排[liyuu 动态表情_可爱][liyuu 动态表情_可爱][liyuu 动态表情_可爱]支持', emote: { '[liyuu 动态表情_可爱]': { url: P[2].pic } } }, like: 12, ctime: NOW - 120, rcount: 0 }] } };
   if (u.includes('search/square')) return { code: 0, data: { trending: { list: ['S16 全球总决赛', '液态玻璃效果怎么做', '万字细嗦警匪片', '塔图姆 40 分', '一位大学老师的 36 岁'].map((k) => ({ keyword: k, show_name: k })) } } };
   if (u.includes('history/shadow') && !u.includes('set')) return { code: 0, data: false };
   if (u.includes('history/cursor') || u.includes('history/search')) return { code: 0, data: { cursor: { max: 0, view_at: 0, business: '' }, list: historyList(), page: { total: 14 } } };
@@ -171,6 +179,34 @@ const popularHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
 
 /** 原版页面的最小骨架：映间会把它藏起来或在上面换皮 */
 function stubHtml(u) {
+  if (/\/fans\/(?:follow|fans)/.test(u)) return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>关注 - bilibili</title><style>
+    :root { --v_text_white: #fff; --v_brand_blue: var(--brand_blue, #00aeec); --v_brand_blue_hover: var(--brand_blue_hover, #40c5f1); --text_white: #fff; --Lb4: #f1f2f3; }
+    .vui_button--blue, .vui_button--blue:focus { color: var(--v_text_white); background: var(--v_brand_blue); border: 1px solid var(--v_brand_blue); }
+    .vui_button--blue:hover { color: var(--v_text_white); background: var(--v_brand_blue_hover); border-color: var(--v_brand_blue_hover); }
+    .space-follow-btn { color: var(--text_white); background-color: var(--brand_blue); }
+    .space-follow-btn:hover { color: var(--text_white); background-color: var(--Lb4); }
+    #follow, #follow:hover { color: var(--text_white); background: var(--Lb4); }
+    .nickname { color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .4); }
+    .view-switcher__trigger, .toutu-editor-trigger { color: #fff; background: rgb(255 255 255 / .14); border: 1px solid rgb(255 255 255 / .2); }
+    .nav-bar { background: #fff; }
+    .vui_checkbox { --checkbox-active-color: var(--v_brand_blue); }
+    .vui_checkbox--input-box { display: block; width: 14px; height: 14px; background: #fff; }
+    .vui_checkbox--input-box::after { content: " "; border: 2px solid var(--v_text_white); }
+    .vui_checkbox--checked .vui_checkbox--input-box { background: var(--checkbox-active-color); }
+  </style></head><body><div id="app">
+    <div class="upinfo"><div class="upinfo-detail__top"><div class="nickname">夜雨火花</div></div><div class="operations"><div class="view-switcher"><div class="view-switcher__trigger">视角：我自己</div></div><div class="toutu-editor"><div class="toutu-editor-trigger">装扮</div></div></div></div>
+    <nav class="nav-bar">主页 动态 投稿</nav>
+    <div id="native-follow" class="space-follow-btn"><i class="vui_icon space-follow-btn-icon"></i> 关注</div>
+    <div id="new-user-card-main"><button id="follow"><bili-icon></bili-icon><span>关注</span></button></div>
+    <bili-user-profile id="new-user-card-shadow"></bili-user-profile>
+    <label class="vui_checkbox vui_checkbox--checked"><span class="vui_checkbox--input"><span class="vui_checkbox--input-box"></span></span><span class="vui_checkbox--label">同时将此用户加入黑名单</span></label>
+    <button class="vui_button vui_button--blue vui_dialog--btn vui_dialog--btn-confirm">确定</button>
+  </div><script>
+    const profile = document.querySelector('#new-user-card-shadow');
+    const root = profile.attachShadow({ mode: 'closed' });
+    root.innerHTML = '<style>#follow, #follow:hover { color: #fff; background: #f1f2f3; }</style><button id="follow"><bili-icon></bili-icon><span>关注</span></button>';
+    profile.__testShadow = root;
+  </script></body></html>`;
   if (/\/opus\/\d/.test(u)) return opusHtml();
   if (/search\.bilibili\.com/.test(u)) return searchHtml();
   if (/\/v\/popular/.test(u)) return popularHtml();

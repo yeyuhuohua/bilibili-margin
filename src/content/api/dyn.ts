@@ -4,7 +4,7 @@ import { getJSON, postForm, postJSON } from './http';
 /** 一条动态，抽成渲染需要的最小结构 */
 export interface Dyn {
   id: string; type: string; author: string; face: string; mid: number; ts: number; time: string;
-  text: string; title?: string;
+  text: string; emotes: Record<string, string>; title?: string;
   video?: { bvid: string; title: string; cover: string; dur: string; play: string; desc: string; ad?: boolean };
   pics: string[];
   article?: { title: string; cover: string; desc: string; url: string };
@@ -27,9 +27,11 @@ export function toDyn(it: any): Dyn | null {
   const major = d.major ?? {};
   const opus = major.opus;
   const text = (opus?.summary?.text ?? d.desc?.text ?? '').trim();
+  const richNodes = [...(opus?.summary?.rich_text_nodes ?? []), ...(d.desc?.rich_text_nodes ?? [])];
+  const emotes = Object.fromEntries(richNodes.filter((n: any) => n?.emoji?.icon_url).map((n: any) => [n.orig_text || n.text || n.emoji.text, https(n.emoji.icon_url)]).filter(([token]) => token));
   const out: Dyn = {
     id: it.id_str, type: it.type, author: a.name ?? '', face: https(a.face), mid: a.mid ?? 0, ts: a.pub_ts ?? 0, time: a.pub_time ?? '',
-    text, title: opus?.title || undefined, pics: [],
+    text, emotes, title: opus?.title || undefined, pics: [],
     stat: { comment: s.comment?.count ?? 0, forward: s.forward?.count ?? 0, like: s.like?.count ?? 0 },
     url: `https://www.bilibili.com/opus/${it.id_str}`,
     liked: s.like?.status === true, cmtType: Number(it.basic?.comment_type) || undefined, cmtOid: it.basic?.comment_id_str || undefined,
@@ -119,14 +121,16 @@ export async function dynRepost(id: string, text: string): Promise<void> {
     web_repost_src: { dyn_id_str: id },
   }, { platform: 'web' });
 }
-export interface Reply { rpid: number; name: string; face: string; mid: number; text: string; like: number; ts: number; rcount: number }
+export interface Reply { rpid: number; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; like: number; ts: number; rcount: number }
 /** 热门评论第一页（旧版 /x/v2/reply 不要 wbi 签名） */
 export async function dynReplies(type: number, oid: string, ps = 8): Promise<{ list: Reply[]; count: number }> {
   const d = await getJSON<any>('/x/v2/reply', { type, oid, sort: 1, ps, pn: 1 });
   const seen = new Set<number>();
   const list = [...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])].filter((r: any) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps).map((r: any) => ({
     rpid: r.rpid, name: r.member?.uname ?? '', face: https(r.member?.avatar), mid: Number(r.mid) || 0,
-    text: r.content?.message ?? '', like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
+    text: r.content?.message ?? '',
+    emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
+    like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
   }));
   return { list, count: d.page?.acount ?? d.page?.count ?? list.length };
 }

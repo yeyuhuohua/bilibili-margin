@@ -31,7 +31,7 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
   const theme = segmented<Theme>([['auto', '跟随系统'], ['light', '亮色'], ['dark', '暗色']], s0.theme, (v) => save({ theme: v }));
   const watch = toggle(s0.watch, '其他页面重设计', (v) => save({ watch: v }));
   const preview = toggle(s0.hoverPreview, '悬停预览', (v) => save({ hoverPreview: v }));
-  const intro = toggle(s0.intro, '开场动画', (v) => save({ intro: v }));
+  const intro = toggle(s0.intro, '首页过场动画', (v) => save({ intro: v }));
   const reduceM = toggle(s0.reduceMotion, '减少动画', (v) => save({ reduceMotion: v }));
   const foot = toggle(s0.footprint, '足迹热力图', (v) => save({ footprint: v }));
   const wxT = toggle(s0.weather, '天气', (v) => save({ weather: v }));
@@ -397,6 +397,7 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
       block('明暗', null, theme),
       row('封面悬停预览', '鼠标停留半秒后静音播放', preview),
       row('减少动画', '暂停背景、天气和悬停动画，并减少界面过渡；系统减少动态效果始终生效', reduceM),
+      row('首页过场动画', '进入首页时播放；关闭后始终直接显示首页内容', intro),
       row('其他页面重设计', '播放页、搜索页、空间、动态等，只换外观不改功能', watch),
       drawer('字体与缩放', () => { const st = get(); return [st.titleFont === 'sans' ? '无衬线标题' : '衬线标题', st.bodyFont || '', st.zoom !== 100 ? `${st.zoom}%` : ''].filter(Boolean).join(' · '); },
         block('标题字体', '页面标题和大号文字用衬线（宋体）还是无衬线（黑体）', fontS),
@@ -407,7 +408,6 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
       drawer('布局与细节', () => { const st = get(); return [st.cols ? `每行 ${st.cols} 个` : '每行自动', st.radius === 0 ? '直角' : st.radius === 50 ? '小圆角' : st.radius === 150 ? '大圆角' : ''].filter(Boolean).join(' · '); },
         block('圆角', '卡片、按钮、面板的圆角大小；头像这类圆形不受影响', radS),
         block('首页每行视频', '自动按窗口宽度排 6–8 个；也可以固定 4 / 5 / 6 个，卡片更大', cols),
-        row('开场动画', '每次打开浏览器后第一次进首页播放，点一下可跳过', intro),
         row('收藏夹直接展开', '点收藏夹直接列出全部视频，不再先弹出最近 4 个', favD),
         row('账号卡片可拖拽', '关掉后头像下的卡片固定挂着，不能甩动，点一下仍可翻面', idD))),
     h('section', { class: 'group' }, h('h3', {}, '顶栏'),

@@ -5,6 +5,25 @@ import { openLightbox } from './lightbox';
 
 const img = (src: string, w: number, hgt?: number) => h('img', { src: src ? `${src}@${w}w${hgt ? `_${hgt}h_1c` : ''}.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
 const ext = { target: '_blank', rel: 'noopener' };
+
+function replyText(text: string, emotes: Record<string, string>): (Node | string)[] {
+  const out: (Node | string)[] = [];
+  let rest = text;
+  while (rest) {
+    let at = -1, token = '';
+    for (const key of Object.keys(emotes)) {
+      if (!key) continue;
+      const i = rest.indexOf(key);
+      if (i >= 0 && (at < 0 || i < at || (i === at && key.length > token.length))) { at = i; token = key; }
+    }
+    if (at < 0) { out.push(rest); break; }
+    if (at) out.push(rest.slice(0, at));
+    out.push(h('img', { class: 'dy-rem', src: emotes[token], alt: token, title: token, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }));
+    rest = rest.slice(at + token.length);
+  }
+  return out;
+}
+
 /** 动态卡 → 原始数据；屏蔽词变化时重新判断用 */
 export const dynData = new WeakMap<Element, Dyn>();
 
@@ -51,7 +70,7 @@ export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement
 
   // 长文折叠（GitHub #8）：按字数 / 行数判断，不读布局
   const long = !!d.text && (d.text.length > 240 || d.text.split('\n').length > 8);
-  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, d.text) : null;
+  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, ...replyText(d.text, d.emotes)) : null;
   const more = long ? h('button', { type: 'button', class: 'dy-more', 'aria-expanded': 'false', onclick: (e: Event) => {
     e.stopPropagation();
     const on = text!.classList.toggle('fold');
@@ -174,7 +193,7 @@ function actions(d: Dyn): HTMLElement {
         h('a', { class: 'dy-r-face', href: `https://space.bilibili.com/${r.mid}`, ...ext }, h('img', { src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })),
         h('div', { class: 'dy-r-b' },
           h('a', { class: 'dy-r-name', href: `https://space.bilibili.com/${r.mid}`, ...ext }, r.name),
-          h('p', {}, r.text),
+          h('p', {}, ...replyText(r.text, r.emotes)),
           h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.like ? `赞 ${fmtCount(r.like)}` : '', r.rcount ? `${r.rcount} 条回复` : ''].filter(Boolean).join(' · '))))) : [h('div', { class: 'dy-rempty' }, '还没有评论')]));
     }).catch((err) => list.replaceChildren(h('div', { class: 'dy-rempty' }, `评论加载失败：${(err as Error).message}`)));
   });

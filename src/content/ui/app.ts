@@ -196,6 +196,7 @@ export class MarginApp {
       { title: '收藏', icon: ICONS.fav, run: () => this.fav.open() },
       { title: '稍后', icon: ICONS.later, run: () => later.open() },
       { title: '足迹', icon: ICONS.heat, run: () => this.showFoot() },
+      { title: '原版', icon: ICONS.exit, run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
     ] });
     this.sunMoon = head.sunMoon;
     this.head = head;

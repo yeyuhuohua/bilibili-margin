@@ -55,6 +55,7 @@ export class PageShell {
         { title: '收藏', icon: ICONS.fav, run: () => fav.open() },
         { title: '稍后', icon: ICONS.later, run: () => later.open() },
         { title: '设置', icon: ICONS.gear, run: () => this.panel.sheet.open() },
+        { title: '原版', icon: ICONS.exit, run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
       ],
     });
     this.sunMoon = this.head.sunMoon;

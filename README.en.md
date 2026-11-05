@@ -110,14 +110,15 @@ MARGIN is an independent open-source project, **not an official Bilibili product
 
 ## Development and contributions
 
-Use Node.js 22 to install dependencies and build:
+Use Node.js 22 and pnpm to install dependencies and build:
 
 ```bash
-npm ci
-npm run build
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run build
 ```
 
-Load `dist/` as an unpacked extension. In an environment with the `zip` command, `npm run pack` creates `margin.zip`.
+Load `dist/` as an unpacked extension. In an environment with the `zip` command, `pnpm run pack` creates `margin.zip`.
 
 The project uses native TypeScript, CSS and Shadow DOM. Vite splits page modules by route, a background service worker merges activity timing, and Chinese fonts are split by character range.
 

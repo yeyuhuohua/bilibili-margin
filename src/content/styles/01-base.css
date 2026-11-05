@@ -26,10 +26,10 @@
   --canvas: #f5f4f1; --surface: #ffffff; --ink: #17181a; --muted: #5f6167; --faint: #66686d; --accent-text: #006e9a;
   --g: max(32px, calc((100vw - 1440px) / 2));
   --line: rgb(23 24 26 / .09); --chip: rgb(23 24 26 / .05); --accent: #00aeec;
-  --serif: var(--margin-title, "Instrument Serif", "Margin Serif SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif);
-  --sans: var(--margin-sans, "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
-  --display: var(--margin-title, "Instrument Serif", "Margin Serif SC", Georgia, serif);
-  --mono: var(--margin-mono, "Geist Mono", "Margin Sans SC", ui-monospace, SFMono-Regular, Menlo, monospace);
+  --serif: var(--margin-title, "Instrument Serif", "Margin Serif SC", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", serif);
+  --sans: var(--margin-sans, "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", system-ui, sans-serif);
+  --display: var(--margin-title, "Instrument Serif", "Margin Serif SC", Georgia, "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", serif);
+  --mono: var(--margin-mono, "Geist Mono", "Margin Sans SC", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", ui-monospace, SFMono-Regular, Menlo, monospace);
   position: fixed; inset: 0; z-index: 2147483000; overflow-y: auto; overflow-x: hidden;
   background: var(--canvas); color: var(--ink); font: 14px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased; color-scheme: light; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 22%, transparent) transparent;

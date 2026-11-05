@@ -1,6 +1,6 @@
 // 冒烟测试：加载构建好的扩展（dist/），在离线伪造的 B 站上依次打开各个接管页面，
 // 断言扩展没有抛未捕获错误、关键元素都在，并保存亮 / 暗两套 1440 截图。
-//   npm run build && node tests/smoke.mjs
+//   pnpm run build && node tests/smoke.mjs
 // 环境变量：CHROMIUM_PATH 指定浏览器（默认用 Playwright 自带的 chromium），SMOKE_OUT 截图目录（默认 tests/artifacts），
 // SMOKE_THEMES=light,dark，SMOKE_ONLY=home,watch 只跑部分页面。
 import { chromium } from 'playwright';
@@ -13,7 +13,7 @@ const EXT = resolve(process.env.SMOKE_EXT || 'dist');
 const OUT = resolve(process.env.SMOKE_OUT || 'tests/artifacts');
 const THEMES = (process.env.SMOKE_THEMES || 'light,dark').split(',');
 const ONLY = process.env.SMOKE_ONLY ? process.env.SMOKE_ONLY.split(',') : null;
-if (!existsSync(join(EXT, 'manifest.json'))) { console.error('dist/ 不存在，先 npm run build'); process.exit(2); }
+if (!existsSync(join(EXT, 'manifest.json'))) { console.error('dist/ 不存在，先 pnpm run build'); process.exit(2); }
 mkdirSync(OUT, { recursive: true });
 
 const R = "document.getElementById('margin-root')?.shadowRoot";
@@ -198,6 +198,25 @@ for (const theme of THEMES) {
         const idx = (sel) => { const el = main?.querySelector(sel); return el ? kids.indexOf(el) : -1; };
         return idx('.dash') >= 0 && idx('.dash') < idx('.hs-slot') ? [] : ['order button did not move hero down'];
       }));
+      const introProblem = await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const label = [...r?.querySelectorAll('.row-label span') ?? []].find((e) => e.textContent === '首页过场动画');
+        const row = label?.closest('.row');
+        const control = row?.querySelector('[role="switch"]');
+        if (!control) return 'intro switch missing';
+        if (row.closest('.sd')) return 'intro switch is hidden inside a drawer';
+        control.click();
+        return '';
+      });
+      if (introProblem) miss.push(introProblem);
+      await sleep(300);
+      const introSaved = await sw.evaluate(async () => (await chrome.storage.local.get('margin:settings'))['margin:settings']?.intro);
+      if (introSaved !== false) miss.push('intro switch was not saved');
+      await page.evaluate(() => { localStorage.setItem('margin:intro-always', '1'); });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.app.home'), null, { timeout: 15_000 });
+      if (await page.evaluate(() => !!document.getElementById('margin-root')?.shadowRoot?.querySelector('.intro'))) miss.push('intro played while disabled');
+      await page.evaluate(() => { localStorage.removeItem('margin:intro-always'); });
       return miss;
     });
 
@@ -280,6 +299,138 @@ for (const theme of THEMES) {
       });
       await page.goto('about:blank');
       await seed({ ytHome: false });
+      return miss;
+    });
+
+    await feature('original-entry', async () => {
+      await reset();
+      const m = [];
+      for (const [name, url] of [['home', HOME], ['watch', WATCH], ['feed', 'https://t.bilibili.com/']]) {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => {
+          const r = document.getElementById('margin-root')?.shadowRoot ?? document.getElementById('margin-watch-top')?.shadowRoot;
+          return r?.querySelector('.et-btn[aria-label="原版"]');
+        }, null, { timeout: 15_000 }).catch(() => {});
+        const visible = await page.evaluate(() => {
+          const r = document.getElementById('margin-root')?.shadowRoot ?? document.getElementById('margin-watch-top')?.shadowRoot;
+          const b = r?.querySelector('.et-btn[aria-label="原版"]');
+          return !!b && !b.hidden && b.getClientRects().length > 0;
+        });
+        if (!visible) m.push(`${name} original entry missing`);
+      }
+      return m;
+    });
+
+    await feature('native-space-light', async () => {
+      await reset();
+      await seed({ theme: 'light' });
+      await page.goto('https://space.bilibili.com/1/fans/follow', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.documentElement.classList.contains('margin-space-native'), null, { timeout: 15_000 });
+      return page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'color:var(--m-ink);background-color:color-mix(in srgb,var(--m-canvas) 88%,transparent)';
+        document.body.append(probe);
+        const style = getComputedStyle(probe);
+        const text = style.color, background = style.backgroundColor;
+        probe.remove();
+        const m = [];
+        const nickname = document.querySelector('.nickname');
+        if (!nickname || getComputedStyle(nickname).color !== text) m.push('light nickname contrast not applied');
+        if (nickname && getComputedStyle(nickname).textShadow !== 'none') m.push('light nickname shadow remains');
+        for (const sel of ['.view-switcher__trigger', '.toutu-editor-trigger']) {
+          const el = document.querySelector(sel);
+          if (!el || getComputedStyle(el).color !== text) m.push(`${sel} contrast not applied`);
+        }
+        const nav = document.querySelector('.nav-bar');
+        if (!nav || getComputedStyle(nav).backgroundColor !== background) m.push('light nav background not applied');
+        return m;
+      });
+    });
+
+    await feature('native-relation-contrast', async () => {
+      await reset();
+      await seed({ theme: 'dark' });
+      await page.goto('https://space.bilibili.com/1/fans/follow', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.documentElement.classList.contains('margin-space-native'), null, { timeout: 15_000 });
+      await page.hover('#new-user-card-main #follow');
+      return page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'color:var(--m-canvas);background-color:var(--m-ink)';
+        document.body.append(probe);
+        const probeStyle = getComputedStyle(probe);
+        const text = probeStyle.color, background = probeStyle.backgroundColor;
+        probe.remove();
+        const m = [];
+        for (const sel of ['#native-follow', '#new-user-card-main #follow', '.vui_dialog--btn-confirm']) {
+          const el = document.querySelector(sel);
+          if (!el) { m.push(`${sel} missing`); continue; }
+          const style = getComputedStyle(el);
+          if (style.color !== text) m.push(`${sel} text ${style.color} != ${text}`);
+          if (style.backgroundColor !== background) m.push(`${sel} background ${style.backgroundColor} != ${background}`);
+        }
+        const cardIcon = document.querySelector('#new-user-card-main #follow bili-icon');
+        if (cardIcon && getComputedStyle(cardIcon).color !== text) m.push('user card plus icon has wrong color');
+        const shadowFollow = document.querySelector('#new-user-card-shadow')?.__testShadow?.querySelector('#follow');
+        if (!shadowFollow) m.push('shadow user card follow button missing');
+        else {
+          const style = getComputedStyle(shadowFollow);
+          if (style.color !== text || style.backgroundColor !== background) m.push('shadow user card contrast not applied');
+        }
+        const box = document.querySelector('.vui_checkbox--input-box');
+        const mark = box && getComputedStyle(box, '::after').borderRightColor;
+        if (mark !== text) m.push(`checkbox mark ${mark} != ${text}`);
+        return m;
+      });
+    });
+
+    await feature('feed-layout-emotes', async () => {
+      await reset();
+      await page.goto('https://t.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-follow-row'), null, { timeout: 15_000 });
+      const miss = await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const first = r?.querySelector('.fd-follow-row');
+        if (!first) return ['follow list empty'];
+        const m = [];
+        const dynText = r?.querySelector('.dy-text');
+        const font = dynText ? getComputedStyle(dynText).fontFamily : '';
+        if (!font.includes('Arial Unicode MS') || !font.includes('Sinhala MN')) m.push('kaomoji font fallback missing');
+        if (getComputedStyle(first).flexDirection !== 'row') m.push('follow row is not horizontal');
+        const face = first.querySelector('.fd-follow-face')?.getBoundingClientRect();
+        const name = first.querySelector('.fd-follow-name')?.getBoundingClientRect();
+        if (face && name && name.left < face.right) m.push('follow avatar and name overlap');
+        const live = r?.querySelector('.fd-live')?.getBoundingClientRect();
+        const follows = r?.querySelector('.fd-follows')?.getBoundingClientRect();
+        if (!live || !follows || live.top >= follows.top) m.push('live card is not above follows');
+        return m;
+      });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelectorAll('.fd-list .dy-text .dy-rem').length === 3, null, { timeout: 8000 });
+      miss.push(...await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const images = [...r?.querySelectorAll('.fd-list .dy-text .dy-rem') ?? []];
+        const m = [];
+        if (images.length !== 3) m.push(`dynamic emote images ${images.length}`);
+        if (images.some((e) => e.getAttribute('alt') !== '[给心心]')) m.push('dynamic emote alt missing');
+        if ([...r?.querySelectorAll('.fd-list .dy-text') ?? []].some((e) => e.textContent?.includes('[给心心]'))) m.push('raw dynamic emote token still visible');
+        return m;
+      }));
+      await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const card = r?.querySelector('.fd-list .dy:not(.sk)');
+        const button = [...card?.querySelectorAll('.dy-act') ?? []].find((e) => e.textContent?.startsWith('评论'));
+        button?.click();
+      });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelectorAll('.dy-cbox .dy-rem').length === 3, null, { timeout: 8000 });
+      miss.push(...await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const token = '[liyuu 动态表情_可爱]';
+        const images = [...r?.querySelectorAll('.dy-cbox .dy-rem') ?? []];
+        const m = [];
+        if (images.length !== 3) m.push(`emote images ${images.length}`);
+        if (images.some((e) => e.getAttribute('alt') !== token || !e.getAttribute('src')?.startsWith('https://'))) m.push('emote image data missing');
+        if (r?.querySelector('.dy-cbox .dy-r p')?.textContent?.includes(token)) m.push('raw emote token still visible');
+        return m;
+      }));
       return miss;
     });
 

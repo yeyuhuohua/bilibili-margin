@@ -13,17 +13,18 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Unit test (settings / filter / md5 / footprint)
-        run: npm run test:unit
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
+        run: pnpm run test:unit
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run build
       - name: Smoke test (offline mocked bilibili)
-        run: npm run test:smoke
+        run: pnpm run test:smoke
         env:
           SMOKE_BUNDLED: '1'
           SMOKE_OUT: smoke-artifacts
