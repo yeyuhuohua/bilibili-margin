@@ -868,6 +868,131 @@ for (const theme of THEMES) {
       return miss;
     });
 
+    await feature('live-web-fullscreen', async () => {
+      await reset();
+      await page.goto('https://live.bilibili.com/2790818', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-watch-top')?.hidden === false, null, { timeout: 15_000 });
+      await page.evaluate(() => document.body.classList.add('player-full-win', 'over-hidden', 'hide-aside-area'));
+      await page.waitForFunction(() => document.getElementById('margin-watch-top')?.hidden === true, null, { timeout: 3000 }).catch(() => {});
+      const m = await page.evaluate(() => {
+        const miss = [];
+        if (document.getElementById('margin-watch-top')?.hidden !== true) miss.push('top bar still covers the web-fullscreen player');
+        if (!document.documentElement.classList.contains('margin-webscreen')) miss.push('web-fullscreen state missing');
+        return miss;
+      });
+      await page.evaluate(() => document.body.classList.remove('player-full-win', 'over-hidden', 'hide-aside-area'));
+      await page.waitForFunction(() => document.getElementById('margin-watch-top')?.hidden === false, null, { timeout: 3000 }).catch(() => {});
+      m.push(...await page.evaluate(() => {
+        const miss = [];
+        if (document.getElementById('margin-watch-top')?.hidden !== false) miss.push('top bar did not return after leaving web fullscreen');
+        if (document.documentElement.classList.contains('margin-webscreen')) miss.push('web-fullscreen state did not clear');
+        return miss;
+      }));
+      return m;
+    });
+
+    await feature('live-native-sidebar', async () => {
+      await reset();
+      await page.goto('https://live.bilibili.com/2790818', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => {
+        const el = document.querySelector('#sidebar-vm .side-bar-cntr');
+        return el && getComputedStyle(el).display === 'none' && document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.sr');
+      }, null, { timeout: 15_000 }).catch(() => {});
+      return page.evaluate(() => {
+        const miss = [];
+        const bar = document.querySelector('#sidebar-vm .side-bar-cntr');
+        if (!bar) miss.push('native sidebar fixture missing');
+        else if (getComputedStyle(bar).display !== 'none') miss.push('native sidebar still overlaps the scroll ruler');
+        if (!document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.sr')) miss.push('scroll ruler missing');
+        return miss;
+      });
+    });
+
+    await feature('live-dark-rank-contrast', async () => {
+      await reset();
+      await seed({ theme: 'dark' });
+      await page.goto('https://live.bilibili.com/2790818', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.rank-list-ctnr .name')).color === 'rgb(237, 237, 238)', null, { timeout: 15_000 }).catch(() => {});
+      const m = await page.evaluate(() => {
+        const miss = [];
+        const cases = [
+          ['.top3-name', 'rgb(237, 237, 238)'], ['.name', 'rgb(237, 237, 238)'], ['.tab-item.active', 'rgb(237, 237, 238)'],
+          ['.rank', 'rgb(176, 177, 182)'], ['.score', 'rgb(176, 177, 182)'],
+          ['.tab-item.opacity6', 'rgb(176, 177, 182)'], ['.sub-tab-item-text.opacity6', 'rgb(176, 177, 182)'],
+        ];
+        for (const [selector, expected] of cases) {
+          const el = document.querySelector(`.rank-list-ctnr ${selector}`);
+          if (!el) { miss.push(`${selector} missing`); continue; }
+          const style = getComputedStyle(el);
+          if (style.color !== expected) miss.push(`${selector} color ${style.color}`);
+          if (style.opacity !== '1') miss.push(`${selector} opacity ${style.opacity}`);
+        }
+        const active = document.querySelector('.rank-list-ctnr .sub-tab-item-text:not(.opacity6)');
+        if (getComputedStyle(active).color !== 'rgb(255, 102, 153)') miss.push('active rank accent overwritten');
+        return miss;
+      });
+      await reset();
+      return m;
+    });
+
+    await feature('live-dark-panels', async () => {
+      await reset();
+      await seed({ theme: 'dark' });
+      await page.goto('https://live.bilibili.com/2790818', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.gift-sender-panel')).backgroundColor === 'rgb(26, 26, 28)', null, { timeout: 15_000 }).catch(() => {});
+      await page.hover('.danmaku-menu .go-space');
+      const m = await page.evaluate(() => {
+        const miss = [];
+        const cases = [
+          ['.gift-label', 'color', 'rgb(237, 237, 238)'], ['.panel-price', 'color', 'rgb(176, 177, 182)'],
+          ['.gift-item.mouse-in', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'],
+          ['.gift-panel-switch', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.gift-panel-switch svg path', 'fill', 'rgb(237, 237, 238)'],
+          ['.guard-info .title', 'color', 'rgb(237, 237, 238)'], ['.balance-info .title', 'color', 'rgb(237, 237, 238)'],
+          ['.gift-sender-panel', 'backgroundColor', 'rgb(26, 26, 28)'], ['.gift-sender-panel', 'borderRadius', '16px'],
+          ['.gift-banner-root', 'borderRadius', '12px'], ['.gift-banner-root .arrow', 'color', 'rgb(237, 237, 238)'],
+          ['.banner-title span', 'color', 'rgb(237, 237, 238)'], ['.banner-subtitle span', 'color', 'rgb(176, 177, 182)'],
+          ['.feed-bar-section', 'backgroundColor', 'rgba(0, 0, 0, 0)'], ['.feed-button-root .text span', 'color', 'rgb(237, 237, 238)'],
+          ['.feed-button-root .content-box', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.feed-button-root .content-box', 'borderRadius', '999px'],
+          ['.gift-upgrade-item.selected', 'borderRadius', '12px'], ['.gift-upgrade-item.selected .gift-icon', 'borderWidth', '0px'],
+          ['.gift-upgrade-item:not(.selected)', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.gift-upgrade-item:not(.selected)', 'borderColor', 'rgba(0, 0, 0, 0)'], ['.gift-upgrade-item:not(.selected)', 'borderRadius', '12px'],
+          ['.gift-upgrade-item.selected .gift-title', 'color', 'rgb(255, 140, 176)'], ['.gift-upgrade-item:not(.selected) .gift-title', 'color', 'rgb(237, 237, 238)'],
+          ['.gift-upgrade-item.selected .gift-desc span', 'color', 'rgb(255, 140, 176)'], ['.gift-upgrade-item:not(.selected) .gift-desc span', 'color', 'rgb(176, 177, 182)'],
+          ['.official-container-root .gift-panel-background', 'backgroundColor', 'rgb(26, 26, 28)'], ['.official-container-root .gift-panel-background', 'borderRadius', '16px'],
+          ['.official-container-root .single-tab.active .tab-name', 'color', 'rgb(255, 140, 176)'], ['.official-container-root .single-tab:not(.active) .tab-name', 'color', 'rgb(176, 177, 182)'],
+          ['.official-container-root .rights-center-btn', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.official-container-root .rights-txt', 'color', 'rgb(237, 237, 238)'],
+          ['.official-container-root .close-btn', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.official-container-root .gift-rearrange-root svg path', 'fill', 'rgb(176, 177, 182)'],
+          ['.official-container-root .gift-label', 'color', 'rgb(237, 237, 238)'], ['.official-container-root .panel-price', 'color', 'rgb(176, 177, 182)'],
+          ['.official-container-root .gift-item.mouse-in', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'], ['.official-container-root .gift-item.mouse-in', 'borderRadius', '12px'],
+          ['.danmaku-menu', 'borderRadius', '12px'], ['.danmaku-menu .go-space', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'],
+          ['.danmaku-menu .go-space', 'borderRadius', '8px'], ['.danmaku-menu .go-space .clickable span', 'color', 'rgb(237, 237, 238)'],
+          ['.danmaku-menu .at-this-guy .clickable span', 'color', 'rgb(237, 237, 238)'], ['.danmaku-menu .block-this-guy .clickable span', 'color', 'rgb(237, 237, 238)'],
+          ['.danmaku-menu .report-this-guy .clickable span', 'color', 'rgb(237, 237, 238)'],
+          ['.blockSetting', 'backgroundColor', 'rgb(26, 26, 28)'], ['.blockSetting .keyword-input', 'color', 'rgb(237, 237, 238)'],
+          ['.blockSetting .keyword-submit-btn:disabled', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'],
+          ['.blockSetting .keyword-submit-btn .txt', 'color', 'rgb(138, 139, 144)'],
+          ['.blockSetting .list-content', 'backgroundColor', 'rgba(255, 255, 255, 0.06)'],
+          ['.blockSetting .block-list-ctnr', 'backgroundColor', 'rgba(0, 0, 0, 0)'],
+          ['.blockSetting .tab-item.active', 'color', 'rgb(255, 140, 176)'],
+        ];
+        for (const [selector, property, expected] of cases) {
+          const el = document.querySelector(selector);
+          if (!el) { miss.push(`${selector} missing`); continue; }
+          const actual = getComputedStyle(el)[property];
+          if (actual !== expected) miss.push(`${selector} ${property} ${actual}`);
+        }
+        const input = document.querySelector('.blockSetting .keyword-input');
+        if (getComputedStyle(input, '::placeholder').color !== 'rgb(176, 177, 182)') miss.push('keyword placeholder contrast');
+        if (getComputedStyle(document.querySelector('.blockSetting .list-content')).borderRadius !== '12px') miss.push('block list radius');
+        const button = document.querySelector('.blockSetting .keyword-submit-btn');
+        button.disabled = false;
+        if (getComputedStyle(button).backgroundColor !== 'rgb(237, 237, 238)') miss.push('enabled keyword button background');
+        if (getComputedStyle(button.querySelector('.txt')).color !== 'rgb(17, 17, 18)') miss.push('enabled keyword button text');
+        return miss;
+      });
+      await reset();
+      return m;
+    });
+
     await feature('wide-mode', async () => {
       await reset();
       await seed({ wide: true });

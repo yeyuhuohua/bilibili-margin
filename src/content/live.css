@@ -2,6 +2,7 @@
    只换外观：顶栏换成映间顶栏，房间皮肤背景换成画布色，播放器和弹幕栏变圆角卡片。播放器、弹幕、礼物、发言的行为都不动。
    活动页（整页模板 + iframe 里的房间）不处理。 */
 html.margin-live .link-navbar-ctnr, html.margin-live #link-navbar-vm { display: none !important; }
+html.margin-live #sidebar-vm .side-bar-cntr { display: none !important; }
 html.margin-live, html.margin-live body, html.margin-live .live-room-app, html.margin-live .app-content {
   background-color: var(--m-canvas) !important; background-image: none !important;
 }
@@ -23,6 +24,59 @@ html.margin-live #chat-control-panel-vm .chat-input-ctnr, html.margin-live #chat
   background: var(--m-chip) !important; color: var(--m-ink) !important; border-color: var(--m-line) !important; border-radius: 12px !important;
 }
 html.margin-live .rank-list-section, html.margin-live .rank-list-ctnr { background: var(--m-surface) !important; border-bottom: 1px solid var(--m-line) !important; }
+html.margin-live[data-margin-theme="dark"] #aside-area-vm .rank-list-ctnr :is(.top3-name, .name, .tab-item) { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] #aside-area-vm .rank-list-ctnr :is(.rank, .score) { color: var(--m-muted) !important; opacity: 1 !important; }
+html.margin-live[data-margin-theme="dark"] #aside-area-vm .rank-list-ctnr :is(.tab-item, .sub-tab-item-text).opacity6 { color: var(--m-muted) !important; opacity: 1 !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section :is(.gift-label, .magic-adventures-text) { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section .panel-price { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section .gift-item:is(:hover, .mouse-in) { background: var(--m-chip) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section .magic-adventures-pic { background: transparent !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section .gift-panel-switch { background: var(--m-chip) !important; color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section .gift-panel-switch svg path { fill: currentColor !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section :is(.guard-info, .balance-info) .title { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-control-section :is(.z-gift-sender-panel, .gift-presets-wrap) .gift-sender-panel { background: var(--m-surface) !important; color: var(--m-ink) !important; border: 1px solid var(--m-line) !important; border-radius: 16px !important; box-shadow: var(--sh-lg) !important; padding: 8px !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-banner-root { background: color-mix(in srgb, #ff6699 12%, var(--m-surface)) !important; color: var(--m-ink) !important; border: 1px solid color-mix(in srgb, #ff6699 24%, var(--m-line)) !important; border-radius: 12px !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .banner-title { font-weight: 600 !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .banner-title, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .banner-title * { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .banner-subtitle, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .banner-subtitle * { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel :is(.arrow, [class*="arrow"], [class*="icon"]) { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-banner-root svg, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-banner-root svg path { fill: currentColor !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .feed-bar-section { background: transparent !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .feed-button-root .content-box { background: var(--m-chip) !important; border-color: var(--m-line) !important; border-radius: 999px !important; box-shadow: none !important; color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .feed-button-root .text, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .feed-button-root .text * { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item { box-sizing: border-box !important; background: var(--m-chip) !important; color: var(--m-ink) !important; border: 1px solid transparent !important; border-radius: 12px !important; box-shadow: none !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item.selected { background: color-mix(in srgb, #ff6699 10%, var(--m-surface)) !important; border-color: color-mix(in srgb, #ff6699 55%, var(--m-line)) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item:not(.selected):hover { border-color: var(--m-line) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item .gift-icon { background: transparent !important; border: 0 !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item .gift-title { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item.selected .gift-title { color: #ff8cb0 !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item .gift-desc, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item .gift-desc * { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item.selected .gift-desc, html.margin-live[data-margin-theme="dark"] .gift-sender-panel .gift-upgrade-item.selected .gift-desc * { color: #ff8cb0 !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .gift-panel-background { background: var(--m-surface) !important; border: 1px solid var(--m-line) !important; border-radius: 16px !important; box-shadow: var(--sh-lg) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .single-tab .tab-name { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .single-tab.active .tab-name { color: #ff8cb0 !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .gift-rearrange-root svg path { fill: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .rights-center-btn { background: var(--m-chip) !important; color: var(--m-ink) !important; border: 1px solid var(--m-line) !important; border-radius: 8px !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .rights-txt { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .close-btn { display: grid !important; place-items: center !important; background: var(--m-chip) !important; background-image: none !important; color: var(--m-ink) !important; border: 1px solid var(--m-line) !important; border-radius: 50% !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .close-btn::before { content: "×" !important; color: var(--m-ink) !important; font: 16px/1 var(--m-sans) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .gift-label { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .panel-price { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] .official-container-root .gift-item:is(:hover, .mouse-in) { background: var(--m-chip) !important; border-radius: 12px !important; }
+html.margin-live[data-margin-theme="dark"] .chat-history-panel .danmaku-menu { background: var(--m-surface) !important; color: var(--m-ink) !important; border: 1px solid var(--m-line) !important; border-radius: 12px !important; box-shadow: var(--sh-md) !important; }
+html.margin-live[data-margin-theme="dark"] .chat-history-panel .danmaku-menu :is(.go-space, .at-this-guy, .block-this-guy, .report-this-guy) { background: transparent !important; color: var(--m-ink) !important; border-radius: 8px !important; }
+html.margin-live[data-margin-theme="dark"] .chat-history-panel .danmaku-menu :is(.go-space, .at-this-guy, .block-this-guy, .report-this-guy):hover { background: var(--m-chip) !important; color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] .chat-history-panel .danmaku-menu .clickable, html.margin-live[data-margin-theme="dark"] .chat-history-panel .danmaku-menu .clickable * { color: inherit !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting { background: var(--m-surface) !important; color: var(--m-ink) !important; border-color: var(--m-line) !important; box-shadow: var(--sh-md) !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting :is(.header-left, .header-right, .close-btn, .clear-all-btn) { color: var(--m-muted) !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-input { background: var(--m-chip) !important; color: var(--m-ink) !important; border-color: var(--m-line) !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-input::placeholder { color: var(--m-muted) !important; opacity: 1; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-submit-btn:disabled { background: var(--m-chip) !important; color: var(--m-faint) !important; border: 1px solid var(--m-line) !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-submit-btn:not(:disabled) { background: var(--m-ink) !important; color: var(--m-canvas) !important; border-color: transparent !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-submit-btn .txt { color: inherit !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .list-content { background: var(--m-chip) !important; border: 1px solid var(--m-line) !important; border-radius: 12px !important; overflow: hidden !important; }
+html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .block-list-ctnr { background: transparent !important; }
 html.margin-live .link-footer { background: var(--m-canvas) !important; border-top: 1px solid var(--m-line); }
 html.margin-live .link-footer, html.margin-live .link-footer a { color: var(--m-muted) !important; }
 html.margin-live #sections-vm, html.margin-live .room-info-ctnr { background: transparent !important; }

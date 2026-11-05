@@ -180,6 +180,7 @@ export class WatchSkin {
     // B 站有两代播放器：新版的 .bpx-player-container[data-screen]，旧版依赖包裹层 class
     const player = () => document.querySelector<HTMLElement>('.bpx-player-container, #bilibili-player, #bilibili-player-wrap, .bilibili-player-wrap');
     const playerScreen = (): string => {
+      if (document.body.classList.contains('player-full-win')) return 'web';
       const bpx = document.querySelector('.bpx-player-container');
       if (bpx) return bpx.getAttribute('data-screen') ?? 'normal';
       const wrap = document.querySelector<HTMLElement>('#bilibili-player-wrap, .bilibili-player-wrap, .player-wrap');
@@ -300,6 +301,7 @@ export class WatchSkin {
     this.screenSync = () => sync(true);
     addEventListener('resize', () => { if (de.classList.contains('margin-webscroll')) webScroll(true); });
     new MutationObserver(() => sync()).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-screen'] });
+    if (document.body) new MutationObserver(() => sync()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     every(1000, sync); // 旧版播放器只改 class、不发 data-screen 变化，兜底轮询
     // v0.43 自动网页全屏；v0.47 宽屏模式：每个视频进来一次，用户自己退出后同一视频不再强开
     const keyOf = () => location.pathname.match(/BV\w+|ep\d+|ss\d+/)?.[0] ?? location.search;

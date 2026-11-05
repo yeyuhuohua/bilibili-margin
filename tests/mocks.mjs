@@ -177,6 +177,63 @@ const popularHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   <div class="video-card" data-k="keyword"><div class="video-name">屏蔽词热门视频</div><div class="up-name">正常UP</div><div class="video-stat">12.3万播放</div><div class="duration">10:00</div></div>
 </div></div></body></html>`;
 
+const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>直播 - bilibili</title><style>
+  .rank-list-ctnr .top3-name, .rank-list-ctnr .name, .rank-list-ctnr .rank, .rank-list-ctnr .score { color: #2f3238; }
+  #aside-area-vm .rank-list-ctnr .tab-item { color: #2f3238 !important; }
+  #aside-area-vm .rank-list-ctnr .tab-item.opacity6 { color: #9a9ba0 !important; }
+  .rank-list-ctnr .sub-tab-item-text { color: #ff6699; }
+  .rank-list-ctnr .sub-tab-item-text.opacity6 { color: #b4b5b9; }
+  .rank-list-ctnr .opacity6, .rank-list-ctnr .score { opacity: .6 !important; }
+  .gift-label, .magic-adventures-text, .guard-info .title, .balance-info .title, .banner-title span, .feed-button-root .text span { color: #18191c; }
+  .panel-price { color: #9499a0; }
+  .gift-item.mouse-in, .gift-sender-panel { background: #fff; }
+  .gift-control-section .z-gift-sender-panel .gift-sender-panel { background: #fff !important; }
+  .gift-banner-root { background: rgb(255 102 153 / .2); }
+  .banner-subtitle span { color: #61666d; }
+  .gift-panel-switch { background: #f1f2f3; }
+  .feed-button-root .content-box { border-color: #e3e5e7; }
+  .gift-upgrade-item { background: #fff; }
+  .gift-upgrade-item .gift-title { color: #18191c; }
+  .gift-upgrade-item .gift-icon { border: 1px solid #e3e5e7; }
+  .gift-upgrade-item.selected .gift-icon { border-color: #ff6699; }
+  .gift-upgrade-item.selected .gift-title, .gift-upgrade-item.selected .gift-desc span { color: #ff6699; }
+  .official-container-root .gift-panel-background { background: #fff; border: 1px solid #e3e5e7; border-radius: 8px; }
+  .official-container-root .single-tab .tab-name { color: #9499a0; }
+  .official-container-root .single-tab.active .tab-name { color: #ff6699; }
+  .official-container-root .rights-center-btn { background: #d7dfff; }
+  .official-container-root .rights-txt { color: #5b7ae3; }
+  .official-container-root .gift-item.mouse-in { background: #fff; }
+  .danmaku-menu { background: #1a1a1c; }
+  .danmaku-menu .clickable { color: #61666d; }
+  .danmaku-menu .go-space:hover { background: #f1f2f3; color: #61666d; }
+  .blockSetting { background: #1f1f22; }
+  .blockSetting .keyword-input { background: #1a1a1c; color: #000; border-color: #c9ccd0; }
+  .blockSetting .keyword-submit-btn:disabled { background: #e3e5e7; color: #aeb3b9; }
+  .blockSetting .keyword-submit-btn .txt { color: #aeb3b9; }
+  .blockSetting .list-content { background: #f1f2f3; }
+  .blockSetting .block-list-ctnr { background: #1a1a1c; }
+  .blockSetting .header-left, .blockSetting .header-right, .blockSetting .clear-all-btn { color: #9a9ba0; }
+  .blockSetting .tab-item.active { color: #ff8cb0; }
+</style></head><body><div id="app"><main class="native">原版直播页面</main>
+<aside id="aside-area-vm"><div class="rank-list-ctnr">
+  <div class="tab-item active">房间观众(84)</div><div class="tab-item opacity6">大航海(1)</div>
+  <div class="sub-tab-item-text">在线榜</div><div class="sub-tab-item-text opacity6">日榜</div>
+  <div class="top3-name">榜首昵称</div><div class="rank">4</div><div class="name">观众昵称</div><div class="score">347</div>
+</div></aside><div class="chat-history-panel"><div class="danmaku-menu"><div class="go-space"><a class="clickable"><span>去 TA 的个人空间</span></a></div><div class="at-this-guy"><a class="clickable"><span>@TA</span></a></div><div class="block-this-guy"><a class="clickable"><span>屏蔽发送者</span></a></div><div class="report-this-guy"><a class="clickable"><span>举报选中弹幕</span></a></div></div></div><div id="sidebar-vm"><div class="side-bar-cntr"><div class="side-bar-btn">实验室</div><div class="side-bar-btn">关注</div></div></div>
+<div class="gift-control-section"><div class="magic-adventures-pic"></div><p class="magic-adventures-text">工坊订单</p>
+  <div class="z-gift-sender-panel"><div class="gift-sender-panel"><div class="gift-banner-root"><div class="banner-title"><span>投喂阿狗盲盒赢活动奖励</span></div><div class="banner-subtitle"><span>爆出指定道具获得奖励</span></div><span class="arrow" style="color:#18191c">›</span></div>
+    <div class="feed-bar-section"><div class="feed-button-root"><div class="content-box"><div class="text"><span>10个</span></div></div></div></div><div class="gift-upgrade"><div class="gift-upgrade-item selected"><div class="gift-icon"></div><div class="gift-title">喜欢你</div><div class="gift-desc"><span>默认</span></div></div><div class="gift-upgrade-item"><div class="gift-icon"></div><div class="gift-title">钟意你</div><div class="gift-desc"><span>+0电池</span></div></div></div></div>
+    <div class="gift-panel"><div class="gift-item mouse-in"><p class="gift-label">人气票</p><div class="panel-price">1电池</div></div></div></div>
+  <div class="gift-panel-switch"><svg><path fill="#000000" d="M0 0h16v16H0z"/></svg></div>
+  <div class="guard-info"><div class="title">大航海</div></div><div class="balance-info"><div class="title"><span>59</span></div></div>
+</div>
+<div class="official-container-root"><div class="gift-panel-background"></div><div class="more-gifts-panel-tabs"><div class="single-tab active"><div class="tab-name">礼物</div><div class="gift-rearrange-root"><svg><path d="M0 0h6v5H0z"/></svg></div></div><div class="single-tab"><div class="tab-name">粉丝团</div></div><div class="rights-center-btn"><div class="rights-txt">权益中心</div></div><div class="close-btn"></div></div>
+  <div class="gift-list-section"><div class="gift-item mouse-in"><p class="gift-label">阿狗盲盒</p><div class="panel-price">90电池</div></div></div></div>
+<div id="chat-control-panel-vm"><div class="blockSetting"><span class="close-btn">✕</span><input class="keyword-input" placeholder="添加屏蔽词">
+  <button class="keyword-submit-btn" disabled><span class="txt">添加</span></button><span class="tab-item active">屏蔽关键词</span>
+  <div class="list-content"><div class="list-header"><span class="header-left">内容(0)</span><span class="header-right">操作</span></div><ul class="block-list-ctnr"></ul><span class="clear-all-btn">一键清空</span></div>
+</div></div></div></body></html>`;
+
 /** 原版页面的最小骨架：映间会把它藏起来或在上面换皮 */
 function stubHtml(u) {
   if (/\/fans\/(?:follow|fans)/.test(u)) return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>关注 - bilibili</title><style>
@@ -207,6 +264,7 @@ function stubHtml(u) {
     root.innerHTML = '<style>#follow, #follow:hover { color: #fff; background: #f1f2f3; }</style><button id="follow"><bili-icon></bili-icon><span>关注</span></button>';
     profile.__testShadow = root;
   </script></body></html>`;
+  if (/live\.bilibili\.com/.test(u)) return liveHtml();
   if (/\/opus\/\d/.test(u)) return opusHtml();
   if (/search\.bilibili\.com/.test(u)) return searchHtml();
   if (/\/v\/popular/.test(u)) return popularHtml();
