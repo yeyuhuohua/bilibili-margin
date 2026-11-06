@@ -964,6 +964,26 @@ for (const theme of THEMES) {
       return miss;
     });
 
+    await feature('watch-body-not-ready', async () => {
+      await reset();
+      await page.goto(WATCH, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('header'), null, { timeout: 15_000 });
+      errors = [];
+      // document_start 时 body 可能尚未创建；移除后等播放器状态轮询跑过，再恢复同一个 body。
+      await page.evaluate(() => {
+        window.__marginTestBody = document.body;
+        document.body.remove();
+      });
+      await sleep(1150);
+      await page.evaluate(() => {
+        if (window.__marginTestBody) document.documentElement.append(window.__marginTestBody);
+        delete window.__marginTestBody;
+      });
+      await page.waitForFunction(() => document.body && document.getElementById('margin-watch-top')?.hidden === false, null, { timeout: 3000 }).catch(() => {});
+      if (!await page.evaluate(() => !!document.body && document.getElementById('margin-watch-top')?.hidden === false)) errors.push('watch did not recover after body insertion');
+      return errors;
+    });
+
     await feature('live-web-fullscreen', async () => {
       await reset();
       await page.goto('https://live.bilibili.com/2790818', { waitUntil: 'domcontentloaded' });

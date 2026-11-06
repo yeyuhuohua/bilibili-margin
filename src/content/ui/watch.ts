@@ -180,7 +180,7 @@ export class WatchSkin {
     // B 站有两代播放器：新版的 .bpx-player-container[data-screen]，旧版依赖包裹层 class
     const player = () => document.querySelector<HTMLElement>('.bpx-player-container, #bilibili-player, #bilibili-player-wrap, .bilibili-player-wrap');
     const playerScreen = (): string => {
-      if (document.body.classList.contains('player-full-win')) return 'web';
+      if (document.body?.classList.contains('player-full-win')) return 'web';
       const bpx = document.querySelector('.bpx-player-container');
       if (bpx) return bpx.getAttribute('data-screen') ?? 'normal';
       const wrap = document.querySelector<HTMLElement>('#bilibili-player-wrap, .bilibili-player-wrap, .player-wrap');
