@@ -494,9 +494,23 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 .dy-send[disabled] { opacity: .4; pointer-events: none; }
 .dy-rlist { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .dy-r { display: flex; gap: 12px; }
+.dy-r-face { position: relative; display: block; flex: 0 0 28px; width: 28px; height: 28px; }
 .dy-r-face img { width: 28px; height: 28px; border-radius: 50%; display: block; background: var(--chip); }
+.dy-r-face.has-pendant .dy-r-avatar { width: 78.7%; height: 78.7%; margin: 10.65%; }
+.dy-r-face .dy-r-pendant { position: absolute; left: -18.75%; top: -18.75%; width: 137.5%; height: 137.5%; border-radius: 0; background: transparent; object-fit: contain; pointer-events: none; }
 .dy-r-b { min-width: 0; flex: 1; }
+.dy-r-user { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 30px; }
 .dy-r-name, .dy-r b { font: 500 12px/1.4 var(--sans); color: var(--muted); text-decoration: none; }
+.dy-r-level { display: block; flex: none; width: 30px; height: 30px; object-fit: contain; }
+.dy-r-medal { display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: fit-content; height: 14px; padding: 0 4px; border-radius: 7px; background: linear-gradient(90deg, var(--medal-bg, #f8ebf0), var(--medal-end, var(--medal-bg, #f8ebf0))); user-select: none; }
+.dy-r-medal.has-icon { border: .5px solid var(--medal-border, #efe3c7); }
+.dy-r-medal-first { flex: none; box-sizing: border-box; width: 20px; height: 20px; margin-left: -7px; object-fit: contain; }
+.dy-r-medal-second { flex: none; width: 7px; height: 10px; margin-right: 2px; object-fit: contain; }
+.dy-r-medal-text { display: flex; align-items: center; line-height: 1; font-size: 0; white-space: nowrap; }
+.dy-r-medal-name { max-width: 72px; overflow: hidden; text-overflow: ellipsis; color: var(--medal-name, #ab6890); font: 500 8px/1 var(--sans); }
+@font-face { font-family: fansmedal-num; font-style: normal; font-weight: 400; font-display: swap; src: url('https://s1.hdslb.com/bfs/static/jinkela/long/fonts/fansmedal-num.ttf') format('truetype'); }
+.dy-r-medal-level { margin-left: 2px; transform: translateY(1px); color: var(--medal-level, #d9a0b6); font: 400 9px/1 fansmedal-num, var(--mono); letter-spacing: -.3px; }
+.dy-r-nameplate { flex: none; width: auto; max-width: 100px; height: 16px; object-fit: contain; }
 .dy-r p { margin: 4px 0 0; font: 400 14px/1.6 var(--sans); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .dy-rem { display: inline-block; width: 24px; height: 24px; margin: 0 2px; vertical-align: -6px; object-fit: contain; }
 .dy-r-meta { display: block; margin-top: 4px; font: 400 11px/1.4 var(--mono); color: var(--faint); }

@@ -89,7 +89,19 @@ export function apiBody(u) {
   if (u.includes('web-dynamic/v1/feed/space')) return { code: 0, data: { items: feedItems(), offset: '', has_more: false } };
   if (u.includes('web-dynamic/v1/portal')) return { code: 0, data: { up_list: { items: P.slice(0, 12).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, has_update: i % 3 === 0 })) }, live_users: { count: 2, items: P.slice(12, 14).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, title: ['今晚通宵剪片', '字体设计直播'][i], room_id: 1000 + i })) } } };
   if (u.includes('/x/relation/followings?')) return { code: 0, data: { total: 12, list: P.slice(0, 12).map((v) => ({ mid: v.mid, uname: v.name, face: v.face })) } };
-  if (u.includes('/x/v2/reply')) return { code: 0, data: { page: { acount: 1 }, replies: [{ rpid: 1, mid: P[1].mid, member: { uname: P[1].name, avatar: P[1].face }, content: { message: '前排[liyuu 动态表情_可爱][liyuu 动态表情_可爱][liyuu 动态表情_可爱]支持', emote: { '[liyuu 动态表情_可爱]': { url: P[2].pic } } }, like: 12, ctime: NOW - 120, rcount: 0 }] } };
+  if (u.includes('/x/v2/reply')) return { code: 0, data: { page: { acount: 1 }, replies: [{
+    rpid: 1, mid: P[1].mid,
+    member: {
+      uname: P[1].name, avatar: P[1].face, level_info: { current_level: 5 },
+      pendant: { image: P[3].pic, image_enhance: P[4].pic, image_enhance_frame: P[5].pic },
+      fans_detail: {
+        medal_name: '映间', level: 12, medal_color: 0xfff8ebf0, medal_color_end: 0xfff8ebf0, medal_color_border: 0xfff8ebf0,
+        medal_color_name: 0xffab6890, medal_color_level: 0xffd9a0b6, first_icon: P[3].pic, second_icon: P[4].pic,
+      },
+      nameplate: { name: '有爱大佬', image_small: P[6].pic },
+    },
+    content: { message: '前排[liyuu 动态表情_可爱][liyuu 动态表情_可爱][liyuu 动态表情_可爱]支持', emote: { '[liyuu 动态表情_可爱]': { url: P[2].pic } } }, like: 12, ctime: NOW - 120, rcount: 0,
+  }] } };
   if (u.includes('search/square')) return { code: 0, data: { trending: { list: ['S16 全球总决赛', '液态玻璃效果怎么做', '万字细嗦警匪片', '塔图姆 40 分', '一位大学老师的 36 岁'].map((k) => ({ keyword: k, show_name: k })) } } };
   if (u.includes('history/shadow') && !u.includes('set')) return { code: 0, data: false };
   if (u.includes('history/cursor') || u.includes('history/search')) return { code: 0, data: { cursor: { max: 0, view_at: 0, business: '' }, list: historyList(), page: { total: 14 } } };

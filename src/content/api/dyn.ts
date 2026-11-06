@@ -121,17 +121,51 @@ export async function dynRepost(id: string, text: string): Promise<void> {
     web_repost_src: { dyn_id_str: id },
   }, { platform: 'web' });
 }
-export interface Reply { rpid: number; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; like: number; ts: number; rcount: number }
+export interface Reply {
+  rpid: number; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; like: number; ts: number; rcount: number;
+  level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string };
+  medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
+}
+function medalColor(value: unknown): string {
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+    const n = Number(value);
+    if (Number.isInteger(n) && n >= 0 && n <= 0xffffff) return `#${n.toString(16).padStart(6, '0')}`;
+    if (Number.isInteger(n) && n <= 0xffffffff) {
+      const argb = n.toString(16).padStart(8, '0');
+      return `#${argb.slice(2)}${argb.slice(0, 2)}`;
+    }
+  }
+  const color = String(value ?? '');
+  return /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(color) ? color : '';
+}
+export function toReply(r: any): Reply {
+  const m = r.member ?? {};
+  const out: Reply = {
+    rpid: r.rpid, name: m.uname ?? '', face: https(m.avatar), mid: Number(r.mid) || 0,
+    text: r.content?.message ?? '',
+    emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
+    like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
+    level: Math.max(0, Math.min(6, Math.trunc(Number(m.level_info?.current_level) || 0))),
+    senior: !!m.is_senior_member,
+    pendant: https(m.pendant?.image_enhance || m.pendant?.image || m.pendant?.image_enhance_frame) || undefined,
+  };
+  const medal = m.fans_detail;
+  if (medal?.medal_name) out.medal = {
+    name: medal.medal_name, level: Number(medal.level) || 0,
+    color: medalColor(medal.medal_color ?? medal.medal_color_start), endColor: medalColor(medal.medal_color_end),
+    borderColor: medalColor(medal.medal_color_border), nameColor: medalColor(medal.medal_color_name), levelColor: medalColor(medal.medal_color_level),
+    firstIcon: https(medal.first_icon), secondIcon: https(medal.second_icon),
+  };
+  const plate = m.nameplate;
+  const plateImage = https(plate?.image_small || plate?.image);
+  if (plateImage) out.nameplate = { name: plate.name ?? '', image: plateImage };
+  return out;
+}
 /** 热门评论第一页（旧版 /x/v2/reply 不要 wbi 签名） */
 export async function dynReplies(type: number, oid: string, ps = 8): Promise<{ list: Reply[]; count: number }> {
   const d = await getJSON<any>('/x/v2/reply', { type, oid, sort: 1, ps, pn: 1 });
   const seen = new Set<number>();
-  const list = [...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])].filter((r: any) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps).map((r: any) => ({
-    rpid: r.rpid, name: r.member?.uname ?? '', face: https(r.member?.avatar), mid: Number(r.mid) || 0,
-    text: r.content?.message ?? '',
-    emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
-    like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
-  }));
+  const list = [...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])].filter((r: any) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps).map(toReply);
   return { list, count: d.page?.acount ?? d.page?.count ?? list.length };
 }
 export async function dynReply(type: number, oid: string, message: string): Promise<void> {

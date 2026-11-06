@@ -511,6 +511,17 @@ for (const theme of THEMES) {
         if (images.length !== 3) m.push(`emote images ${images.length}`);
         if (images.some((e) => e.getAttribute('alt') !== token || !e.getAttribute('src')?.startsWith('https://'))) m.push('emote image data missing');
         if (r?.querySelector('.dy-cbox .dy-r p')?.textContent?.includes(token)) m.push('raw emote token still visible');
+        const level = r?.querySelector('.dy-cbox .dy-r-level');
+        if (!level?.getAttribute('src')?.endsWith('/level_5.svg') || getComputedStyle(level).width !== '30px') m.push('native reply level missing');
+        const medal = r?.querySelector('.dy-cbox .dy-r-medal');
+        if (medal?.getAttribute('title') !== '映间 12 级粉丝勋章' || medal?.textContent !== '映间12') m.push('reply fan medal missing');
+        const medalStyle = medal ? getComputedStyle(medal) : null;
+        if (medalStyle?.height !== '14px' || medalStyle?.borderRadius !== '7px') m.push('reply medal shape does not match native');
+        if (!medal?.querySelector('.dy-r-medal-first') || !medal.querySelector('.dy-r-medal-second')) m.push('reply medal icons missing');
+        const avatar = r?.querySelector('.dy-cbox .dy-r-avatar');
+        if (!avatar || Math.abs(parseFloat(getComputedStyle(avatar).width) - 28 * .787) > .1) m.push('reply pendant avatar ratio does not match native');
+        if (!r?.querySelector('.dy-cbox .dy-r-pendant')?.getAttribute('src')?.startsWith('https://')) m.push('reply pendant missing');
+        if (r?.querySelector('.dy-cbox .dy-r-nameplate')?.getAttribute('alt') !== '有爱大佬') m.push('reply nameplate missing');
         return m;
       }));
       return miss;

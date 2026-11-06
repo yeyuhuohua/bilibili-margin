@@ -1,4 +1,4 @@
-import { dynLike, dynReplies, dynReply, dynRepost, type Dyn } from '../api/dyn';
+import { dynLike, dynReplies, dynReply, dynRepost, type Dyn, type Reply } from '../api/dyn';
 import { fmtAgo, fmtCount, h, icon, ICONS } from './dom';
 import { laterButton } from './later-btn';
 import { openLightbox } from './lightbox';
@@ -22,6 +22,22 @@ function replyText(text: string, emotes: Record<string, string>): (Node | string
     rest = rest.slice(at + token.length);
   }
   return out;
+}
+
+function replyUser(r: Reply): HTMLElement {
+  const m = r.medal;
+  const medalStyle = m ? [
+    m.color && `--medal-bg:${m.color}`, m.endColor && `--medal-end:${m.endColor}`,
+    m.borderColor && `--medal-border:${m.borderColor}`, m.nameColor && `--medal-name:${m.nameColor}`, m.levelColor && `--medal-level:${m.levelColor}`,
+  ].filter(Boolean).join(';') : '';
+  return h('div', { class: 'dy-r-user' },
+    h('a', { class: 'dy-r-name', href: `https://space.bilibili.com/${r.mid}`, ...ext }, r.name),
+    r.level ? h('img', { class: 'dy-r-level', src: `https://i0.hdslb.com/bfs/seed/jinkela/short/webui/user-profile/img/level_${r.senior ? 'h' : r.level}.svg`, alt: r.senior ? '硬核会员' : `Lv${r.level}`, title: r.senior ? '硬核会员' : `用户等级 Lv${r.level}`, width: '30', height: '30', loading: 'lazy' }) : null,
+    m ? h('span', { class: `dy-r-medal${m.firstIcon || m.secondIcon ? ' has-icon' : ''}`, title: `${m.name} ${m.level} 级粉丝勋章`, style: medalStyle },
+      m.firstIcon ? h('img', { class: 'dy-r-medal-first', src: m.firstIcon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
+      m.secondIcon ? h('img', { class: 'dy-r-medal-second', src: m.secondIcon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
+      h('span', { class: 'dy-r-medal-text' }, h('span', { class: 'dy-r-medal-name' }, m.name), h('b', { class: 'dy-r-medal-level' }, String(m.level)))) : null,
+    r.nameplate ? h('img', { class: 'dy-r-nameplate', src: r.nameplate.image, alt: r.nameplate.name, title: r.nameplate.name, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null);
 }
 
 /** 动态卡 → 原始数据；屏蔽词变化时重新判断用 */
@@ -190,9 +206,11 @@ function actions(d: Dyn): HTMLElement {
     wrap.append(cmtBox); cmt.setAttribute('aria-expanded', 'true');
     dynReplies(d.cmtType!, d.cmtOid!).then(({ list: rs }) => {
       list.replaceChildren(...(rs.length ? rs.map((r) => h('div', { class: 'dy-r' },
-        h('a', { class: 'dy-r-face', href: `https://space.bilibili.com/${r.mid}`, ...ext }, h('img', { src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })),
+        h('a', { class: `dy-r-face${r.pendant ? ' has-pendant' : ''}`, href: `https://space.bilibili.com/${r.mid}`, ...ext },
+          h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+          r.pendant ? h('img', { class: 'dy-r-pendant', src: r.pendant, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null),
         h('div', { class: 'dy-r-b' },
-          h('a', { class: 'dy-r-name', href: `https://space.bilibili.com/${r.mid}`, ...ext }, r.name),
+          replyUser(r),
           h('p', {}, ...replyText(r.text, r.emotes)),
           h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.like ? `赞 ${fmtCount(r.like)}` : '', r.rcount ? `${r.rcount} 条回复` : ''].filter(Boolean).join(' · '))))) : [h('div', { class: 'dy-rempty' }, '还没有评论')]));
     }).catch((err) => list.replaceChildren(h('div', { class: 'dy-rempty' }, `评论加载失败：${(err as Error).message}`)));
