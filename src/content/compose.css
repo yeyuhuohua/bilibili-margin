@@ -1,0 +1,66 @@
+html.margin-compose #bili-header-container,
+html.margin-compose .bili-dyn-home--member > aside,
+html.margin-compose .bili-dyn-home--member > main > section:not(:first-child),
+html.margin-compose .bili-dyn-sidebar,
+html.margin-compose #app > .bgc,
+html.margin-compose #app > .bg { display: none !important; }
+html.margin-compose .bili-dyn-home--member { display: block !important; min-height: calc(100vh - 96px); }
+html.margin-compose .bili-dyn-home--member > main { display: block !important; width: min(780px, calc(100vw - 32px)) !important; margin: 96px auto 48px !important; }
+html.margin-compose .bili-dyn-publishing { position: relative; padding: 24px; border: 1px solid var(--m-line); border-radius: 20px; background: var(--m-surface) !important; color: var(--m-ink) !important; box-shadow: var(--sh-md); }
+html.margin-compose .bili-dyn-publishing__topic { margin-bottom: 18px; }
+html.margin-compose .bili-topic-search__input { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--m-line); border-radius: 999px; background: transparent; color: var(--m-muted); transition: background-color .15s; }
+html.margin-compose .bili-topic-search__input:hover { background: var(--m-chip); }
+html.margin-compose .bili-topic-search__input__text { color: var(--m-muted) !important; }
+html.margin-compose .bili-dyn-publishing__title { height: auto !important; min-height: 56px; padding: 0 !important; overflow: hidden; border: 1px solid var(--m-line); border-radius: 16px 16px 0 0; background: var(--m-canvas); }
+html.margin-compose .bili-dyn-publishing__title__input { width: 100%; height: 56px; padding: 0 16px; border: 0 !important; background: transparent !important; color: var(--m-ink) !important; font: 600 18px/1.4 var(--m-sans) !important; outline: 0 !important; }
+html.margin-compose .bili-dyn-publishing__title__input::placeholder { color: var(--m-faint) !important; font-weight: 400; }
+html.margin-compose .bili-dyn-publishing__input { height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 16px 12px; border: 1px solid var(--m-line); border-top: 0; border-radius: 0 0 16px 16px; background: var(--m-canvas); }
+html.margin-compose .bili-rich-textarea__inner { height: auto !important; min-height: 210px !important; padding: 12px 4px; background: transparent !important; color: var(--m-ink) !important; font: 16px/1.75 var(--m-sans) !important; outline: 0 !important; }
+html.margin-compose .bili-rich-textarea__inner.empty { color: var(--m-faint) !important; }
+html.margin-compose .bili-dyn-publishing__control { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 16px; }
+html.margin-compose .bili-dyn-publishing__tools { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; }
+html.margin-compose .bili-dyn-publishing__tools__item { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--m-chip); color: var(--m-muted) !important; cursor: pointer; transition: background-color .15s, color .15s; }
+html.margin-compose .bili-dyn-publishing__tools__item:hover { background: color-mix(in srgb, var(--m-ink) 10%, transparent); color: var(--m-ink) !important; }
+html.margin-compose .bili-dyn-publishing__tools__item svg, html.margin-compose .bili-dyn-publishing__tools__item svg path { fill: currentColor !important; }
+html.margin-compose .bili-dyn-publishing__tools__item svg { width: 22px; height: 22px; }
+html.margin-compose .bili-dyn-publishing__headquarters { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 0; }
+html.margin-compose .bili-dyn-publishing__hint { margin-right: 0; color: var(--m-faint) !important; font: 12px/1.4 var(--m-mono); }
+html.margin-compose .bili-dyn-publishing__settings { position: relative; }
+html.margin-compose .bili-dyn-publishing__settings__btn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--m-chip); color: var(--m-muted) !important; cursor: pointer; }
+html.margin-compose .bili-dyn-publishing__settings__btn:hover { background: color-mix(in srgb, var(--m-ink) 10%, transparent); color: var(--m-ink) !important; }
+html.margin-compose .bili-dyn-publishing__settings__btn svg, html.margin-compose .bili-dyn-publishing__settings__btn svg path { fill: currentColor !important; }
+html.margin-compose .bili-dyn-publishing__action.launcher { display: grid; place-items: center; min-width: 80px; height: 40px; padding: 0 24px; border-radius: 999px; background: var(--m-ink) !important; color: var(--m-canvas) !important; font-weight: 600; cursor: pointer; }
+html.margin-compose .bili-dyn-publishing__action.launcher.disabled { background: var(--m-chip) !important; color: var(--m-faint) !important; opacity: 1; cursor: default; }
+html.margin-compose .bili-dyn-publishing__action.launcher:not(.disabled) { background: var(--m-ink) !important; color: var(--m-canvas) !important; }
+html.margin-compose .bili-dyn-publishing__action.launcher:not(.disabled):hover { opacity: .86; }
+@media (max-width: 640px) {
+  html.margin-compose .bili-dyn-publishing__control { flex-wrap: wrap; }
+  html.margin-compose .bili-dyn-publishing__headquarters { width: 100%; }
+  html.margin-compose .bili-dyn-publishing__hint { margin-right: auto; }
+}
+html.margin-compose :is(.bili-popup, .bili-cascader-options) { background: var(--m-surface) !important; color: var(--m-ink) !important; border: 1px solid var(--m-line) !important; border-radius: 14px !important; box-shadow: var(--sh-md) !important; }
+html.margin-compose body > .bili-popup :is(.bili-popup__wrap, .bili-popup__content) { height: fit-content !important; max-height: calc(100vh - 144px) !important; }
+html.margin-compose body > .bili-popup .bili-popup-modal { height: fit-content !important; max-height: 100% !important; }
+html.margin-compose body > .bili-popup .bili-popup-modal__content { height: fit-content !important; max-height: calc(100vh - 256px) !important; min-height: 0 !important; overflow-y: auto !important; padding-bottom: 24px !important; }
+html.margin-compose body > .bili-popup .bili-popup-modal__footer { position: static !important; flex: none !important; }
+html.margin-compose .bili-topic-search__popover { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+html.margin-compose .bili-cascader-options { padding: 6px; }
+html.margin-compose .bili-cascader-options__item { border-radius: 8px; color: var(--m-ink) !important; }
+html.margin-compose .bili-cascader-options__item:hover { background: var(--m-chip) !important; }
+html.margin-compose .bili-cascader-options__item-label { color: var(--m-ink) !important; }
+html.margin-compose :is(.bili-input, .bili-picker-input) { background: color-mix(in srgb, var(--m-ink) 4%, var(--m-surface)) !important; border: 1px solid var(--m-line) !important; border-radius: 10px !important; }
+html.margin-compose :is(.bili-input, .bili-picker-input):focus-within { border-color: color-mix(in srgb, var(--m-ink) 24%, transparent) !important; outline: 0 !important; box-shadow: none !important; }
+html.margin-compose :is(.bili-input__inner, .bili-textarea__inner):focus, html.margin-compose :is(.bili-input__inner, .bili-textarea__inner):focus-visible { outline: 0 !important; box-shadow: none !important; }
+html.margin-compose :is(.bili-input, .bili-picker-input)::before, html.margin-compose :is(.bili-input, .bili-picker-input)::after { border: 0 !important; outline: 0 !important; box-shadow: none !important; }
+html.margin-compose :is(.bili-input__inner, .bili-textarea__inner, .bili-topic-search__input__inner) { background: transparent !important; color: var(--m-ink) !important; }
+html.margin-compose :is(.bili-input__inner, .bili-textarea__inner, .bili-topic-search__input__inner)::placeholder { color: var(--m-faint) !important; }
+html.margin-compose .bili-popup-modal__footer { background: transparent !important; border-top: 1px solid var(--m-line); }
+html.margin-compose .bili-popup-modal__button.confirm { background: var(--m-ink) !important; color: var(--m-canvas) !important; border-radius: 10px !important; }
+html.margin-compose .bili-popup-modal__button.confirm.disabled { background: var(--m-chip) !important; color: var(--m-faint) !important; }
+html.margin-compose .bili-popup__header__close { color: var(--m-muted) !important; }
+html.margin-compose :is(.bili-input, .bili-textarea, .bili-select, .bili-cascader, .bili-radio, .bili-checkbox, .bili-button) { color: var(--m-ink); }
+@media (max-width: 640px) {
+  html.margin-compose .bili-dyn-home--member > main { width: calc(100vw - 24px) !important; margin-top: 84px !important; }
+  html.margin-compose .bili-dyn-publishing { padding: 16px; border-radius: 16px; }
+  html.margin-compose .bili-dyn-publishing__headquarters { gap: 10px; }
+}

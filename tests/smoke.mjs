@@ -59,6 +59,11 @@ const PAGES = [
     return miss; })()`],
   ['feed', 'https://t.bilibili.com/', `(() => { const r = ${R}; if (!r) return ['#margin-root'];
     const miss = []; if (!r.querySelector('main.tk')) miss.push('main.tk'); return miss; })()`],
+  ['compose', 'https://t.bilibili.com/?compose=1', `(() => { const miss = [];
+    if (!document.documentElement.classList.contains('margin-compose')) miss.push('html.margin-compose');
+    if (!document.querySelector('.bili-dyn-publishing')) miss.push('full composer');
+    if (!document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('header')) miss.push('#margin-watch-top header');
+    return miss; })()`],
 ].filter(([n]) => !ONLY || ONLY.includes(n));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -509,6 +514,86 @@ for (const theme of THEMES) {
         return m;
       }));
       return miss;
+    });
+
+    await feature('feed-full-composer', async () => {
+      await reset();
+      await seed({ theme: 'dark' });
+      await page.goto('https://t.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fd-post'), null, { timeout: 15_000 });
+      await page.evaluate(() => document.getElementById('margin-root').shadowRoot.querySelector('.fd-post').click());
+      await page.waitForFunction(() => location.search.includes('compose=1') && document.documentElement.classList.contains('margin-compose') && getComputedStyle(document.querySelector('.bili-dyn-publishing')).backgroundColor === 'rgb(26, 26, 28)', null, { timeout: 15_000 });
+      const m = await page.evaluate(() => {
+        const miss = [];
+        if (document.getElementById('margin-root')) miss.push('takeover app mounted over the full composer');
+        if (document.querySelector('.dc-editor')) miss.push('limited composer is still present');
+        if (document.querySelectorAll('.bili-dyn-publishing__tools__item').length !== 5) miss.push('composer tools are incomplete');
+        if (document.querySelector('.bili-dyn-publishing__title__input')?.placeholder !== '好的标题更容易获得支持，选填20字') miss.push('title input missing');
+        if (document.querySelector('.bili-rich-textarea__inner')?.getAttribute('placeholder') !== '有什么想和大家分享的？') miss.push('rich editor missing');
+        if (document.querySelector('.bili-dyn-publishing__title').getBoundingClientRect().height < 56) miss.push('title container is clipped');
+        if (document.querySelector('.bili-rich-textarea__inner').getBoundingClientRect().height < 210) miss.push('rich editor is clipped');
+        if (getComputedStyle(document.querySelector('.bili-dyn-publishing__control')).display !== 'flex') miss.push('composer footer layout missing');
+        if (getComputedStyle(document.querySelector('.bili-dyn-publishing__action.launcher.disabled')).backgroundColor !== 'rgba(255, 255, 255, 0.06)') miss.push('disabled publish button is too prominent');
+        if (!document.querySelector('.bili-dyn-publishing__action.launcher')) miss.push('publish action missing');
+        if (!document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('header')) miss.push('margin header missing');
+        for (const el of document.querySelectorAll('.bili-dyn-home--member > aside, .bili-dyn-home--member > main > section:not(:first-child)')) {
+          if (getComputedStyle(el).display !== 'none') miss.push('feed or sidebar still visible');
+        }
+        if (getComputedStyle(document.body).display === 'none') miss.push('original editor is still muted');
+        if (getComputedStyle(document.querySelector('.bili-topic-search__popover')).borderWidth !== '0px') miss.push('topic button has duplicate borders');
+        for (const el of document.querySelectorAll('.bili-popup .bili-input, .bili-popup .bili-picker-input')) {
+          const style = getComputedStyle(el);
+          if (style.backgroundColor === 'rgb(17, 17, 18)') miss.push('form control still uses a black background');
+          if (style.borderRadius !== '10px') miss.push('form control radius mismatch');
+        }
+        for (const el of document.querySelectorAll('.bili-popup .bili-input__inner')) {
+          if (getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)') miss.push('nested input is not transparent');
+        }
+        if (getComputedStyle(document.querySelector('.bili-popup-modal__button.confirm.disabled')).backgroundColor !== 'rgba(255, 255, 255, 0.06)') miss.push('modal disabled button is too prominent');
+        const focused = document.querySelector('.bili-popup .bili-input__inner');
+        focused.focus();
+        for (const el of [focused, focused.closest('.bili-input')]) {
+          const style = getComputedStyle(el);
+          if (style.boxShadow !== 'none') miss.push('input focus glow remains');
+          if (style.outlineStyle !== 'none') miss.push('input focus outline remains');
+          if (getComputedStyle(el, '::before').borderWidth !== '0px') miss.push('input pseudo focus border remains');
+        }
+        return miss;
+      });
+      await page.evaluate(() => document.querySelector('.bili-dyn-publishing__settings__btn').click());
+      m.push(...await page.evaluate(() => {
+        const miss = [];
+        const options = document.querySelector('.bili-cascader-options');
+        if (options.hidden) miss.push('settings did not open');
+        const labels = [...options.querySelectorAll('.bili-cascader-options__item-label')].map((e) => e.textContent.trim());
+        for (const text of ['可见范围', '定时发布', '允许评论', '创作声明']) if (!labels.includes(text)) miss.push(`${text} missing`);
+        if (getComputedStyle(options).backgroundColor !== 'rgb(26, 26, 28)') miss.push('settings theme mismatch');
+        return miss;
+      }));
+      await page.evaluate(() => {
+        const popup = document.querySelector('.bili-popup');
+        popup.hidden = false;
+        const content = popup.querySelector('.bili-popup-modal__content');
+        const filler = document.createElement('div');
+        filler.style.height = '2000px';
+        content.append(filler);
+        content.scrollTop = content.scrollHeight;
+      });
+      m.push(...await page.evaluate(() => {
+        const miss = [];
+        const wrap = document.querySelector('.bili-popup__wrap');
+        const content = document.querySelector('.bili-popup-modal__content');
+        const footer = document.querySelector('.bili-popup-modal__footer');
+        const title = document.querySelector('.bili-popup__header__title');
+        if (title.getBoundingClientRect().top < 72) miss.push('modal title is covered by the navigation');
+        if (getComputedStyle(footer).position !== 'static') miss.push('modal footer still covers content');
+        if (content.scrollHeight <= content.clientHeight) miss.push('modal content is not scrollable');
+        if (content.getBoundingClientRect().bottom > footer.getBoundingClientRect().top + 1) miss.push('modal content overlaps the footer');
+        if (footer.getBoundingClientRect().bottom > innerHeight) miss.push('modal footer is outside the viewport');
+        if (wrap.getBoundingClientRect().height > innerHeight - 144 + 1) miss.push('modal exceeds the viewport height');
+        return miss;
+      }));
+      return m;
     });
 
     await feature('back-top-all-pages', async () => {

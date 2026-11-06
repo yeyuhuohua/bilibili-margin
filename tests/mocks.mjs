@@ -177,6 +177,31 @@ const popularHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   <div class="video-card" data-k="keyword"><div class="video-name">屏蔽词热门视频</div><div class="up-name">正常UP</div><div class="video-stat">12.3万播放</div><div class="duration">10:00</div></div>
 </div></div></body></html>`;
 
+const composeHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>发动态 - bilibili</title><style>
+  .bili-dyn-publishing { background: #fff; }
+  .bili-dyn-publishing__title { height: 24px; overflow: hidden; padding-right: 48px; }
+  .bili-rich-textarea__inner { height: 52px; min-height: 24px; }
+  .bili-topic-search__popover { background: #1a1a1c; border: 1px solid #2c2c30; border-radius: 14px; }
+  .bili-input, .bili-picker-input { background: #1a1a1c; }
+  .bili-input__inner { background: #111112; }
+  .bili-input:focus-within { box-shadow: 0 0 0 2px #00aeec; }
+  .bili-input:focus-within::before { border: 3px solid #00aeec; }
+  .bili-input__inner:focus-visible { outline: 2px solid #00aeec; }
+  .bili-popup { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .bili-popup__wrap { display: flex; height: 500px; max-height: 500px; overflow: hidden; }
+  .bili-popup-modal__content { height: 65vh; overflow: auto; }
+  .bili-popup-modal__footer { position: absolute; bottom: 0; }
+  .bili-cascader-options { background: #242628; }
+</style></head><body><div id="bili-header-container"></div><div id="app"><div class="bgc"></div><div class="bg"></div><div class="bili-dyn-home--member"><aside class="left"></aside><main>
+<section><div class="bili-dyn-publishing"><div class="bili-dyn-publishing__topic"><div class="bili-topic-search__popover"><div class="bili-topic-search__input"><span class="bili-topic-search__input__text">选择话题</span></div></div></div>
+<div class="bili-dyn-publishing__title"><input class="bili-dyn-publishing__title__input" placeholder="好的标题更容易获得支持，选填20字"></div>
+<div class="bili-dyn-publishing__input"><div class="bili-rich-textarea"><div class="bili-rich-textarea__inner empty" contenteditable="true" placeholder="有什么想和大家分享的？">​</div></div></div>
+<div class="bili-dyn-publishing__control"><div class="bili-dyn-publishing__tools">${['emoji', 'pic', 'at', 'poll', 'live-reserve'].map((name) => `<div class="bili-dyn-publishing__tools__item ${name}"><svg><path d="M0 0h22v22H0z"/></svg></div>`).join('')}</div>
+<div class="bili-dyn-publishing__headquarters"><div class="bili-dyn-publishing__hint">0</div><div class="bili-dyn-publishing__settings"><div class="bili-dyn-publishing__settings__btn"><svg><path d="M0 0h22v22H0z"/></svg></div><div class="bili-cascader-options" hidden>${['可见范围', '定时发布', '允许评论', '创作声明'].map((name) => `<div class="bili-cascader-options__item"><div class="bili-cascader-options__item-label">${name}</div></div>`).join('')}</div></div><div class="bili-dyn-publishing__action launcher disabled">发布</div></div></div></div></section>
+<section>关注列表</section><section>动态列表</section></main><aside class="right"></aside><div class="bili-dyn-sidebar"></div></div></div>
+<div class="bili-popup" hidden><div class="bili-popup__wrap"><div class="bili-popup__content"><div class="bili-popup-modal"><div class="bili-popup__header__title">发起投票</div><div class="bili-popup-modal__content"><div class="bili-input"><input class="bili-input__inner" placeholder="请填写预约标题"></div><div class="bili-picker-input"><input class="bili-input__inner" value="20时"></div></div><div class="bili-popup-modal__footer"><button class="bili-popup-modal__button confirm disabled">完成</button></div></div></div></div>
+<script>document.querySelector('.bili-dyn-publishing__settings__btn').addEventListener('click',()=>{const options=document.querySelector('.bili-cascader-options');options.hidden=!options.hidden;});</script></body></html>`;
+
 const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>直播 - bilibili</title><style>
   .rank-list-ctnr .top3-name, .rank-list-ctnr .name, .rank-list-ctnr .rank, .rank-list-ctnr .score { color: #2f3238; }
   #aside-area-vm .rank-list-ctnr .tab-item { color: #2f3238 !important; }
@@ -236,6 +261,7 @@ const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="u
 
 /** 原版页面的最小骨架：映间会把它藏起来或在上面换皮 */
 function stubHtml(u) {
+  if (/[?&]compose=1/.test(u)) return composeHtml();
   if (/\/fans\/(?:follow|fans)/.test(u)) return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>关注 - bilibili</title><style>
     :root { --v_text_white: #fff; --v_brand_blue: var(--brand_blue, #00aeec); --v_brand_blue_hover: var(--brand_blue_hover, #40c5f1); --text_white: #fff; --Lb4: #f1f2f3; }
     .vui_button--blue, .vui_button--blue:focus { color: var(--v_text_white); background: var(--v_brand_blue); border: 1px solid var(--v_brand_blue); }

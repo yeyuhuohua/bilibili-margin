@@ -12,6 +12,7 @@ import watchCss from './watch.css?inline';
 import pagesCss from './pages.css?inline';
 import detailCss from './detail.css?inline';
 import liveCss from './live.css?inline';
+import composeCss from './compose.css?inline';
 import globalCss from './global.css?inline';
 import { setUserReducedMotion } from './motion';
 import { startNativeFilter } from './native-filter';
@@ -101,6 +102,7 @@ function setSkinMirror(v: string): void { try { if (skinMirror() !== v) localSto
 function skinStyle(kind: SkinKind, theme: string): HTMLStyleElement {
   const de = document.documentElement;
   de.classList.add('margin-skin', `margin-${kind}`);
+  de.classList.toggle('margin-compose', isFeed() && new URLSearchParams(location.search).get('compose') === '1');
   const dk = kind === 'page' ? detailKind() : null;
   if (dk) { de.classList.add('margin-detail'); de.dataset.marginDetail = dk; }
   de.dataset.marginTheme = theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
@@ -108,7 +110,7 @@ function skinStyle(kind: SkinKind, theme: string): HTMLStyleElement {
   if (!st) {
     st = document.createElement('style');
     st.id = 'margin-watch-css';
-    st.textContent = watchCss + '\n' + pagesCss + '\n' + detailCss + '\n' + liveCss;
+    st.textContent = watchCss + '\n' + pagesCss + '\n' + detailCss + '\n' + liveCss + '\n' + composeCss;
     de.append(st);
   }
   return st;
@@ -116,7 +118,7 @@ function skinStyle(kind: SkinKind, theme: string): HTMLStyleElement {
 function unskin(kind: SkinKind): void {
   const de = document.documentElement;
   document.getElementById('margin-watch-css')?.remove();
-  de.classList.remove('margin-skin', `margin-${kind}`, 'margin-has-bg', 'margin-detail', 'margin-detail-narrow');
+  de.classList.remove('margin-skin', `margin-${kind}`, 'margin-has-bg', 'margin-detail', 'margin-detail-narrow', 'margin-compose');
   delete de.dataset.marginTheme;
   delete de.dataset.marginDetail;
 }
@@ -222,6 +224,7 @@ async function start(): Promise<void> {
   if (sm) return takeover(load('space'), (m, st) => new m.SpaceApp(st, Number(sm[1]), sm[2] === 'dynamic' ? 'dynamic' : 'video'), false);
   if (isMessage()) return takeover(load('message'), (m, st) => new m.MessageApp(st));
   if (isHistory()) return takeover(load('history'), (m, st) => new m.HistoryApp(st));
+  if (isFeed() && new URLSearchParams(location.search).get('compose') === '1') return startWatch('page');
   if (isFeed()) return takeover(load('feed'), (m, st) => new m.FeedApp(st));
   if (isSearch()) return startWatch('search');
   if (isLive()) return startWatch('live');
