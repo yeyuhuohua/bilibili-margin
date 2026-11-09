@@ -54,5 +54,6 @@ export const csrf = () => document.cookie.match(/(?:^|;\s*)bili_jct=([^;]+)/)?.[
 export async function logout(): Promise<boolean> {
   const body = new URLSearchParams({ biliCSRF: csrf(), gourl: location.href });
   const r = await fetch('https://passport.bilibili.com/login/exit/v2', { method: 'POST', credentials: 'include', body }).then((x) => x.json()).catch(() => null);
+  if (r?.code === 0) await chrome.runtime.sendMessage({ margin: 'app', op: 'revoke' }).catch(() => {});
   return r?.code === 0;
 }

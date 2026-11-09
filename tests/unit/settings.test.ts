@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   loadSettings, saveSettings, sanitizeSettings, normalizeHomeOrder,
-  cleanFont, cleanHost, DEFAULTS,
+  cleanFont, cleanHost, DEFAULTS, clampPaletteSpeed,
 } from '../../src/shared/settings';
 
 /** chrome.storage.local 的最小模拟：loadSettings / saveSettings 只用到 get(KEY) / set */
@@ -19,11 +19,91 @@ const setChromeMock = () => {
 };
 
 describe('settings 迁移（merge / loadSettings）', () => {
+  it('旧设置使用经典搜索，切换新版可以保存和重新载入', async () => {
+    store.set('margin:settings', {});
+    expect((await loadSettings()).searchStyle).toBe('classic');
+    await saveSettings({ searchStyle: 'new' });
+    expect((await loadSettings()).searchStyle).toBe('new');
+    expect(sanitizeSettings({ searchStyle: 'classic', paletteSpeed: 200 })?.paletteSpeed).toBe(200);
+    expect(sanitizeSettings({ searchStyle: 'unknown' })?.searchStyle).toBe('classic');
+    expect(clampPaletteSpeed(Number.NaN)).toBe(100);
+    expect(clampPaletteSpeed(999)).toBe(200);
+  });
   beforeEach(() => { store.clear(); setChromeMock(); });
+  it('动态菜单默认显示全部，开关可保存并兼容旧配置', async () => {
+    expect((await loadSettings()).dynamicVideoOnly).toBe(false);
+    expect((await saveSettings({ dynamicVideoOnly: true })).dynamicVideoOnly).toBe(true);
+    expect((await loadSettings()).dynamicVideoOnly).toBe(true);
+    expect(sanitizeSettings({ dynamicVideoOnly: 'true' })?.dynamicVideoOnly).toBe(false);
+    expect(sanitizeSettings({ dynamicVideoOnly: true })?.dynamicVideoOnly).toBe(true);
+  });
 
   it('空存储 → 全部默认值', async () => {
     const s = await loadSettings();
     expect(s).toEqual(DEFAULTS);
+  });
+
+  it('控件动效独立保存，旧设置默认开启，平面质感可导入', async () => {
+    expect((await loadSettings()).uiEffects).toBe(true);
+    expect(sanitizeSettings({ uiEffects: 'false' })?.uiEffects).toBe(true);
+    const imported = sanitizeSettings({ uiEffects: false, glass: 'flat' })!;
+    expect(imported).toMatchObject({ uiEffects: false, glass: 'flat', reduceMotion: false });
+    await saveSettings(imported);
+    expect(await loadSettings()).toMatchObject({ uiEffects: false, glass: 'flat', bg: DEFAULTS.bg });
+  });
+
+  it('弹幕建议默认关闭，导入和本地保存严格接受布尔值', async () => {
+    expect(DEFAULTS.danmakuJump).toBe(false);
+    expect(sanitizeSettings({ danmakuJump: 'true' })?.danmakuJump).toBe(false);
+    expect(sanitizeSettings({ danmakuJump: true })?.danmakuJump).toBe(true);
+    await saveSettings({ danmakuJump: true });
+    expect((await loadSettings()).danmakuJump).toBe(true);
+  });
+
+  it('弹幕空降默认关闭，旧设置及导入严格接受布尔值', async () => {
+    expect(DEFAULTS.danmakuAirborne).toBe(false);
+    expect((await loadSettings()).danmakuAirborne).toBe(false);
+    store.set('margin:settings', { danmakuAirborne: 'true' });
+    expect((await loadSettings()).danmakuAirborne).toBe(false);
+    expect(sanitizeSettings({ danmakuAirborne: 'true' })?.danmakuAirborne).toBe(false);
+    expect(sanitizeSettings({ danmakuAirborne: true })?.danmakuAirborne).toBe(true);
+    await saveSettings({ danmakuAirborne: true });
+    expect((await loadSettings()).danmakuAirborne).toBe(true);
+  });
+
+  it('批次导航默认关闭、每批 12 条，条数导入时收敛到合法范围', async () => {
+    expect(DEFAULTS.batchNav).toBe(false);
+    expect(DEFAULTS.batchSize).toBe(12);
+    expect(DEFAULTS.batchRefresh).toBe(true);
+    expect(DEFAULTS.batchPrefetch).toBe(false);
+    expect(sanitizeSettings({ batchPrefetch: true })?.batchPrefetch).toBe(true);
+    expect(sanitizeSettings({ batchPrefetch: 'true' })?.batchPrefetch).toBe(false);
+    expect(sanitizeSettings({ batchNav: 'true' })?.batchNav).toBe(false);
+    expect(sanitizeSettings({ batchNav: true })?.batchNav).toBe(true);
+    expect(sanitizeSettings({ batchSize: 1 })?.batchSize).toBe(1);
+    expect(sanitizeSettings({ batchSize: 999 })?.batchSize).toBe(100);
+  });
+
+  it('撤回的播放页评论布局选项不再导入或作为默认设置', () => {
+    expect(DEFAULTS).not.toHaveProperty('watchComments');
+    expect(DEFAULTS).not.toHaveProperty('commentInput');
+    const s = sanitizeSettings({watchComments:'side',commentInput:'comfortable'});
+    expect(s).not.toHaveProperty('watchComments');
+    expect(s).not.toHaveProperty('commentInput');
+  });
+
+  it('新安装默认直接打开收藏夹，已有选择保留；列数枚举安全回落', async () => {
+    expect(DEFAULTS.favDirect).toBe(true);
+    store.set('margin:settings',{favDirect:false,favColumns:9});
+    expect(await loadSettings()).toMatchObject({favDirect:false,favColumns:3});
+    expect(sanitizeSettings({favColumns:4})).toMatchObject({favColumns:4});
+  });
+
+  it('强调色与玻璃设置默认沿用经典色并使用柔和效果，非法枚举回落',async () => {
+    expect(DEFAULTS.accent).toBe('classic');expect(DEFAULTS.glass).toBe('soft');
+    expect(sanitizeSettings({accent:'pink',glass:'liquid'})).toMatchObject({accent:'pink',glass:'liquid'});
+    store.set('margin:settings',{accent:'bad',glass:'bad'});
+    expect(await loadSettings()).toMatchObject({accent:'classic',glass:'soft'});
   });
 
   it('部分存储：给什么用什么，缺的补默认', async () => {
@@ -87,6 +167,16 @@ describe('settings 迁移（merge / loadSettings）', () => {
     expect(s.theme).toBe('light');
     expect(s.monoNum).toBe(false);
     expect(store.get('margin:settings')).toBeTruthy();
+  });
+
+  it('广告片段跳过默认关闭，仅显式布尔值开启，支持备份导入', async () => {
+    expect((await loadSettings()).sponsorSkip).toBe(false);
+    store.set('margin:settings', { sponsorSkip: 'true' });
+    expect((await loadSettings()).sponsorSkip).toBe(false);
+    await saveSettings({ sponsorSkip: true });
+    expect((await loadSettings()).sponsorSkip).toBe(true);
+    expect(sanitizeSettings({ sponsorSkip: true })?.sponsorSkip).toBe(true);
+    expect(sanitizeSettings({ sponsorSkip: 'true' })?.sponsorSkip).toBe(false);
   });
 });
 

@@ -5,3 +5,10 @@ tests/artifacts/
 dist-firefox
 .idea/
 .DS_Store
+.npm-cache/
+.uv-cache/
+.python/
+.security-venv/
+.security-tools/
+.browsers/
+artifacts/

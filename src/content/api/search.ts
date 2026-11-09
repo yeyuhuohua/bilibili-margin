@@ -1,4 +1,5 @@
 import { getWbi } from './http';
+export { searchHistory, rememberSearch, forgetSearch } from './search-history';
 /** 搜索联想、热搜、稍后再看——都是 B 站网页端自己在用的接口（只允许 www.bilibili.com 跨域） */
 export interface Suggest { term: string; html: string }
 export interface Hot { keyword: string; name: string }
@@ -44,17 +45,6 @@ export async function addWatchLater(bvid: string): Promise<{ ok: boolean; msg: s
   return b.code === 0 ? { ok: true, msg: '已加入稍后再看' } : { ok: false, msg: b.message || '没加上，稍后再试' };
 }
 
-const HKEY = 'margin:search-history';
-export function searchHistory(): string[] {
-  try { return JSON.parse(localStorage.getItem(HKEY) || '[]'); } catch { return []; }
-}
-export function rememberSearch(q: string): void {
-  const list = [q, ...searchHistory().filter((x) => x !== q)].slice(0, 8);
-  localStorage.setItem(HKEY, JSON.stringify(list));
-}
-export function forgetSearch(q?: string): void {
-  localStorage.setItem(HKEY, JSON.stringify(q ? searchHistory().filter((x) => x !== q) : []));
-}
 export const searchUrl = (q: string) => `https://search.bilibili.com/all?keyword=${encodeURIComponent(q)}`;
 
 export interface LaterItem { aid: number; bvid: string; title: string; cover: string; duration: number; progress: number; author: string; mid: number; addAt: number }

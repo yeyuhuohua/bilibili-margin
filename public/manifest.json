@@ -3,7 +3,12 @@
   "name": "__MSG_extensionName__",
   "default_locale": "en",
   "short_name": "MARGIN",
-  "version": "0.52.0",
+  "version": "0.60.15",
+  "version_name": "0.6.15",
+  "minimum_chrome_version": "110",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'self' https://app.bilibili.com https://bsbsb.top https://api.github.com"
+  },
   "description": "__MSG_extensionDescription__",
   "icons": {
     "16": "icons/16.png",
@@ -21,12 +26,19 @@
     "storage"
   ],
   "host_permissions": [
-    "https://app.bilibili.com/*"
+    "https://app.bilibili.com/*",
+    "https://bsbsb.top/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": ["https://www.bilibili.com/*", "https://t.bilibili.com/*", "https://space.bilibili.com/*"],
+      "js": ["comment-location.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://www.bilibili.com/*",

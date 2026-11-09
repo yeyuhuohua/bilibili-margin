@@ -2,9 +2,21 @@
 import { getJSON, postForm, postJSON } from './http';
 
 /** 一条动态，抽成渲染需要的最小结构 */
+export interface DynText { text: string; emoji?: string }
+interface ReserveStyle {
+  text?: string; disable?: number; toast?: string;
+  interactive?: { popups?: string; desc?: string; confirm?: string; cancel?: string };
+}
+export interface DynReserve {
+  rid: string; title: string; state: number; reserve_total: number; jump_url: string;
+  desc1?: { text: string }; desc2?: { text: string; visible: boolean };
+  desc3?: { text: string; jump_url: string };
+  premiere?: { cover: string; online?: string }; badge_text?: string;
+  button?: { type: number; status: number; check?: ReserveStyle; uncheck?: ReserveStyle; jump_style?: ReserveStyle };
+}
 export interface Dyn {
   id: string; type: string; author: string; face: string; mid: number; ts: number; time: string;
-  text: string; emotes: Record<string, string>; title?: string;
+  text: string; emotes: Record<string, string>; richText?: DynText[]; title?: string;
   video?: { bvid: string; title: string; cover: string; dur: string; play: string; desc: string; ad?: boolean };
   pics: string[];
   article?: { title: string; cover: string; desc: string; url: string };
@@ -12,6 +24,8 @@ export interface Dyn {
   live?: { title: string; cover: string; url: string; on: boolean; meta: string };
   /** 其它带卡片的类型（合集、番剧、课程、音乐、通用卡片），统一成链接卡 */
   link?: { title: string; cover: string; desc: string; url: string; kind: string };
+  attachment?: Dyn['link'];
+  reserve?: DynReserve;
   orig?: Dyn | null;
   stat: { comment: number; forward: number; like: number };
   url: string;
@@ -20,18 +34,26 @@ export interface Dyn {
 }
 
 const https = (u: unknown) => String(u ?? '').replace(/^\/\//, 'https://').replace(/^http:/, 'https:');
+const reserveUrl = (u: unknown) => /^https:\/\//.test(https(u)) ? https(u) : '';
 
 export function toDyn(it: any): Dyn | null {
   if (!it?.modules) return null;
   const m = it.modules, a = m.module_author ?? {}, d = m.module_dynamic ?? {}, s = m.module_stat ?? {};
   const major = d.major ?? {};
   const opus = major.opus;
-  const text = (opus?.summary?.text ?? d.desc?.text ?? '').trim();
-  const richNodes = [...(opus?.summary?.rich_text_nodes ?? []), ...(d.desc?.rich_text_nodes ?? [])];
-  const emotes = Object.fromEntries(richNodes.filter((n: any) => n?.emoji?.icon_url).map((n: any) => [n.orig_text || n.text || n.emoji.text, https(n.emoji.icon_url)]).filter(([token]) => token));
+  const desc = opus?.summary?.text != null ? opus.summary : d.desc;
+  const text = (desc?.text ?? '').trim();
+  const nodes: DynText[] = (desc?.rich_text_nodes ?? []).map((n: any) => {
+    const emoji = https(n.emoji?.icon_url);
+    return { text: String(n.text ?? n.orig_text ?? n.emoji?.text ?? ''),
+      ...(n.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && /^https:\/\//.test(emoji) ? { emoji } : {}) };
+  });
+  const emotes = Object.fromEntries((desc?.rich_text_nodes ?? []).filter((n: any) => n?.emoji?.icon_url)
+    .map((n: any): [string, string] => [n.orig_text || n.text || n.emoji.text, https(n.emoji.icon_url)]).filter(([token]: [string, string]) => token));
   const out: Dyn = {
     id: it.id_str, type: it.type, author: a.name ?? '', face: https(a.face), mid: a.mid ?? 0, ts: a.pub_ts ?? 0, time: a.pub_time ?? '',
-    text, emotes, title: opus?.title || undefined, pics: [],
+    text, emotes, richText: nodes.length && nodes.map((n) => n.text).join('').trim() === text ? nodes : undefined,
+    title: opus?.title || undefined, pics: [],
     stat: { comment: s.comment?.count ?? 0, forward: s.forward?.count ?? 0, like: s.like?.count ?? 0 },
     url: `https://www.bilibili.com/opus/${it.id_str}`,
     liked: s.like?.status === true, cmtType: Number(it.basic?.comment_type) || undefined, cmtOid: it.basic?.comment_id_str || undefined,
@@ -41,6 +63,7 @@ export function toDyn(it: any): Dyn | null {
     const ad = v.is_ad === true || Boolean(v.ad_info) || Boolean(v.business_info) || undefined;
     out.video = { bvid: v.bvid, title: v.title, cover: https(v.cover), dur: v.duration_text ?? '', play: v.stat?.play ?? '', desc: v.desc ?? '', ad };
     out.url = `https://www.bilibili.com/video/${v.bvid}`;
+    if (!out.cmtType && !out.cmtOid && v.aid) { out.cmtType = 1; out.cmtOid = String(v.aid); }
   }
   if (opus?.pics) out.pics = opus.pics.map((p: any) => https(p.url));
   else if (major.draw?.items) out.pics = major.draw.items.map((p: any) => https(p.src));
@@ -66,8 +89,33 @@ export function toDyn(it: any): Dyn | null {
     out.link = { title: lk.title ?? '', cover: https(lk.cover), desc: lk.desc ?? lk.sub_title ?? lk.label ?? '', url: https(lk.jump_url), kind };
     if (out.link.url) out.url = out.link.url;
   }
+  const ugc = d.additional?.ugc;
+  const ugcUrl = https(ugc?.jump_url);
+  if (/^https:\/\//.test(ugcUrl)) {
+    out.attachment = { title: ugc.title ?? '', cover: https(ugc.cover), url: ugcUrl, kind: '视频',
+      desc: ugc.stat ? [ugc.stat.play ? `${ugc.stat.play}播放` : '', ugc.stat.danmaku ? `${ugc.stat.danmaku}弹幕` : ''].filter(Boolean).join(' · ') : ugc.desc_second ?? '' };
+  }
+  const reserve = d.additional?.reserve;
+  if (reserve) {
+    out.reserve = { ...reserve, rid: String(reserve.rid ?? ''), title: String(reserve.title ?? ''),
+      jump_url: reserveUrl(reserve.jump_url),
+      desc3: reserve.desc3 ? { text: String(reserve.desc3.text ?? ''), jump_url: reserveUrl(reserve.desc3.jump_url) } : undefined,
+      premiere: reserve.premiere ? { ...reserve.premiere, cover: reserveUrl(reserve.premiere.cover) } : undefined };
+  }
   if (it.orig) out.orig = toDyn(it.orig);
   return out;
+}
+
+/** 与原生预约卡使用同一接口，状态和人数以服务器返回值为准。 */
+export async function dynReserve(id: string, reserve: DynReserve): Promise<string> {
+  const result = await postJSON<{ final_btn_status: number; desc_update?: string; reserve_update?: number; toast?: string }>(
+    '/x/dynamic/feed/reserve/click', { reserve_id: reserve.rid, cur_btn_status: reserve.button!.status,
+      dynamic_id_str: id, reserve_total: reserve.reserve_total, spmid: '' });
+  if (result.final_btn_status !== 1 && result.final_btn_status !== 2) throw new Error('预约状态未确认，请刷新后重试');
+  reserve.button!.status = result.final_btn_status;
+  if (result.desc_update !== undefined && reserve.desc2) reserve.desc2.text = result.desc_update;
+  if (result.reserve_update !== undefined) reserve.reserve_total = result.reserve_update;
+  return result.toast || (result.final_btn_status === 2 ? '预约成功' : '已取消预约');
 }
 
 export async function spaceDynamics(mid: number, offset: string): Promise<{ list: Dyn[]; offset: string; more: boolean }> {
@@ -121,9 +169,19 @@ export async function dynRepost(id: string, text: string): Promise<void> {
     web_repost_src: { dyn_id_str: id },
   }, { platform: 'web' });
 }
+/** 列表接口偶尔省略 basic，点开评论时才补详情，不为整页动态预取。 */
+export async function dynCommentTarget(d: Dyn): Promise<{ type: number; oid: string } | null> {
+  if (d.cmtType && d.cmtOid) return { type: d.cmtType, oid: d.cmtOid };
+  const detail = await getJSON<any>('/x/polymer/web-dynamic/v1/detail', { id: d.id });
+  const item = toDyn(detail.item);
+  if (!item?.cmtType || !item.cmtOid) return null;
+  d.cmtType = item.cmtType; d.cmtOid = item.cmtOid;
+  return { type: item.cmtType, oid: item.cmtOid };
+}
+
 export interface Reply {
-  rpid: number; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; like: number; ts: number; rcount: number;
-  level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string };
+  rpid: string; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
+  location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string };
   medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
 }
 function medalColor(value: unknown): string {
@@ -141,10 +199,15 @@ function medalColor(value: unknown): string {
 export function toReply(r: any): Reply {
   const m = r.member ?? {};
   const out: Reply = {
-    rpid: r.rpid, name: m.uname ?? '', face: https(m.avatar), mid: Number(r.mid) || 0,
+    rpid: String(r.rpid_str ?? r.rpid), name: m.uname ?? '', face: https(m.avatar), mid: Number(r.mid ?? m.mid) || 0,
     text: r.content?.message ?? '',
     emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
+    richText: String(r.content?.message ?? '').split(/(\[[^\]\r\n]+\])/g).filter(Boolean).map((text) => {
+      const emoji = https(r.content?.emote?.[text]?.url);
+      return { text, ...(/^https:\/\//.test(emoji) ? { emoji } : {}) };
+    }),
     like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
+    location: typeof r.reply_control?.location === 'string' ? r.reply_control.location.trim() || undefined : undefined,
     level: Math.max(0, Math.min(6, Math.trunc(Number(m.level_info?.current_level) || 0))),
     senior: !!m.is_senior_member,
     pendant: https(m.pendant?.image_enhance || m.pendant?.image || m.pendant?.image_enhance_frame) || undefined,
@@ -164,9 +227,16 @@ export function toReply(r: any): Reply {
 /** 热门评论第一页（旧版 /x/v2/reply 不要 wbi 签名） */
 export async function dynReplies(type: number, oid: string, ps = 8): Promise<{ list: Reply[]; count: number }> {
   const d = await getJSON<any>('/x/v2/reply', { type, oid, sort: 1, ps, pn: 1 });
-  const seen = new Set<number>();
-  const list = [...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])].filter((r: any) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps).map(toReply);
+  const seen = new Set<string>();
+  const list = [...(d.top_replies ?? []), ...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])]
+    .map(toReply).filter((r) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps);
   return { list, count: d.page?.acount ?? d.page?.count ?? list.length };
+}
+export async function dynSubReplies(type: number, oid: string, root: string, pn: number): Promise<{ list: Reply[]; more: boolean }> {
+  const ps = 10;
+  const d = await getJSON<any>('/x/v2/reply/reply', { type, oid, root, pn, ps });
+  const list: Reply[] = (d.replies ?? []).map(toReply);
+  return { list, more: list.length > 0 && pn * (d.page?.size || ps) < (d.page?.count ?? 0) };
 }
 export async function dynReply(type: number, oid: string, message: string): Promise<void> {
   await postForm('/x/v2/reply/add', { type, oid, message, plat: 1 });

@@ -1,0 +1,41 @@
+rules:
+  - id: margin-no-dynamic-html
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Use text nodes or the reviewed sanitizer instead of assigning dynamic HTML.
+    pattern-either:
+      - pattern: $ELEMENT.innerHTML = $VALUE
+      - pattern: $ELEMENT.outerHTML = $VALUE
+      - pattern: $ELEMENT.insertAdjacentHTML(...)
+  - id: margin-no-code-evaluation
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Runtime code evaluation is not allowed in this extension.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: margin-no-persistent-app-auth
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: App authorization must remain in background-only session storage.
+    pattern-either:
+      - pattern: chrome.storage.local.get(APP_AUTH_KEY)
+      - pattern: 'chrome.storage.local.set({..., [APP_AUTH_KEY]: $VALUE, ...})'
+  - id: margin-no-sensitive-logs
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Credentials and cookies must not enter console logs.
+    patterns:
+      - pattern: console.$METHOD(..., $SECRET, ...)
+      - metavariable-regex:
+          metavariable: $SECRET
+          regex: '(?i).*(access_token|access_key|authorization|document\.cookie).*'
+  - id: margin-optional-network-gate
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Optional external services must use optionalFetch and its consent check.
+    patterns:
+      - pattern: fetch($URL, ...)
+      - metavariable-regex:
+          metavariable: $URL
+          regex: '(?s).*https://(ipwho\.is|api\.open-meteo\.com|geocoding-api\.open-meteo\.com|bsbsb\.top|api\.github\.com).*'

@@ -16,6 +16,17 @@ function toItem(x: any): HistItem {
   const id = biz === 'archive' ? h.oid : biz === 'pgc' ? h.epid || h.oid : h.oid;
   let url = x.uri || '';
   if (!url && biz === 'archive') url = `https://www.bilibili.com/video/${h.bvid}`;
+  if (biz === 'archive' && h.bvid) {
+    let target = new URL(`https://www.bilibili.com/video/${h.bvid}`);
+    try {
+      const supplied = new URL(https(url));
+      if (supplied.hostname === 'www.bilibili.com' &&
+          [ `/video/${h.bvid}`, `/video/av${h.oid}` ].includes(supplied.pathname.replace(/\/$/, ''))) target = supplied;
+    } catch { /* 缺少有效 uri 时使用历史记录中的视频 ID。 */ }
+    const page = Number(h.page);
+    if (Number.isInteger(page) && page > 0) target.searchParams.set('p', String(page));
+    url = target.href;
+  }
   if (!url && biz === 'live') url = `https://live.bilibili.com/${h.oid}`;
   if (!url && biz === 'article') url = `https://www.bilibili.com/read/cv${h.oid}`;
   if (!url && biz === 'pgc') url = `https://www.bilibili.com/bangumi/play/ep${h.epid}`;

@@ -24,7 +24,12 @@ function feedItem(i, kind) {
   const d = m.module_dynamic;
   if (kind === 'av') { d.desc = { text: '新视频上线：这期把三家播放器的进度条拆开来看。' }; d.major = { archive: { bvid: v.bvid, title: v.title, cover: v.pic, duration_text: mmss(v.dur), stat: { play: `${(v.play / 1e4).toFixed(1)}万` }, desc: v.desc } }; }
   if (kind === 'draw') d.major = { opus: { title: '这周的字体笔记', summary: { text: '霞鹜新致宋的标点挤压做得很舒服。' }, pics: [0, 1, 2].map((j) => ({ url: P[i + j].pic })) } };
-  if (kind === 'word') d.major = { opus: { summary: { text: '有人问映间为什么没有 logo。因为页面本身就是名片。' } } };
+  if (kind === 'word') d.major = { opus: { summary: {
+    text: '有人问映间为什么没有 logo。[开心]因为页面本身就是名片。',
+    rich_text_nodes: [{ text: '有人问映间为什么没有 logo。' },
+      { type: 'RICH_TEXT_NODE_TYPE_EMOJI', text: '[开心]', emoji: { icon_url: 'https://i0.hdslb.com/bfs/emote/happy.gif' } },
+      { text: '因为页面本身就是名片。' }],
+  } } };
   return { id_str: String(900000 + i), type: kind, modules: m, basic: { comment_type: 1, comment_id_str: String(800000 + i) } };
 }
 function feedItems() {
@@ -39,6 +44,7 @@ function feedItems() {
   };
   fw.orig = feedItem(6, 'av');
   items.splice(2, 0, fw);
+  for (const item of items.slice(0, 2)) delete item.basic;
   return items;
 }
 
@@ -84,7 +90,31 @@ export function apiBody(u) {
   if (u.includes('fav/resource/list')) return { code: 0, data: { has_more: false, medias: P.slice(0, 8).map((v) => ({ type: 2, attr: 0, bvid: v.bvid, title: v.title, cover: v.pic, duration: v.dur, upper: { name: v.name, mid: v.mid, face: v.face }, cnt_info: { play: v.play, danmaku: 100 }, fav_time: v.pub })) } };
   if (u.includes('fav/folder/')) return { code: 0, data: 0 };
   if (u.includes('nav/stat')) return { code: 0, data: { following: 218, follower: 1342, dynamic_count: 57 } };
+  if (u.includes('/x/relation/followings')) return { code: 0, data: { total: 12,
+    list: P.slice(0, 12).map((v, i) => ({ mid: 100 + i, uname: v.name, face: v.face })),
+  } };
   if (u.includes('feed/all/update')) return { code: 0, data: { update_num: 6 } };
+  if (u.includes('web-dynamic/v1/detail')) return { code: 0, data: { item: {
+    ...feedItem(1, 'av'), basic: { comment_type: 17, comment_id_str: '900001' },
+  } } };
+  if (u.includes('/x/v2/reply/add')) return { code: 0, data: {} };
+  if (u.includes('/x/v2/reply?')) return { code: 0, data: {
+    top_replies: [{ rpid: 11, member: { uname: '置顶作者', mid: 1 }, content: {
+      message: '置顶评论[开心]', emote: { '[开心]': { url: 'https://i0.hdslb.com/bfs/emote/happy.gif' } },
+    } }], replies: [{ rpid: 12, member: { uname: '热评作者', mid: 2 }, content: { message: '热门评论' } }, {
+      rpid: 1, mid: P[1].mid,
+      member: {
+        uname: P[1].name, avatar: P[1].face, level_info: { current_level: 5 },
+        pendant: { image: P[3].pic, image_enhance: P[4].pic, image_enhance_frame: P[5].pic },
+        fans_detail: {
+          medal_name: '映间', level: 12, medal_color: 0xfff8ebf0, medal_color_end: 0xfff8ebf0, medal_color_border: 0xfff8ebf0,
+          medal_color_name: 0xffab6890, medal_color_level: 0xffd9a0b6, first_icon: P[3].pic, second_icon: P[4].pic,
+        },
+        nameplate: { name: '有爱大佬', image_small: P[6].pic },
+      },
+      content: { message: '前排[liyuu 动态表情_可爱][liyuu 动态表情_可爱][liyuu 动态表情_可爱]支持', emote: { '[liyuu 动态表情_可爱]': { url: P[2].pic } } }, like: 12, ctime: NOW - 120, rcount: 0,
+    }], page: { count: 3 },
+  } };
   if (u.includes('web-dynamic/v1/feed/all')) return { code: 0, data: { update_baseline: '1000', items: feedItems(), has_more: false, offset: '' } };
   if (u.includes('web-dynamic/v1/feed/space')) return { code: 0, data: { items: feedItems(), offset: '', has_more: false } };
   if (u.includes('web-dynamic/v1/portal')) return { code: 0, data: { up_list: { items: P.slice(0, 12).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, has_update: i % 3 === 0 })) }, live_users: { count: 2, items: P.slice(12, 14).map((v, i) => ({ mid: v.mid, uname: v.name, face: v.face, title: ['今晚通宵剪片', '字体设计直播'][i], room_id: 1000 + i })) } } };
@@ -251,7 +281,18 @@ const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="u
   .blockSetting .block-list-ctnr { background: #1a1a1c; }
   .blockSetting .header-left, .blockSetting .header-right, .blockSetting .clear-all-btn { color: #9a9ba0; }
   .blockSetting .tab-item.active { color: #ff8cb0; }
-</style></head><body><div id="app"><main class="native">原版直播页面</main>
+</style></head><body><div class="link-navbar-ctnr"></div>
+<div class="live-room-app"><main class="app-content"><div class="app-body">
+  <div id="player-ctnr"><div id="live-player"><div id="fullscreen-container" style="height:240px;background:#222">
+    <div class="web-player-inject-wrap"><video muted playsinline></video></div>
+  </div></div></div>
+</div></main></div>
+<button id="native-full" type="button" style="position:fixed;right:8px;bottom:8px;z-index:2147483647;padding:4px 10px">全屏</button>
+<script>
+  document.getElementById('native-full').addEventListener('click', () => {
+    document.getElementById('fullscreen-container').requestFullscreen().catch(() => {});
+  });
+</script><div id="app"><main class="native">原版直播页面</main>
 <aside id="aside-area-vm"><div class="rank-list-ctnr">
   <div class="tab-item active">房间观众(84)</div><div class="tab-item opacity6">大航海(1)</div>
   <div class="sub-tab-item-text">在线榜</div><div class="sub-tab-item-text opacity6">日榜</div>
@@ -305,6 +346,7 @@ function stubHtml(u) {
   if (/live\.bilibili\.com/.test(u)) return liveHtml();
   if (/\/opus\/\d/.test(u)) return opusHtml();
   if (/search\.bilibili\.com/.test(u)) return searchHtml();
+  if (/live\.bilibili\.com\/\d+/.test(u)) return liveHtml();
   if (/\/v\/popular/.test(u)) return popularHtml();
   if (/\/video\//.test(u)) return watchHtml();
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>哔哩哔哩 (゜-゜)つロ 干杯~-bilibili</title></head><body>
@@ -330,11 +372,11 @@ ${[['like', '3.3万'], ['coin', '2656'], ['favorite', '1.8万'], ['forward', '17
 }
 
 /** 给 BrowserContext 装上离线路由 */
-export async function installMocks(ctx) {
+export async function installMocks(ctx, override) {
   await ctx.route(/^https?:\/\//, async (route) => {
     const req = route.request();
     const u = req.url();
-    const body = apiBody(u);
+    const body = (await override?.(u)) ?? apiBody(u);
     const origin = req.headers().origin || 'https://www.bilibili.com';
     if (body) return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true' }, body: JSON.stringify(body) });
     const type = req.resourceType();

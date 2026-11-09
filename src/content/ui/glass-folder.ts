@@ -9,8 +9,8 @@
  * - 首次进入视口时自己组装；指针移动带视差与光斑；尊重 prefers-reduced-motion
  */
 import { fanSlot, hashString, paint, recipeOf, rng, type ArtPreset } from './folder-art';
-import { h, setMarkup } from './dom';
-import { reducedMotion } from '../motion';
+import { h, setMarkup, icon, ICONS } from './dom';
+import { uiReducedMotion as reducedMotion } from '../motion';
 
 export interface GFFile { name: string; meta?: string; image?: string; art?: ArtPreset; href?: string }
 export interface GFMenuItem { label: string; onSelect?: () => void; danger?: boolean }
@@ -30,7 +30,7 @@ export interface GFOptions {
   onDirect?: () => void;
   onFileSelect?: (file: GFFile, index: number) => void;
 }
-export interface GlassFolderApi { el: HTMLElement; setFiles(files: GFFile[]): void; setOpen(open: boolean): void; isOpen(): boolean }
+export interface GlassFolderApi { el: HTMLElement; setFiles(files: GFFile[]): void; setOpen(open: boolean): void; isOpen(): boolean; dispose(): void }
 
 const NS = 'http://www.w3.org/2000/svg';
 const W = 340;
@@ -74,10 +74,11 @@ function artCanvas(art: ArtPreset, seed: number, w: number, hh: number, density:
 export function glassFolder(o: GFOptions): GlassFolderApi {
   const uid = `gf${++uidSeq}`;
   const width = o.width ?? W;
-  const k = width / W;
+  let k = width / W;
   const density = Math.min(1.5, Math.max(1, devicePixelRatio || 1)) * k;
   let open = false;
   let menuOpen = false;
+  let disposed = false;
   let files: GFFile[] = [];
 
   const root = h('div', { class: 'gf-root', 'data-place': 'bottom-left', style: `width:${width}px;height:${(H + HEADROOM) * k}px` });
@@ -115,11 +116,9 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
 
   // ··· 键与菜单
   const key = h('button', { type: 'button', class: 'gf-key gf-key--more', 'aria-label': `${o.label} 更多操作`, 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-controls': `${uid}-menu` }) as HTMLButtonElement;
-  const glyph = document.createElementNS(NS, 'svg');
+  const glyph = icon(ICONS.more) as SVGElement;
   glyph.setAttribute('class', 'gf-glyph gf-glyph--more');
-  glyph.setAttribute('viewBox', '0 0 30 12');
   glyph.setAttribute('aria-hidden', 'true');
-  setMarkup(glyph, '<rect x="1" y="1.5" width="8" height="9" rx="3.4"/><rect x="11" y="1.5" width="8" height="9" rx="3.4"/><rect x="21" y="1.5" width="8" height="9" rx="3.4"/>');
   key.append(glyph);
   const menu = h('div', { class: 'gf-menu', role: 'menu', id: `${uid}-menu`, 'aria-label': `${o.label} 选项` });
 
@@ -128,9 +127,10 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   stage.append(tilt);
   root.append(stage);
 
+  let arts = [...root.querySelectorAll<HTMLElement>('.gf-art')];
   let frostRaf = 0;
   function syncFrost() {
-    if (frostRaf) return;
+    if (disposed || frostRaf) return;
     frostRaf = requestAnimationFrame(() => {
       frostRaf = 0;
       const b = back.cloneNode(true) as HTMLElement;
@@ -143,6 +143,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
         a.forEach((cv, i) => { const d = c[i]; d.width = cv.width; d.height = cv.height; if (cv.width > 1) d.getContext('2d')?.drawImage(cv, 0, 0); });
       }
       frost.replaceChildren(b, f);
+      arts = [...root.querySelectorAll<HTMLElement>('.gf-art')];
     });
   }
 
@@ -190,6 +191,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   }
 
   function setFiles(next: GFFile[]) {
+    if (disposed) return;
     const first = !files.length;
     files = next;
     const start = Math.max(0, files.length - MAX_VISIBLE);
@@ -224,17 +226,23 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   let px = 0;
   let py = 0;
   let pointerX = 0, pointerY = 0, tracking = false;
+  let pointerRect: DOMRect | null = null;
+  let pointerScope: Document | ShadowRoot | null = null;
+  const invalidatePointer = () => {
+    pointerRect = null;
+    if (tracking && !raf) raf = requestAnimationFrame(write);
+  };
   const write = () => {
     raf = 0;
     if (reducedMotion()) {
       tilt.style.transform = '';
       shadowEl.style.transform = '';
       specEl.style.transform = '';
-      root.querySelectorAll<HTMLElement>('.gf-art').forEach((a) => { a.style.transform = ''; });
+      arts.forEach((a) => { a.style.transform = ''; });
       return;
     }
     if (tracking) {
-      const r = root.getBoundingClientRect();
+      const r = pointerRect ??= root.getBoundingClientRect();
       px = ((pointerX - r.left) / r.width) * 2 - 1;
       py = ((pointerY - r.top) / r.height) * 2 - 1;
     } else px = py = 0;
@@ -243,15 +251,29 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
     tilt.style.transform = px || py ? `translate(${(px * 3).toFixed(2)}px, ${(py * 2).toFixed(2)}px)` : '';
     shadowEl.style.transform = px ? `translateX(${(px * -8).toFixed(2)}px)` : '';
     const art = px || py ? `translate(${(px * -7).toFixed(2)}px, ${(py * -6).toFixed(2)}px) scale(1.02)` : '';
-    root.querySelectorAll<HTMLElement>('.gf-art').forEach((a) => { a.style.transform = art; });
+    arts.forEach((a) => { a.style.transform = art; });
     specEl.style.transform = px || py ? `translate(${(px * W * 0.46).toFixed(1)}px, ${(py * FRONT_H * 0.4).toFixed(1)}px)` : '';
   };
   root.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'touch' || reducedMotion()) return;
+    if (!tracking) {
+      pointerRect = null;
+      pointerScope = root.getRootNode() as Document | ShadowRoot;
+      pointerScope.addEventListener('scroll', invalidatePointer, { capture: true, passive: true });
+      addEventListener('scroll', invalidatePointer, { capture: true, passive: true });
+      addEventListener('resize', invalidatePointer, { passive: true });
+    }
     pointerX = e.clientX; pointerY = e.clientY; tracking = true;
     if (!raf) raf = requestAnimationFrame(write);
   });
-  root.addEventListener('pointerleave', () => { tracking = false; if (!raf) raf = requestAnimationFrame(write); });
+  root.addEventListener('pointerleave', () => {
+    tracking = false; pointerRect = null;
+    pointerScope?.removeEventListener('scroll', invalidatePointer, true);
+    pointerScope = null;
+    removeEventListener('scroll', invalidatePointer, true);
+    removeEventListener('resize', invalidatePointer);
+    if (!raf) raf = requestAnimationFrame(write);
+  });
 
   hit.addEventListener('click', () => { setMenu(false); if (o.direct?.()) { if (open) setOpen(false); o.onDirect?.(); return; } setOpen(!open); });
   key.addEventListener('click', () => setMenu(!menuOpen));
@@ -289,14 +311,34 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   }
 
   // 首次进入视口时组装
+  let enterTimer = 0;
   const io = new IntersectionObserver((es) => {
     if (!es.some((e) => e.isIntersecting)) return;
     io.disconnect();
-    setTimeout(() => root.toggleAttribute('data-entered', true), o.appearDelay ?? 0);
+    enterTimer = window.setTimeout(() => root.toggleAttribute('data-entered', true), o.appearDelay ?? 0);
   }, { threshold: 0.25 });
   io.observe(root);
+  let measuredWidth = width;
+  const ro = new ResizeObserver(([entry]) => {
+    const w = entry.contentRect.width;
+    if (!w || Math.abs(w - measuredWidth) < .5) return;
+    measuredWidth = w;k = w / W;
+    invalidatePointer();
+    root.style.height = `${(H + HEADROOM) * k}px`;
+    stage.style.transform = `translateY(${HEADROOM * k}px) scale(${k})`;
+  });
+  ro.observe(root);
 
-  const api = { el: root, setFiles, setOpen, isOpen: () => open };
+  const dispose = () => {
+    disposed = true; open = false; menuOpen = false; listen();
+    io.disconnect(); ro.disconnect(); clearTimeout(enterTimer);
+    cancelAnimationFrame(raf); cancelAnimationFrame(frostRaf);
+    pointerScope?.removeEventListener('scroll', invalidatePointer, true);
+    pointerScope = null;
+    removeEventListener('scroll', invalidatePointer, true);
+    removeEventListener('resize', invalidatePointer);
+  };
+  const api = { el: root, setFiles, setOpen, isOpen: () => open, dispose };
   if (o.meta) setMeta(o.meta);
   renderMenu();
   setFiles(o.files ?? []);

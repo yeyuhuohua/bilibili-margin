@@ -2,6 +2,217 @@
 
 # Changelog
 
+## Unreleased
+
+## v0.6.15 · 2026-11-08
+
+- Restore the original compact header search with its icon, placeholder and shortcut hint, without a submit button.
+- Classic search uses the original panel interaction. In-place expansion and rotating trends remain optional, while homepage search and other fixes are preserved.
+
+## v0.6.14 · 2026-11-08
+
+- Integrate batch navigation and both search styles, defaulting to classic search with settings for the expanding panel and animation speed.
+- Display native comment locations from existing public reply data, handling recycled nodes, missing fields and escaped text.
+- Improve creator information and follow markers, simplify toolbar surfaces, and cancel stale batch refreshes after tab changes.
+
+## v0.6.13 · 2026-11-08
+
+- Fix #102 higher-specificity follow-button styles overriding the selected accent. Search tabs, sorting and pagination follow the accent across light/dark themes, hover and restoration of classic colors.
+- Extend #18 application-window navigation to middle-clicked Bilibili links and dynamic cards. Ordinary browser tabs, modified clicks, external links and downloads keep browser handling.
+- Limit unit-test discovery to tests so local backup copies cannot run stale tests.
+
+## v0.6.12 · 2026-11-08
+
+- Complete #103 with creator-space articles, audio and public favorite folders, including incremental loading, empty states, retries and direct links. Public folders show their videos; private folders and subscribed collections use the native page.
+- Integrate PR #124 to omit the ignored WebGPU powerPreference option on Windows while retaining low-power preference elsewhere. Disposal during platform lookup prevents subsequent GPU initialization.
+- Use browser-computed content geometry in the profile-card hover regression to hit transformed links reliably.
+
+## v0.6.11 · 2026-11-08
+
+- Improve #103 errors for HTML responses and clear failed navigation/WBI promises so space loading can recover on retry.
+- Fix #101 preview delays caused by movement inside a cover, discard stale hover requests, and retry failed metadata or expired media URLs.
+- Add #104 sequential multi-image messaging with file selection, paste, drop and per-image removal. Keep failed and remaining images, remove confirmed sends, and cancel the remaining queue when switching conversations.
+- Add #99 a persistent video-only filter to the header dynamic menu, defaulting to all content. Place Watch Later on covers and ignore stale responses after filter changes.
+
+## v0.6.10 · 2026-11-08
+
+- Fix #108 by preserving the watched video ID and part number in history links, including history search and header history entries.
+- Fix #107 by keeping first-time feed tab changes at the first video row and restoring cached scroll positions after rendering. Reserve loading space and suppress scroll anchoring during the replacement.
+- Fix #100 by scrolling the selected followed creator into view, with immediate positioning when reduced motion is enabled.
+
+## v0.6.9 · 2026-11-08
+
+- Integrate PR #112 to remove the holographic strip and its animation from the avatar card.
+- Keep the quick-entry label on one line, adjust icon sizes and spacing, and verify text wrapping and row overflow.
+
+## v0.6.8 · 2026-11-08
+
+- Integrate cross-tab message synchronization based on PR #122. Use actual server unread counts, retain unread state after failed private-message acknowledgements, coalesce requests and broadcasts, and retry after delayed server updates.
+- Integrate space and collection search based on PR #119. Continue through upload, collection-directory, and collection-video pages with up to three concurrent collection requests per batch. Cancel stale queries, allow retries, reuse result cards, and honor the selected sort order.
+- Fix stacked horizontal padding in dynamic-detail comments for third-party IP labels and action rows. Keep the reply-collapse button in normal document flow (#121).
+
+## v0.6.7 · 2026-11-08
+
+- Apply the shared header refraction filter, translucent surface, and reflections to the theme-switch capsule. Follow liquid, soft, and flat glass settings and the system reduced-transparency preference.
+
+## v0.6.6 · 2026-11-08
+
+- Add a circular glass theme switch with round sun and moon particles, muted cool and warm highlights, press deformation, and a slower spring release. Supports click, drag, and keyboard input.
+- Batch particle drawing, cache unchanged icons, combine glow rendering, and coalesce drag updates per frame. Pause animation while idle, offscreen, or in a hidden tab, respecting system and extension motion preferences.
+- Keep theme persistence through the existing settings writer, initialize directly to the saved theme, and release observers and motion subscriptions when the control is removed.
+
+## [v0.6.5](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.5) · Pending release
+
+- Fix slight movement of profile-card links during hover with high-refresh interpolation. Synchronize the physics state with the displayed position before pausing movement over a link.
+
+## [v0.6.4](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.4) · Pending release
+
+- Integrate the privacy preview with optional external services and recent searches disabled by default. Opted-in searches stay in extension storage, capped at eight entries with 30-day expiration and cleanup on read.
+- Store App-feed credentials in background-only session storage and clear legacy persistent credentials on upgrade. Reauthorization is required after upgrading and browser restarts. Add external request allowlists, credential isolation, URL checks, DOMPurify search highlighting, and an extension-page CSP.
+- Integrate high-refresh performance changes. Backgrounds follow native rAF cadence with overload protection, hidden-tab suspension, and explicit caps. Normalize particle trails, damping, and brightness over time, and interpolate profile-card rendering between fixed physics steps.
+- Animate ruler ticks with transforms and cache intro canvas geometry through ResizeObserver. Retain the glass intro and no-WebGL fallback restored in 0.6.2.
+- Scan newly inserted comment subtrees, use a Map and explicit stack for reply ordering, and skip unchanged style writes. Add privacy, performance, and development security checks.
+
+## [v0.6.3](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.3) · Pending release
+
+- Restore livestream reservation cards in followed feeds, creator spaces, and reposts, including titles, schedules, reservation counts, and server-provided button states (#98).
+- Support reserving, cancellation, server confirmation prompts, and retries with duplicate-click protection. Respect ended, deleted, and app-only states, and provide the live-room link when available.
+
+## [v0.6.2](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.2) · Pending release
+
+- Restore the glass intro with software rendering at a lower initial resolution. Use a lightweight TV-logo entrance and header landing when WebGL is unavailable.
+- Fix initialization order during early intro exits and clean up animation and timeout resources. Add browser coverage for initial playback, same-tab reloads, skipping, and reduced-motion settings.
+
+## [v0.6.1](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.1) · Pending release
+
+The display version is 0.6.1 and the internal update version is 0.60.1. Increment the patch number for every delivered update and synchronize the manifest, package versions, and both changelogs.
+
+- Add Watch Later actions to videos and reposted videos in the header's dynamic feed, with retries and duplicate-click protection.
+- Accept selected text dropped onto the homepage search, header search entry, and search panel. Press Enter or the search button to confirm.
+- Collapse search-result grid columns when their video is filtered, and restore them when the filter is cleared.
+- Rescan native video filters when result lists change, reducing work from unrelated comment and danmaku updates while supporting delayed lists and full replacements.
+- Keep the homepage's return-to-original button at the bottom left so scrolling and appended recommendations remain usable.
+
+## [v0.6](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.0) · 2026-11-07
+
+The displayed release version is 0.6. The internal update version is 0.60.0 so browsers and update checks recognize it as a newer release.
+
+- Wrap watch-page toolbar actions when space is limited so menus and location controls stay inside the card. Keep the wide-mode sidebar in document flow to prevent native sticky positioning from abruptly moving recommendations into view. Check automatic wide mode immediately while waiting for native SSR hydration before interacting, reducing the fixed delay when controls are ready (#97).
+
+- Remove cover tooltips that obscure hover previews on home and profile pages. Collapse the block action to an accessible icon during playback. Render attached video cards in dynamics while retaining the original post and comment targets, and prevent video statistics from wrapping or squeezing icons in article details (#93).
+- Keep native comment picture-detail popups above the extension header so their close buttons remain clickable in both themes (#96). Extend nested-reply regressions to following and profile feeds, including pagination and retries, and check sun/moon alignment across three pages (#95).
+
+- Fix the header covering live web fullscreen by recognizing the native `player-full-win` state. Cover repeated transitions, native fullscreen round trips, delayed body initialization and header restoration when only scroll locking remains (follow-up on closed issue #76).
+
+- Add a 16px gap between the wide player and the action card, aligning the creator card with the action card's top edge. Cover ordinary videos, Watch Later, favorite playlists, zoom, mini-player scrolling and repeated mode changes so rounded borders have space below the player (#92).
+
+- Apply existing theme, accent, radius and control-motion preferences to the live homepage's search, navigation, rankings, areas and room cards. Use native color variables with the native layout and recommendation player, supporting system theme changes, immediate disable and `?margin=off` without loading the watch-page UI module (#88).
+
+- Fix native like and costume animations appearing at the page's top-left by preserving SVGA measurement before reparenting and costume icons. Cover normal and scaled layouts (#91). Add first-frame checks for reply expansion and pagination, verifying the existing `--bg1_rgb` dark-loading fix (#90).
+
+- Stop resize-triggered shader draws after disabling animated backgrounds or selecting an image. Verify control-effect preferences against hardware animation and the software-rendering static fallback, excluding settings thumbnails from draw counts.
+
+- Fix a cold-start square-corner flash before the first theme mirror exists by applying default player styling synchronously and reconciling stored settings. Share the startup settings read and skip the watch UI module download when page redesign is disabled.
+- Add an independent control-animation switch for buttons, panels, cards and triple-action feedback while background and weather motion follow their own settings. Add a Flat surface option that removes backdrop blur, refraction and primary floating shadows. Persist and import both settings, with home, watch and search regressions. Release held input and clean up animations when effects are disabled during a triple-action hold (#85).
+- Add the approved compact squeeze carousel to channel pages, with a main image, two narrow previews and a translucent caption gradient. Reuse Bilibili covers, titles and links, support keyboard and rapid switching, resizing and reduced motion, and load the module only on channel pages.
+- Expand, collapse and paginate nested replies inside dynamic cards. Fetch on demand, preserve long reply IDs, support retries and discard stale responses after closing or reopening comments. Retain native emoji assets and author profile links.
+- Fix live leaderboard text blending into dark backgrounds and guard-skin text conflicting with the selected theme. Apply readable colors to ranking tabs, usernames and scores.
+- Style the new `/c/` channel components with shared typography, cover corners, text colors and carousel surfaces. Transparent channel containers allow the selected background to show through. Add light/dark theme and video-navigation regressions (#84).
+- Add opt-in danmaku jump suggestions for standard BV videos. A matching explicit timestamp from at least three different senders produces a prompt, with click-to-seek, undo and dismiss. Validate each part's CID and duration, bound response size and request time, cancel on disabling and load the module on demand (#64).
+- Support the native columns on Watch Later and favorite-list playback pages, restoring the description/tag card and preventing the author card from overlapping a wide player. Align normal-mode author cards with the player top and wide-mode cards with the toolbar, preserving document positions through mini-player scrolling, page zoom and expanded tags (#11, #86).
+- Add creator filtering and grouping to Watch Later across shared drawer entry points. Distinguish identical names by UID, update groups and counts after deletion, and ignore stale list responses after reopening (#82).
+- Merge #60 and prefetch enough cards for the intended scroll position before refreshing. Cover positions before, at and after the sticky boundary, top-of-page refresh, zoom, tab changes and failure recovery.
+- Merge the real Fullscreen API regression from #77, alongside late-body initialization and transitions between live web and native fullscreen modes.
+- Document direct temporary-extension installation from a built folder or ZIP in Safari versions that expose this developer option. The reporter in #12 confirmed successful installation and no obvious issues so far. Broader platform compatibility still requires ongoing validation.
+
+- Add a Subscriptions view to Favorites for subscribed collections and other users' saved folders, with list pagination and retry support. Separate cache keys by content type, fetch each complete collection once and render its videos in batches, and discard stale responses after switching views (#75).
+- Release size, visibility and pointer listeners and cancel pending animation frames when switching favorite categories or deleting cards, preventing removed folder components from accumulating.
+- Fix the header covering live web fullscreen and failing to return after native fullscreen exits. Track player mode, native fullscreen and live web fullscreen separately, including fullscreen transitions and initialization before the document body is available (#76, informed by #77).
+- Align the player after automatic wide-mode layout settles, leaving room for the header. Cancel alignment when the page has already scrolled, the user scrolls, the video changes or wide mode exits (#83).
+- Preserve coordinates and pointer identity when replaying a delayed release after a triple-action hold. This fixes release-position feedback being placed at the top-left corner. Add normal-click, hold-timeout and successful-hold regressions. The loading-time percentage reported in #85 still requires independent measurement.
+
+- Pause background thumbnail generation when the swatches leave the viewport or the settings panel closes, and resume when visible. Reduce offscreen shader compilation and interaction delays on first use.
+- Fix earlier settings notifications overriding the latest rapid theme toggle and interrupting the switch animation. Coalesce theme writes on home, watch and takeover pages, restoring settings and offering a retry after save failures.
+- Hide the watch-page scroll ruler while settings or favorites drawers are open so its ticks cannot cover the panel or intercept clicks.
+- Fix automatic web fullscreen being skipped when the native player starts in wide mode. Cover normal, wide, mini and fullscreen states, including manual exit behavior.
+- Focus the image viewer's close button on opening, cycle Tab within the viewer and restore focus to the originating image on closing. Cancel pending opening animation after closing and preserve existing page scroll styles.
+- Show server or network errors and stop polling when App QR authorization fails. Ignore earlier QR status responses after retrying, avoiding misleading expiry messages. Add regressions for theme writes, overlays, automatic player modes, the image viewer and authorization.
+- Integrate #87 "Danmaku airborne", disabled by default. Click an underlined timestamp to seek, with undo available. Correct malformed, ambiguous and hour-based timestamps, reject out-of-range seeks, and clean up notices on media changes or disabling. Load the feature on demand and parse timestamps locally.
+
+- Fix square corners on the black video loading surface. Apply the existing clipping before the native player sets its screen mode, covering radius settings, wide mode, mini player and fullscreen.
+- Mount the watch-page card as soon as native hydration finishes, removing the previous polling delay of up to about 1.5 seconds. Coalesce startup observation by animation frame and bound its lifetime, with periodic checks covering late nodes.
+- Load native profile-page drawers through a separate on-demand module, reducing the entry script by about 64% and lowering startup script parsing. Add regressions for initial loading, late mounting, hydration and native media node continuity.
+
+- Fix the weather search selecting the Shandong namesake of Zhuhai. The weather card and settings share explicit location candidates with regional details, including a supplementary city-suffix search for Chinese names. Discard stale searches and weather responses after clearing, switching cities, or returning to automatic location, and validate cached weather against the current coordinates (#73).
+- Fix excessive trailing space in the native video share capsule and collapsed text after native label transitions. Cover counts, the copy prompt, and browser zoom levels (#38).
+- Update the header hover setting and its description to match the current sliding indicator behavior (#11).
+
+- Fix the creator card jumping upward and danmaku or playlist spacing changing when a wide player becomes a mini player. Preserve the preceding document layout and anchor sidebar placement to the original player placeholder, including resize, sidebar updates, and return to wide mode (#58).
+
+- Fix the wide player covering the creator card during scrolling when native sticky positioning pins the left column. Keep the wide column in document flow and cover creator hit testing, screen-mode transitions, and recovery from the mini player (#58).
+
+- Fix recommendations and playlists being pushed far below the player when automatic wide mode starts. Sidebar placement accounts for existing native spacing and removes the duplicate danmaku spacer, with coverage for automatic entry, manual toggling, late mounting, and cleanup (#58).
+- Restore a live badge below the profile avatar that opens the corresponding live room. Live status loads independently so slow or failed status requests leave profile information and actions usable (#71).
+- Add previous and next scroll buttons to the followed-creator strip on the dynamic feed. Controls reflect scroll boundaries, search results, and viewport changes, and support keyboard input and reduced motion. Keep the empty search field stable on blur so creator clicks reach their target (#72).
+
+- Add a responsive inset to profile statistics and action buttons, with left-aligned placement in narrow windows.
+
+- Let the footprint card fill the content area when weather is disabled (#69).
+- Use the homepage's standalone settings button across extension pages (#70).
+- Match the title container to the actual wide player's width, including window resizing (#66).
+- Add Collections and Series to user spaces, with covers, video counts, detail views, pagination, list view, empty states and retry. Discard stale responses after switching tabs (#67).
+- Keep the home category bar's layout space during its sticky transition to prevent flickering while older followed videos load (#11 feedback).
+
+- Remove the visible full-width header band while scrolling over image backgrounds. Drop the header tint, parent backdrop blur and lower mask across pages while keeping individual search/navigation glass controls. Add high-contrast background checks for scrolling, both themes and both glass modes.
+
+- Reduce bundled Chinese font fragmentation from 97 to 34 files per family while preserving Unicode coverage, outlines and variable weights. Common-character groups remain separate; no system-font substitution or remote fonts. Use maximum Deflate compression for the release ZIP.
+
+- Unify extension-owned action icons with locally bundled IconMCP outlines across navigation, search, favorites, messages, settings, feed actions and the image viewer. Preserve brand marks and native player/comment controls.
+- Position the header glass indicator on interaction and use an interruptible 200ms transition, removing continuous hover layout polling and overlapping bounces. Add a 150ms emoji-panel entrance and a 140ms attachment fade; cancel on dismissal, removal or conversation changes and respect reduced motion.
+- Soften the watch header fade and remove full-header blur in soft-glass mode. Render private-message sessions without waiting for profile requests, hydrate names/avatars progressively and show page-memory chat history before refreshing, preserving the active draft and focus.
+
+- Add native Bilibili image and emoji support to private messages: select, paste or drop a single image with preview/removal; lazily load emoji packs with categories, search and cursor insertion, and render original emoji images/GIFs in chat. Preserve failed drafts, cancel uploads on conversation changes and retry only the unsent part of mixed image/text messages.
+- Fix uploader cards following the floating mini-player and creating excessive right-column gaps. Align against the player's document placeholder, preserve the initial gap during scrolling and recalibrate at the top; retain normal-mode, title-wrap and wide-mode-return alignment.
+- Restore the previous watch-page UI outside the requested title, player, uploader, danmaku-list and playlist area. Comments return below the player with their previous styling; remove fixed side comments, input-height options and the compact theme button. Preserve performance improvements and native nodes.
+- Fix automatic feed filling bypassing its retry delay when recommendations are duplicates or fully filtered, causing repeated requests and skeleton creation. Coalesce automatic loads during empty-batch cooldowns; changing tabs, refreshing or restoring the previous batch clears the cooldown.
+- Update home and watch settings lists only when their contents change, avoiding hidden order, CDN and filter-chip rebuilds during theme changes. Skip unchanged segmented-control values.
+- Reuse folder geometry and cover nodes while hovering. Recalibrate after drawer/page scrolling, viewport resizing and column changes, preserving animated backgrounds and full hover effects.
+
+- Keep visible backgrounds animated during playback, continuous scrolling and open drawers by removing obsolete pause conditions. Hidden tabs, covered fullscreen backgrounds and reduced-motion preferences retain their protections. Add activity regressions that count GL draw calls separately from physical-device FPS measurements.
+
+- Add classic / Bilibili blue / pink accents and soft frosted / liquid refractive controls. Classic colors and soft frosting are the defaults; primary actions and links share theme variables while notifications and errors keep semantic colors. Soft mode skips displacement-map computation; large drawers use solid surfaces. Keep the classic home layout and pill search field.
+- Add responsive 2 / 3 / 4-column favorites, full hover previews and a plain three-dot menu. New installs open folder contents directly while existing choices remain intact. Personal shortcuts can be reordered with keyboard focus preserved; watch-later icons match native search cards.
+- Keep the previous comment input height and heading typography, while retaining the modern comment editor's 14–17 text-size fix.
+
+- Keep the classic home layout, pill search field and day/night switch; discard the side navigation proposal. Restore the previous watch header and day/night switch while preserving player, danmaku and playlist controls.
+- Add “Mark all as read” for all message categories, keeping the separate chat action. Refresh server unread counts after processing and retain failed categories and drafts. Fix ignored chat acknowledgement failures, the 25-page cap, and system cursor handling across personal notices and announcements, including cursor precision.
+
+- Align the author panel with the player in normal mode, updating after title wrapping, resizing and leaving wide mode without moving native nodes (#11).
+- Do not classify an intentional 30fps background cap as dropped frames; use the effective frame interval so removing the cap resumes the normal cadence while retaining load-based fallback.
+- Preview background intensity locally while dragging and persist once on release, avoiding repeated storage writes and full settings-panel synchronization.
+- Render space profile identity and actions before slower statistics or optional banner fallback; patch only counters and the banner afterward, preserving focused controls and interaction state.
+- Refresh unread badges when returning to the tab or window, including shortly after reading messages elsewhere; coalesce duplicate resume events.
+- Stabilize interactive targets on draggable account cards: links and buttons use a pointer cursor, and hovering them holds the card position and tilt while other areas retain drag and flip behavior (#11).
+- Fixed white reply-loading masks in dark mode by synchronizing the native `--bg1_rgb` token, including live theme changes (#65).
+- Fixed the direct-open favorites setting across watch, search, space, message, feed, history and native-space entries, including live updates (#11).
+- Added an Upload visibility option (#11) and fixed narrow headers pushing the avatar off screen and displacing the account card (#38).
+- Added collapse/reopen controls for both generations of native nested comments while preserving pagination, drafts and asynchronous replies (#11).
+- Preserved the native author card's measured width and replaced its scaling entrance with an opacity transition; removed excess share-button width (#38).
+- Disabled gravity simulation for fixed account cards, fixing gradual drift with dragging disabled; reduced-motion mode also stays fixed (#11 / #38).
+- Kept search, profile and video navigation inside Chrome application windows (#18), preserving ordinary browser tabs, modified clicks and explicit Open in New Tab actions.
+- Added opt-in community advertisement skipping (#64), using BilibiliSponsorBlock's read-only hash-prefix API and matching the current CID and duration. Skips can be undone; network failures leave playback intact. Added the `bsbsb.top` host permission, with no new requests while disabled, and updated privacy information and attribution.
+- Added regressions for native media seek/undo, application-window navigation, header controls, favorites, nested comments and card geometry.
+- Fixed collapsing feed height and header-widget jumps during refresh (#59), integrating PR #60 by @liguochuan00 with stale-request guards and zoom-aware positioning. Failed refreshes preserve the old list.
+- Rendered emoji in dynamic posts, reposts and inline comments (#61), preserving original image URLs and falling back to text when loading fails.
+- Resolve missing comment identifiers on demand and expand pinned/hot replies below the post, with collapse and a full-comments link on failure (#61).
+- Reposition late-mounted or resized collection sidebars in wide mode and clean up observers and spacing when leaving wide mode (#58).
+- Added dynamic-data unit tests and browser regressions for delayed/failed refreshes, other feed tabs, zoom, comment fallback and late sidebars.
+- Fixed the full-screen overlay blocking native space pages after drawers close.
+- Kept the history drawer in its original style container so it appears above the space page.
+- Cancelled pending close callbacks when reopening history; closing restores the previous scroll state and focus.
+- Calculated history progress from watched seconds and duration, including the completed marker.
+- Added browser regression tests for space drawers in light and dark themes, and included them in CI.
+
 ## [v0.52.0](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.52.0) · 2026-11-04
 
 - **Removed the YouTube-style layout** (#51): 映间 now ships a single visual language. Deleted `ui/yt/` (648 lines), both YT stylesheets, the `ytHome` setting and all branches that depended on it. Tag filtering, the space-page waiver and the message-toggle linkage are unaffected.

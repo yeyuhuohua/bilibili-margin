@@ -1,6 +1,6 @@
 // 流光：粒子沿随时间演化的旋度噪声流场漂移（无散度，所以粒子不会扎堆或抽空）
 struct Particle { pos: vec2f, vel: vec2f, age: f32, life: f32, seed: f32, pad: f32 }
-struct Sim { time: f32, dt: f32, aspect: f32, count: f32 }
+struct Sim { time: f32, dt: f32, aspect: f32, count: f32, damping: f32, pad0: f32, pad1: f32, pad2: f32 }
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> sim: Sim;
@@ -54,7 +54,7 @@ fn cs_main(@builtin(global_invocation_id) id: vec3u) {
     p.life = 4.0 + rand(s + 7.7) * 8.0;
   }
   let v = curl(p.pos, sim.time) * 0.03 + vec2f(0.01, 0.003);
-  p.vel = mix(p.vel, v, 0.2);
+  p.vel = mix(p.vel, v, sim.damping);
   p.pos += p.vel * dt;
   particles[i] = p;
 }

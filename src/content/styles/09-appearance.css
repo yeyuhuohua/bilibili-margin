@@ -1,0 +1,31 @@
+/* 不改变旧版布局；可选强调色统一主要操作，经典模式沿用原有颜色。 */
+.app :is(.upload,.hs-btn,.sp-msave,.sp-follow:not(.on),.wh-send,.fd-post,.dy-send,.ms-act,.data-acts .primary) {
+  background:var(--margin-primary,var(--ink));color:var(--margin-primary-fg,var(--canvas));
+}
+/* 小控件使用同一档磨砂；大抽屉保持实底，避免视频底图导致整块反复模糊。 */
+.app[data-glass="soft"] :is(.idcl-card,.cp-panel,.gf-menu,.dp) {
+  backdrop-filter:blur(16px) saturate(1.1);
+}
+.app[data-glass="soft"] :is(.search,.et,.ts-c,.cp-panel) {
+  background:color-mix(in srgb,var(--surface) 74%,transparent);
+}
+@media(prefers-reduced-transparency:reduce) {
+  .app[data-glass="soft"] :is(.idcl-card,.cp-panel,.gf-menu,.dp,.search,.et,.ts-c) { backdrop-filter:none!important;background:var(--surface); }
+}
+
+.app[data-glass="flat"] {
+  --sh-xs:0 0 transparent;--sh-sm:0 0 transparent;--sh-md:0 0 transparent;--sh-lg:0 0 transparent;
+}
+.app[data-glass="flat"] *, .app[data-glass="flat"] *::before, .app[data-glass="flat"] *::after { backdrop-filter:none!important; }
+.app[data-glass="flat"] :is(.search,.et,.ts-c,.hero-search,.sheet,.idcl-card,.cp-panel,.gf-menu,.dp,.wx) {
+  background:var(--surface);box-shadow:var(--ring);
+}
+.app[data-glass="flat"] :is(.gf-frost,.gf-shadow,.gf-back-sheen,.gf-tint) { display:none; }
+.app[data-glass="flat"] :is(.gf-front,.gf-back) { background:var(--surface);box-shadow:none; }
+.app[data-glass="flat"] .cp.cp-clipping .cp-shell { box-shadow:var(--ring); }
+.app.margin-ui-still :not(.bg,.bg *,.wx-sky,.wx-sky *),
+.app.margin-ui-still :not(.bg,.bg *,.wx-sky,.wx-sky *)::before,
+.app.margin-ui-still :not(.bg,.bg *,.wx-sky,.wx-sky *)::after {
+  animation-duration:.001ms!important;animation-delay:0s!important;animation-iteration-count:1!important;
+  transition-duration:.001ms!important;transition-delay:0s!important;scroll-behavior:auto!important;
+}

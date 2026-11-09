@@ -8,6 +8,16 @@ export interface SpaceInfo {
   likes: number; views: number; isFollowing: boolean; videoCount: number;
 }
 
+/** 直播状态独立加载，资料接口回退或统计请求较慢时也能显示开播入口。 */
+export async function spaceLive(mid: number): Promise<number | null> {
+  const response = await fetch(`https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld?mid=${mid}`, { credentials: 'omit' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const { code, data, message } = await response.json();
+  if (code !== 0) throw new Error(message || `code ${code}`);
+  const room = Number(data?.roomid);
+  return Number(data?.liveStatus) === 1 && Number.isSafeInteger(room) && room > 0 ? room : null;
+}
+
 /** 图片地址补全：// 开头、http:、以及 acc/info 老字段 top_photo 那种不带域名的 bfs/space/xxx.png（v0.47：空间头图不显示） */
 const https = (u: unknown) => {
   const s = String(u ?? '').trim();
@@ -16,37 +26,154 @@ const https = (u: unknown) => {
   return s.replace(/^\/\//, 'https://').replace(/^http:/, 'https:');
 };
 
-export async function spaceInfo(mid: number): Promise<SpaceInfo> {
-  const [acc0, rel, up, nav] = await Promise.all([
-    getWbi<any>('/x/space/wbi/acc/info', { mid }).catch((e) => { console.warn('[MARGIN] acc/info', e); return null; }),
+export async function spaceInfo(mid: number, onBasic?: (info: SpaceInfo) => void): Promise<SpaceInfo> {
+  const stats = Promise.all([
     getJSON<any>('/x/relation/stat', { vmid: mid }).catch(() => null),
     getJSON<any>('/x/space/upstat', { mid }).catch(() => null),
     getJSON<any>('/x/space/navnum', { mid }).catch(() => null),
   ]);
+  const acc0 = await getWbi<any>('/x/space/wbi/acc/info', { mid }).catch((e) => { console.warn('[MARGIN] acc/info', e); return null; });
   // acc/info 被风控（-352 / -403）时退回 web-interface/card：名字、头像、签名、头图都有（v0.47）
   let acc = acc0;
   let card: any = null;
-  if (!acc?.name || !(acc.top_photo_v2?.l_img || acc.top_photo)) card = await getJSON<any>('/x/web-interface/card', { mid, photo: 'true' }).catch(() => null);
+  if (!acc?.name) card = await getJSON<any>('/x/web-interface/card', { mid, photo: 'true' }).catch(() => null);
   if (!acc?.name) {
     const c = card?.card;
     if (!c) throw new Error('资料接口暂时不可用');
     acc = { name: c.name, face: c.face, sign: c.sign, level: c.level_info?.current_level, official: { title: c.Official?.title }, vip: c.vip, is_followed: card.following };
   }
   const banner = acc.top_photo_v2?.l_img || acc.top_photo || card?.space?.l_img || card?.space?.s_img;
-  return {
+  const basic: SpaceInfo = {
     mid, name: acc.name, face: https(acc.face), sign: acc.sign ?? '', level: acc.level ?? 0,
     banner: https(banner),
     official: acc.official?.title ?? '', vip: acc.vip?.label?.text ?? '',
-    following: rel?.following ?? 0, follower: rel?.follower ?? 0,
-    likes: up?.likes ?? 0, views: up?.archive?.view ?? 0,
-    isFollowing: !!acc.is_followed, videoCount: nav?.video ?? 0,
+    following: 0, follower: 0, likes: 0, views: 0,
+    isFollowing: !!acc.is_followed, videoCount: 0,
   };
+  // 名字、头像与操作入口不等待粉丝数、获赞、投稿数量等独立统计。
+  onBasic?.(basic);
+  const bannerFallback = banner || card ? Promise.resolve(card) : getJSON<any>('/x/web-interface/card', { mid, photo: 'true' }).catch(() => null);
+  const [[rel, up, nav], bannerCard] = await Promise.all([stats, bannerFallback]);
+  return { ...basic, banner: https(banner || bannerCard?.space?.l_img || bannerCard?.space?.s_img), following: rel?.following ?? 0, follower: rel?.follower ?? 0,
+    likes: up?.likes ?? 0, views: up?.archive?.view ?? 0, videoCount: nav?.video ?? 0 };
 }
 
 export type VideoOrder = 'pubdate' | 'click';
 
-export async function spaceVideos(mid: number, pn: number, order: VideoOrder, keyword = ''): Promise<{ list: Video[]; total: number }> {
-  const d = await getWbi<any>('/x/space/wbi/arc/search', { mid, ps: 30, pn, order, tid: 0, keyword, order_avoided: 'true', platform: 'web', web_location: 1550101 });
+export interface SpaceCollection {
+  id: number; kind: 'season' | 'series'; name: string; cover: string; total: number;
+}
+
+export async function spaceCollections(mid: number, page: number, signal?: AbortSignal): Promise<{ list: SpaceCollection[]; total: number }> {
+  const d = await getJSON<any>('/x/polymer/web-space/seasons_series_list', { mid, page_num: page, page_size: 20 }, signal);
+  const items = d.items_lists;
+  const list: SpaceCollection[] = [];
+  for (const [kind, entries] of [['season', items.seasons_list], ['series', items.series_list]] as const) {
+    for (const entry of entries ?? []) {
+      const meta = entry.meta;
+      list.push({ id: Number(kind === 'season' ? meta.season_id : meta.series_id), kind,
+        name: meta.name, cover: https(meta.cover || entry.archives?.[0]?.pic), total: Number(meta.total) || 0 });
+    }
+  }
+  return { list, total: items.page?.total ?? list.length };
+}
+
+export async function spaceCollectionVideos(mid: number, collection: SpaceCollection, page: number, signal?: AbortSignal): Promise<{ list: Video[]; total: number }> {
+  const d = collection.kind === 'season'
+    ? await getJSON<any>('/x/polymer/web-space/seasons_archives_list', { mid, season_id: collection.id, page_num: page, page_size: 30, sort_reverse: 'false' }, signal)
+    : await getJSON<any>('/x/series/archives', { mid, series_id: collection.id, pn: page, ps: 30, only_normal: 'true', sort: 'asc' }, signal);
+  const list: Video[] = (d.archives ?? []).map((v: any) => ({
+    bvid: v.bvid || `av${v.aid}`, cid: 0, title: v.title, cover: https(v.pic), duration: Number(v.duration) || 0,
+    author: v.owner?.name ?? '', mid: v.owner?.mid ?? v.upMid ?? mid, face: https(v.owner?.face),
+    views: v.stat?.view ?? 0, danmaku: v.stat?.danmaku ?? 0, pubdate: v.pubdate ?? v.ctime ?? 0,
+  }));
+  return { list, total: d.page?.total ?? d.meta?.total ?? collection.total };
+}
+
+/** 搜索 / 合集匹配用的关键词归一化：合集名和视频标题的空格写法不一致（「从零开始的 AI 学习」vs「从零开始的AI学习」），去掉空白再比 */
+export function normQuery(s: unknown): string {
+  return String(s ?? '').toLowerCase().replace(/\s+/g, '');
+}
+
+export interface SpaceSearch {
+  list: Video[];
+  collections: SpaceCollection[];
+  done: boolean;
+  warning: boolean;
+}
+
+/** 每次继续搜索最多取一页投稿、一页合集目录和三页合集视频。 */
+export function createSpaceSearch(mid: number, keyword: string, order: VideoOrder, only?: SpaceCollection) {
+  const query = normQuery(keyword);
+  let uploadPage = 1, indexPage = 1;
+  let uploadsDone = !!only, indexDone = !!only;
+  let incomplete = false;
+  const videos = new Map<string, Video>();
+  const collections = new Map<string, SpaceCollection>();
+  const uploadSeen = new Set<string>();
+  type Pending = { collection: SpaceCollection; page: number; seen: Set<string> };
+  const pending: Pending[] = only ? [{ collection: only, page: 1, seen: new Set() }] : [];
+
+  return async (signal?: AbortSignal): Promise<SpaceSearch> => {
+    signal?.throwIfAborted();
+    let warning = incomplete;
+    const [uploads, index] = await Promise.allSettled([
+      uploadsDone ? Promise.resolve(null) : spaceVideos(mid, uploadPage, order, keyword, signal),
+      indexDone ? Promise.resolve(null) : spaceCollections(mid, indexPage, signal),
+    ]);
+    signal?.throwIfAborted();
+    if (uploads.status === 'fulfilled' && uploads.value) {
+      const { list, total } = uploads.value;
+      const fresh = list.filter(video => !uploadSeen.has(video.bvid));
+      for (const video of fresh) { uploadSeen.add(video.bvid); videos.set(video.bvid, video); }
+      // A repeated upstream page cannot advance the search; expose a partial-result warning.
+      if (list.length && !fresh.length) warning = incomplete = true;
+      uploadsDone = !fresh.length || uploadSeen.size >= total;
+      uploadPage++;
+    } else if (uploads.status === 'rejected') warning = true;
+    if (index.status === 'fulfilled' && index.value) {
+      const { list, total } = index.value;
+      let added = 0;
+      for (const collection of list) {
+        const key = `${collection.kind}:${collection.id}`;
+        if (collections.has(key)) continue;
+        collections.set(key, collection);
+        pending.push({ collection, page: 1, seen: new Set() });
+        added++;
+      }
+      if (list.length && !added) warning = incomplete = true;
+      indexDone = !added || collections.size >= total;
+      indexPage++;
+    } else if (index.status === 'rejected') warning = true;
+    // Prioritize matching collection names, while retaining all other collections for title search.
+    pending.sort((a, b) => Number(normQuery(b.collection.name).includes(query)) - Number(normQuery(a.collection.name).includes(query)));
+    const batch = pending.splice(0, 3);
+    const pages = await Promise.allSettled(batch.map(item => spaceCollectionVideos(mid, item.collection, item.page, signal)));
+    if (signal?.aborted) { pending.unshift(...batch); signal.throwIfAborted(); }
+    for (let i = 0; i < batch.length; i++) {
+      const item = batch[i], result = pages[i];
+      if (result.status === 'rejected') { pending.push(item); warning = true; continue; }
+      const { list, total } = result.value;
+      const fresh = list.filter(video => !item.seen.has(video.bvid));
+      const includeAll = !only && normQuery(item.collection.name).includes(query);
+      for (const video of fresh) {
+        item.seen.add(video.bvid);
+        if (!videos.has(video.bvid) && (includeAll || normQuery(video.title).includes(query))) videos.set(video.bvid, video);
+      }
+      if (list.length && !fresh.length) warning = incomplete = true;
+      if (fresh.length && item.seen.size < total) { item.page++; pending.push(item); }
+    }
+    return {
+      list: [...videos.values()].sort((a, b) => order === 'click' ? b.views - a.views : b.pubdate - a.pubdate),
+      collections: [...collections.values()].filter(collection => normQuery(collection.name).includes(query)),
+      done: uploadsDone && indexDone && pending.length === 0,
+      warning,
+    };
+  };
+}
+
+export async function spaceVideos(mid: number, pn: number, order: VideoOrder, keyword = '', signal?: AbortSignal): Promise<{ list: Video[]; total: number }> {
+  const d = await getWbi<any>('/x/space/wbi/arc/search', { mid, ps: 30, pn, order, tid: 0, keyword, order_avoided: 'true', platform: 'web', web_location: 1550101 }, signal);
   const list: Video[] = (d.list?.vlist ?? []).map((v: any) => ({
     bvid: v.bvid, cid: 0, title: v.title, cover: https(v.pic), duration: parseLen(v.length),
     author: v.author, mid: v.mid, face: '', views: Number(v.play) || 0, danmaku: v.video_review ?? 0, pubdate: v.created ?? 0,

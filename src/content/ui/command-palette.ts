@@ -1,6 +1,9 @@
 import { loadSettings, onSettingsChange } from '../../shared/settings';
+import { openBili } from '../navigation';
+import { uiReducedMotion as reducedMotion } from '../motion';
 import { forgetSearch, hotSearch, rememberSearch, searchHistory, searchUrl, suggest } from '../api/search';
 import { h, highlight, icon, ICONS } from './dom';
+import { acceptTextDrop } from './text-drop';
 
 /**
  * 命令面板：21st「Command Palette」（rafa-porto，Raycast 风格）的原生移植。
@@ -18,7 +21,7 @@ const bump = (id: string) => { const u = usage(); u[id] = (u[id] ?? 0) + 1; loca
 const strip = (s: string) => s.replace(/<[^>]+>/g, '');
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-export interface Palette { el: HTMLElement; open: (q?: string) => void; close: () => void; isOpen: () => boolean }
+export interface Palette { el: HTMLElement; open: (q?: string, origin?: HTMLElement) => void; close: () => void; isOpen: () => boolean }
 
 export function createCommandPalette(commands: Command[]): Palette {
   const input = h('input', { type: 'text', placeholder: '搜索视频、UP 主', autocomplete: 'off', spellcheck: 'false', 'aria-label': '搜索', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'cp-list' }) as HTMLInputElement;
@@ -32,7 +35,15 @@ export function createCommandPalette(commands: Command[]): Palette {
       h('span', { class: 'cp-hint' }, h('span', {}, '选择'), h('kbd', {}, '↑'), h('kbd', {}, '↓'), h('b', {}, '|'), h('span', {}, '切换搜索 / 命令'), h('kbd', {}, 'Tab'), h('b', {}, '|'), h('span', {}, '执行'), h('kbd', {}, '↵')),
     ),
   );
-  const el = h('div', { class: 'cp', 'data-open': 'false', hidden: '' }, h('div', { class: 'cp-scrim' }), panel);
+  // 形变期间贴着裁剪边缘显示搜索框里的 / 键；完全展开后才换成面板自己的 Esc
+  const morphKbd = h('kbd', { class: 'cp-morph-kbd', 'aria-hidden': 'true' }, '/');
+  const shell = h('div', { class: 'cp-shell' }, panel, morphKbd);
+  const el = h('div', { class: 'cp', 'data-open': 'false', hidden: '' }, h('div', { class: 'cp-scrim' }), shell);
+  acceptTextDrop(panel.querySelector<HTMLElement>('.cp-input')!, (text) => {
+    input.value = text;
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 
   // 左栏 = 搜索（联想 / 最近 / 热搜），右栏 = 命令；两栏各自一套选中，Tab 切换当前栏
   let pane: 'l' | 'r' = 'l';
@@ -45,8 +56,9 @@ export function createCommandPalette(commands: Command[]): Palette {
   let ctrl: AbortController | null = null;
   let timer = 0;
   let lastFocus: Element | null = null;
+  addEventListener('margin:search-history', () => { if (el.dataset.open === 'true') render(); });
 
-  const go = (q: string) => { rememberSearch(q); window.open(searchUrl(q), '_blank', 'noopener'); close(); };
+  const go = (q: string) => { rememberSearch(q); openBili(searchUrl(q)); close(); };
   const searchRow = (q: string, kind: 'history' | 'hot' | 'sugg', html?: string, n?: number): Row => ({
     id: `${kind}:${q}`, title: q, titleHtml: html, cat: '搜索',
     icon: kind === 'history' ? ICONS.history : ICONS.search,
@@ -159,27 +171,130 @@ export function createCommandPalette(commands: Command[]): Palette {
   });
   el.querySelector('.cp-scrim')!.addEventListener('click', () => close());
 
-  function open(q = ''): void {
+  // 搜索框展开成面板：外壳只做裁剪，面板内容按最终布局放在里面，外壳从搜索框长到面板，
+  // 内容随可视区域逐步露出。快捷键和减少动画使用普通入场。
+  let animK = 1;
+  let morphOrigin: HTMLElement | null = null;
+  let hiddenOrigin: HTMLElement | null = null;
+  let morphTimer = 0;
+  let hideTimer = 0;
+  let openFrame = 0;
+
+  /** 展开期间藏起原搜索框：保留占位避免顶栏重排，同时不让它留在面板后面 */
+  function concealOrigin(): void {
+    if (!morphOrigin || hiddenOrigin === morphOrigin) return;
+    revealOrigin();
+    morphOrigin.style.opacity = '0';
+    morphOrigin.style.pointerEvents = 'none';
+    hiddenOrigin = morphOrigin;
+  }
+  function revealOrigin(): void {
+    if (!hiddenOrigin) return;
+    hiddenOrigin.style.removeProperty('opacity');
+    hiddenOrigin.style.removeProperty('pointer-events');
+    hiddenOrigin = null;
+  }
+
+  const rect = (el: Element): DOMRect => el.getBoundingClientRect();
+  const onScreen = (r: DOMRect) => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight;
+  function setBox(r: DOMRect, radius: string): void {
+    shell.style.left = `${r.left}px`;
+    shell.style.top = `${r.top}px`;
+    shell.style.width = `${r.width}px`;
+    shell.style.height = `${r.height}px`;
+    shell.style.borderRadius = radius;
+  }
+  function cleanupMorph(): void {
+    cancelAnimationFrame(openFrame);
+    window.clearTimeout(morphTimer);
+    window.clearTimeout(hideTimer);
+    el.classList.remove('cp-measuring', 'cp-clipping');
+    shell.removeAttribute('style');
+    revealOrigin();
+  }
+
+  function open(q = '', origin?: HTMLElement): void {
     if (el.dataset.open === 'true') { input.focus(); return; }
+    const reversing = !el.hidden && el.classList.contains('cp-clipping');
+    const current = reversing ? rect(shell) : null;
+    const currentRadius = reversing ? getComputedStyle(shell).borderRadius : '';
+    origin ??= reversing ? morphOrigin ?? undefined : undefined;
+    cleanupMorph();
     lastFocus = (el.getRootNode() as ShadowRoot).activeElement ?? document.activeElement;
+    const from = origin && origin.isConnected ? rect(origin) : null;
+    // 减少动画时不做几何过渡，但原点同样要在点击当帧隐藏，不能只靠展开动画盖住
+    const morph = !!from && onScreen(from);
+    const animate = morph && !reducedMotion();
+    morphOrigin = morph ? origin! : null;
     el.hidden = false;
+    el.style.setProperty('--cp-k', String(animK));
+    // 顶栏搜索框可能正在轮播热搜；形变当帧沿用同一句话，避免点击瞬间文字跳变
+    const word = origin?.querySelector('.search-ph-w:not(.out)')?.textContent?.trim();
+    input.placeholder = word || '搜索视频、UP 主';
+    input.classList.toggle('hot-ph', !!word);
     input.value = q; pane = 'l'; sel = 0; csel = 0; sugg = [];
     render();
-    requestAnimationFrame(() => { el.dataset.open = 'true'; input.focus(); input.setSelectionRange(q.length, q.length); });
+    // 外壳落位与原点隐藏放在同一个任务里：点击后的第一帧就是裁剪到搜索框大小的面板
+    let to: DOMRect | null = null;
+    if (animate) {
+      el.classList.add('cp-measuring');
+      to = rect(panel);
+      el.classList.remove('cp-measuring');
+      el.classList.add('cp-clipping');
+      shell.style.transition = 'none';
+      setBox(current ?? from!, currentRadius || `${from!.height / 2}px`);
+      void shell.offsetWidth;
+      shell.style.removeProperty('transition');
+    }
+    concealOrigin();
+    el.dataset.open = 'true';
+    openFrame = requestAnimationFrame(() => {
+      if (to) {
+        setBox(to, '16px');
+        morphTimer = window.setTimeout(() => {
+          el.classList.remove('cp-clipping');
+          shell.removeAttribute('style');
+        }, 360 * animK + 40);
+      }
+      render();
+      input.focus(); input.setSelectionRange(q.length, q.length);
+    });
     if (q) input.dispatchEvent(new Event('input'));
     hotSearch().then((list2) => { hot = list2.map((x, n) => ({ ...searchRow(x.keyword, 'hot', esc(x.name), n + 1) })); if (el.dataset.open === 'true' && !input.value.trim()) render(); });
   }
   function close(): void {
     if (el.dataset.open !== 'true') return;
+    cancelAnimationFrame(openFrame);
+    // 展开途中也要能反向：从外壳当前所在的位置收回，而不是跳回全尺寸再淡出
+    const clipping = el.classList.contains('cp-clipping');
+    const from = clipping ? rect(shell) : rect(panel);
+    const fromRadius = clipping ? getComputedStyle(shell).borderRadius : '16px';
+    const to = morphOrigin?.isConnected ? rect(morphOrigin) : null;
     el.dataset.open = 'false';
     ctrl?.abort();
-    setTimeout(() => { if (el.dataset.open === 'false') el.hidden = true; }, 220);
+    window.clearTimeout(morphTimer);
+    window.clearTimeout(hideTimer);
+    // 反向裁剪回搜索框；没有来源或减少动画时直接淡出
+    if (to && onScreen(to) && !reducedMotion()) {
+      el.classList.add('cp-clipping');
+      shell.style.transition = 'none';
+      setBox(from, fromRadius);
+      void shell.offsetWidth;
+      shell.style.removeProperty('transition');
+      setBox(to, `${to.height / 2}px`);
+      // 收到搜索框尺寸后整块一次换回原控件。提前露出搜索框会让模糊的面板压在它上面，
+      // 淡出过程中出现一下发虚；两端材质和文字已经对齐，直接切换看不出接缝
+      hideTimer = window.setTimeout(() => { el.hidden = true; cleanupMorph(); }, 300 * animK);
+    } else {
+      cleanupMorph();
+      hideTimer = window.setTimeout(() => { if (el.dataset.open === 'false') el.hidden = true; }, reducedMotion() ? 0 : 220);
+    }
     (lastFocus as HTMLElement | null)?.blur?.();
   }
 
   let cmdK = true;
-  loadSettings().then((st) => { cmdK = st.cmdK; }).catch(() => {});
-  onSettingsChange((n) => { cmdK = n.cmdK; });
+  loadSettings().then((st) => { cmdK = st.cmdK; animK = 100 / st.paletteSpeed; }).catch(() => {});
+  onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
   addEventListener('keydown', (e) => {
     if (cmdK && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); el.dataset.open === 'true' ? close() : open(); return; }
     if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || el.dataset.open === 'true') return;

@@ -1,5 +1,5 @@
 import type { Settings } from '../../shared/settings';
-import { saveSettings } from '../../shared/settings';
+import { loadSettings } from '../../shared/settings';
 import { BackgroundLayer } from '../bg/background';
 import { h, ICONS, guardTyping } from './dom';
 import { createHeader, type Header, SITE_LINKS } from './header';
@@ -11,8 +11,10 @@ import { createFavorites } from './favorites';
 import { attachPreview } from './preview';
 import type { SunMoon } from './sun-moon';
 import { FilterRuntime } from '../filter-runtime';
-import { reducedMotion } from '../motion';
+import { uiReducedMotion as reducedMotion } from '../motion';
 import { createBackTop } from './back-top';
+import { toast } from './controls';
+import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
 import pagesCss from '../takeover.css?inline';
 
@@ -32,6 +34,7 @@ export class PageShell {
   private panel: SettingsPanel;
   private fadeTimer = 0;
   private media = matchMedia('(prefers-color-scheme: dark)');
+  private themeWriter = new ThemeWriter();
 
   constructor(public settings: Settings, kind: string) {
     this.host = h('div', { id: 'margin-root' });
@@ -40,7 +43,7 @@ export class PageShell {
     this.root.append(h('style', {}, css + '\n' + pagesCss));
     this.filter = new FilterRuntime(settings);
     this.panel = createSettingsPanel(() => this.settings, () => this.bg.shader);
-    const fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), undefined, this.filter);
+    const fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), () => this.settings.favDirect, this.filter);
     const later = createLaterDrawer(() => this.app, this.filter);
     const hist = createHistoryDrawer();
     panels.fav = fav;
@@ -48,6 +51,7 @@ export class PageShell {
     panels.hist = hist;
     this.head = createHeader({
       onTheme: () => this.toggleTheme(),
+      onSettings: () => this.panel.sheet.open(),
       msgRemind: () => this.settings.msgRemind,
       filter: this.filter,
       tabs: [
@@ -55,42 +59,35 @@ export class PageShell {
         'separator',
         { title: '收藏', icon: ICONS.fav, run: () => fav.open() },
         { title: '稍后', icon: ICONS.later, run: () => later.open() },
-        { title: '设置', icon: ICONS.gear, run: () => this.panel.sheet.open() },
         { title: '原版', icon: ICONS.exit, run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
       ],
     });
     this.sunMoon = this.head.sunMoon;
     this.main = h('main', { class: `main tk tk-${kind}` });
     const exit = h('button', { class: 'ghost small', type: 'button', onclick: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } }, '本次回到 B 站原版');
-    this.app = h('div', { class: 'app' },
+    this.app = h('div', { class: 'app','data-glass':settings.glass },
       this.bg.el, this.head.el, this.main,
       h('footer', { class: 'foot tk-foot' }, exit, h('span', {}, '映间 MARGIN · 非 B 站官方')),
       this.panel.sheet.el, fav.el, later.el, hist.el,
     );
     this.app.append(createBackTop(this.app, this.main));
-    // 侧板开着时背景定格：侧板的毛玻璃（backdrop-filter）只有在底下画面变化时才需要每帧重算（v0.45）
-    this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); this.bg.hold('sheet', on); });
+    // 标记抽屉状态；大面板使用实底，可见背景保持动态。
+    this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     this.root.append(this.app);
     const lg = filtersIn(this.root);
     this.head.glass.forEach((g) => attachGlass(g, lg));
     attachGlass(this.head.thumb, lg, { blur: 2, strength: 0.4 });
     this.applyTheme();
     this.media.addEventListener('change', () => this.applyTheme());
-    // 滚动时背景停一停，毛玻璃不用每帧重算（v0.43）
-    let st = 0;
-    const onScroll = () => {
-      if (!st) this.bg.hold('scroll', true);
-      clearTimeout(st);
-      st = window.setTimeout(() => { st = 0; this.bg.hold('scroll', false); }, 160);
-    };
-    this.app.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('scroll', onScroll, { passive: true });
   }
 
   /** 页面里的胶囊控件也做成液态玻璃 */
   glass(el: HTMLElement): void { attachGlass(el, filtersIn(this.root)); }
 
   update(s: Settings): void {
+    s = this.themeWriter.sync(s);
+    this.app.dataset.glass = s.glass;
+    this.app.classList.toggle('margin-ui-still', !s.uiEffects);
     const prev = this.settings;
     this.settings = s;
     this.filter.update(s);
@@ -110,6 +107,7 @@ export class PageShell {
     this.app.dataset.palette = this.settings.palette;
     this.app.dataset.bg = this.settings.bg.mode;
     this.app.classList.toggle('margin-reduce', this.settings.reduceMotion);
+    this.app.classList.toggle('margin-ui-still', !this.settings.uiEffects);
     document.documentElement.style.background = t === 'dark' ? '#111' : '#f5f4f1';
     this.sunMoon.set(t, !reducedMotion());
     this.bg.apply(this.settings.bg, t, this.settings.palette).then(() => this.panel.sync(this.settings));
@@ -125,7 +123,11 @@ export class PageShell {
     }
     this.settings = { ...this.settings, theme: next };
     this.applyTheme();
-    await saveSettings({ theme: next });
+    try { await this.themeWriter.save(next); }
+    catch {
+      this.update(await loadSettings().catch(() => this.settings));
+      toast(this.app, '主题设置保存失败，请重试');
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import css from './styles/index';
 import { createFavorites } from './ui/favorites';
 import { createLaterDrawer } from './ui/drawer';
 import { createHistoryDrawer } from './ui/history-drawer';
+import { loadSettings, onSettingsChange } from '../shared/settings';
 
 /**
  * 空间页「原生模式」的钩子（GitHub #52 / #38 后续）。
@@ -9,9 +10,10 @@ import { createHistoryDrawer } from './ui/history-drawer';
  * space.bilibili.com 的子页（收藏夹 / 历史 / 稍后再看…）映间不接管，走 B 站原生页面
  * （见 main.ts 的 spaceNative），所以在 ui/space.ts 里改按钮对这里无效。
  * 这里用事件委托拦住原生入口的 <a>，改成开映间自己的抽屉；抽屉放在独立的 shadow root 里，
- * 并注入整份 app CSS，否则拿不到 --card / --foreground 这些变量，也没 .dw-* 的样式。
+ * 并注入整份 app CSS，否则拿不到主题变量，也没 .dw-* 的样式。
  */
 let installed = false;
+let favDirect = false;
 let built: { fav: { open(): void }; hist: { open(): void }; later: { open(): void } } | null = null;
 
 function ensure() {
@@ -21,14 +23,15 @@ function ensure() {
   host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000';
   const root = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
-  style.textContent = css;
+  style.textContent = css + '\n.app > .dw { pointer-events: auto; }';
   const app = document.createElement('div');
   app.className = 'app';
-  app.style.pointerEvents = 'auto';
+  // 只由打开的抽屉接收点击；容器透明，关闭后原生页面仍可操作。
+  app.style.cssText = 'background:transparent;pointer-events:none;overflow:visible';
   root.append(style, app);
   document.body.append(host);
 
-  const fav = createFavorites(() => { /* 空间页不做悬停预览 */ });
+  const fav = createFavorites(() => { /* 空间页不做悬停预览 */ }, () => favDirect);
   const hist = createHistoryDrawer();
   const later = createLaterDrawer(() => app);
   app.append(fav.el as HTMLElement, hist.el, later.el);
@@ -39,6 +42,8 @@ function ensure() {
 export function installSpaceHooks(): void {
   if (installed) return;
   installed = true;
+  loadSettings().then((s) => { favDirect = s.favDirect; }).catch(() => {});
+  onSettingsChange((s) => { favDirect = s.favDirect; });
   document.addEventListener('click', (ev) => {
     const t = ev.target as HTMLElement | null;
     const a = t?.closest?.('a[href]') as HTMLAnchorElement | null;

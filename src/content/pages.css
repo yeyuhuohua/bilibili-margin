@@ -63,9 +63,9 @@ html.margin-search:has(.search-input-wrap:focus-within) body::after { opacity: 1
 html.margin-search .search-tabs { border-bottom: 1px solid var(--m-line); }
 html.margin-search .vui_tabs--nav-item { color: var(--m-muted) !important; font-size: 14px !important; }
 html.margin-search .vui_tabs--nav-item:hover { color: var(--m-ink) !important; }
-html.margin-search .vui_tabs--nav-item-active { color: var(--m-ink) !important; font-weight: 600 !important; }
+html.margin-search .vui_tabs--nav-item-active, html.margin-search .vui_tabs--nav-item-active:hover { color: var(--margin-primary, var(--m-ink)) !important; font-weight: 600 !important; }
 html.margin-search .vui_tabs--nav-item-active .vui_tabs--nav-text, html.margin-search .vui_tabs--nav-item-active { font-family: var(--m-serif) !important; }
-html.margin-search .vui_tabs--nav-bar, html.margin-search .vui_tabs--nav-link-active::after { background: var(--m-ink) !important; height: 2px !important; border-radius: 2px; }
+html.margin-search .vui_tabs--nav-bar, html.margin-search .vui_tabs--nav-link-active::after { background: var(--margin-primary, var(--m-ink)) !important; height: 2px !important; border-radius: 2px; }
 html.margin-search .vui_tabs--nav-num { font-family: var(--m-mono) !important; font-size: 11px !important; color: var(--m-faint) !important; }
 
 /* 排序 / 筛选：胶囊 */
@@ -74,7 +74,7 @@ html.margin-search .search-condition-row .vui_button, html.margin-search .more-c
   border-radius: 999px !important; border: 0 !important; background: transparent !important; color: var(--m-muted) !important; padding: 0 14px !important;
 }
 html.margin-search .vui_button--active, html.margin-search .search-conditions .vui_button--active,
-html.margin-search .search-condition-row .vui_button--active { background: var(--m-ink) !important; color: var(--m-canvas) !important; }
+html.margin-search .search-condition-row .vui_button--active { background: var(--margin-primary, var(--m-ink)) !important; color: var(--margin-primary-fg, var(--m-canvas)) !important; }
 html.margin-search .vui_button:not(.search-button):not(.vui_button--active):hover { color: var(--m-ink) !important; background: var(--m-chip) !important; }
 
 /* 视频卡片 */
@@ -99,12 +99,60 @@ html.margin-search .user-name, html.margin-search .media-card-content-head-title
 
 /* 分页 */
 html.margin-search .vui_pagenation--btn { border-radius: 999px !important; border: 0 !important; background: color-mix(in srgb, var(--m-surface) 80%, transparent) !important; color: var(--m-ink) !important; font-family: var(--m-mono) !important; }
-html.margin-search .vui_pagenation--btn-num.vui_button--active, html.margin-search .vui_pagenation--btn.vui_button--active { background: var(--m-ink) !important; color: var(--m-canvas) !important; }
+html.margin-search .vui_pagenation--btn-num.vui_button--active, html.margin-search .vui_pagenation--btn.vui_button--active { background: var(--margin-primary, var(--m-ink)) !important; color: var(--margin-primary-fg, var(--m-canvas)) !important; }
 html.margin-search .vui_button--disabled { opacity: .45; }
 
 /* 广告：统一由 global.css 的 html.margin-ads-hide 控制（v0.47） */
 
 /* ── 其他页面：热门 / 排行 / 番剧等，统一卡片圆角与表面 ── */
+/* 新版 /c/ 分区使用另一套封面和标题组件，和首页共享字体、颜色及圆角。 */
+html.margin-page .feedchannel,
+html.margin-page .feedchannel-body,
+html.margin-page .feedchannel-main { background: transparent !important; }
+html.margin-page .channel-page .channel-name {
+  font-family: var(--m-serif) !important; font-size: 28px; font-weight: 400 !important; color: var(--m-ink) !important;
+}
+html.margin-page .channel-page :is(.bili-video-card__cover, .bili-cover-card, .bili-cover-card__thumbnail, .bili-cover-card__thumbnail img, .channel-carousel) {
+  border-radius: 12px !important;
+}
+html.margin-page .channel-page .bili-video-card__wrap { background: transparent !important; }
+html.margin-page .channel-page :is(.bili-video-card__title, .bili-video-card__title a) {
+  font-family: var(--m-sans) !important; color: var(--m-ink) !important; font-size: 14px !important; line-height: 22px !important; font-weight: 500;
+}
+html.margin-page .channel-page :is(.bili-video-card__subtitle, .bili-video-card__author) {
+  font-family: var(--m-sans) !important; font-size: 12px !important; color: var(--m-faint) !important;
+}
+html.margin-page .channel-page .bili-video-card__title a:hover,
+html.margin-page .channel-page .bili-video-card__author:hover { color: var(--m-accent) !important; }
+html.margin-page .channel-page .banner-carousel__footer { background: var(--m-surface) !important; color: var(--m-ink) !important; }
+html.margin-page .channel-page .banner-carousel__footer .mask { background: var(--m-surface) !important; filter: none !important; }
+html.margin-page .channel-page .banner-carousel__footer a { color: inherit !important; }
+html.margin-page .channel-page .banner-carousel__footer .switcher-btns > div { color: var(--m-ink) !important; background: var(--m-chip) !important; }
+
+/* 小尺寸挤压轮播：固定图片尺寸，局部裁切和位移，底部半透明渐变。 */
+html.margin-page .channel-carousel[data-margin-carousel="on"] { display: none !important; }
+.m-channel-carousel { --mcc-duration: 350ms; --mcc-ease: cubic-bezier(.16,1,.3,1); --mcc-radius: calc(12px * var(--margin-rk,1)); grid-column: span 2; position: relative; min-height: 180px; height: 100%; isolation: isolate; contain: layout paint; overflow: hidden; border-radius: 12px; font-family: var(--m-sans); }
+.m-channel-carousel[hidden], .m-channel-carousel [hidden] { display: none !important; }
+.mcc-panel { position: absolute; inset: 0 auto 0 0; width: var(--mcc-main); overflow: hidden; border-radius: 12px; background: var(--m-surface); transition: transform var(--mcc-duration) var(--mcc-ease), clip-path var(--mcc-duration) var(--mcc-ease), opacity 180ms; }
+.mcc-panel[data-visible="false"] { opacity: 0; pointer-events: none; }
+.mcc-panel img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; pointer-events: none; }
+.mcc-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg,transparent 35%,rgb(0 0 0 / .04) 48%,rgb(0 0 0 / .58) 79%,rgb(0 0 0 / .74)); opacity: 0; transition: opacity var(--mcc-duration); }
+.mcc-panel[data-selected="true"]::after { opacity: 1; }
+.mcc-open, .mcc-select { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; border: 0; padding: 0; background: none; cursor: pointer; }
+.mcc-select { width: 18px; }
+.mcc-caption { position: absolute; left: 16px; bottom: 31px; width: max(0px,calc(var(--mcc-main) - 100px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; color: #fff; text-shadow: 0 1px 5px rgb(0 0 0 / .5); font: 400 14px/1.5 var(--m-sans); }
+.mcc-dots { position: absolute; left: 14px; bottom: 10px; display: flex; gap: 2px; max-width: calc(var(--mcc-main) - 30px); overflow: hidden; }
+.mcc-dot { flex: none; border: 0; width: 12px; height: 12px; padding: 3px; background: none; cursor: pointer; }
+.mcc-dot::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: rgb(255 255 255 / .4); }
+.mcc-dot[aria-current="true"]::before { background: #fff; }
+.mcc-controls { position: absolute; left: calc(var(--mcc-main) - 74px); bottom: 26px; display: flex; gap: 6px; }
+.mcc-controls button { display: grid; place-items: center; width: 26px; height: 28px; padding: 0; border: 1px solid rgb(255 255 255 / .1); border-radius: 8px; background: rgb(255 255 255 / .11); color: #fff; cursor: pointer; transition: background-color 130ms; }
+.mcc-controls button:hover { background: rgb(255 255 255 / .22); }
+.mcc-controls svg { width: 14px; height: 14px; }
+.m-channel-carousel :is(a,button):focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+html.margin-reduce .mcc-panel, html.margin-reduce .mcc-panel::after, html.margin-reduce .mcc-controls button { transition: none; }
+@media (prefers-reduced-motion: reduce) { .mcc-panel, .mcc-panel::after, .mcc-controls button { transition: none; } }
+
 html.margin-page .video-card__content img, html.margin-page .rank-item .img img,
 html.margin-page .video-card .cover, html.margin-page .bili-video-card__image { border-radius: 12px !important; }
 html.margin-page .popular-video-container .video-name, html.margin-page .rank-item .info .title { color: var(--m-ink) !important; }

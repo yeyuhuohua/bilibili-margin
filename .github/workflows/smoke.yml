@@ -10,7 +10,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,17 +20,181 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Unit test (settings / filter / md5 / footprint)
-        run: pnpm run test:unit
+        run: ppnpm run test:unit
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run build
+      - run: ppnpm run build
+      - name: Display version and update comparison
+        run: node tests/popup-version.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/popup-version
+      - name: Space drawer regressions
+        run: pnpm run test:drawers
+      - name: Space articles, audio and public favorites
+        run: node tests/space-content.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/space-content
+      - name: Application window navigation
+        run: pnpm run test:app-window
+      - name: Native comment locations and both search styles
+        run: node tests/pr-completion.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/pr-completion
+      - name: Recommendation batch navigation
+        run: node tests/feed-batches.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/feed-batches
+      - name: Native controls follow the selected accent
+        run: node tests/accent-controls.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/accent-controls
+      - name: Watch Later creator filters and groups
+        run: pnpm run test:watch-later
+        env:
+          SMOKE_OUT: smoke-artifacts/watch-later-groups
+      - name: Manual danmaku jump suggestions
+        run: pnpm run test:danmaku-jump
+        env:
+          SMOKE_OUT: smoke-artifacts/danmaku-jump
+      - name: Community advertisement skipping
+        run: pnpm run test:sponsor-skip
+      - name: Opt-in danmaku clicks and undo
+        run: pnpm run test:danmaku-airborne
+      - name: Background frame pacing
+        run: pnpm run test:frame-budget
+      - name: UI interaction performance
+        run: pnpm run test:performance-ui
+        env:
+          SMOKE_OUT: smoke-artifacts/performance-ui
+      - name: Independent control effects and flat surfaces
+        run: node tests/effect-controls.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/effect-controls
+      - name: Glass theme switch integration
+        run: node tests/sun-moon.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/sun-moon
+      - name: Private message images and emojis
+        run: pnpm run test:message-media
+        env:
+          SMOKE_OUT: smoke-artifacts/message-media
+      - name: Session loading and cached history
+        run: pnpm run test:message-loading
+        env:
+          SMOKE_OUT: smoke-artifacts/message-loading
+      - name: Cross-tab message unread synchronization
+        run: node tests/message-sync.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/message-sync
+      - name: Transparent header over high-contrast backgrounds
+        run: pnpm run test:header-surface
+        env:
+          SMOKE_OUT: smoke-artifacts/header-surface
       - name: Smoke test (offline mocked bilibili)
-        run: pnpm run test:smoke
+        run: ppnpm run test:smoke
         env:
           SMOKE_BUNDLED: '1'
           SMOKE_OUT: smoke-artifacts
+      - name: Dashboard, settings, wide title and space collections regressions
+        run: pnpm run test:reported-issues
+        env:
+          SMOKE_OUT: smoke-artifacts/reported-issues
+      - name: Native channel theme and video navigation
+        run: |
+          SMOKE_OUT=smoke-artifacts/channel-theme node tests/channel-theme.mjs
+          SMOKE_OUT=smoke-artifacts/channel-carousel node tests/channel-carousel.mjs
+      - name: Dynamic nested replies and live leaderboard contrast
+        run: |
+          SMOKE_OUT=smoke-artifacts/dynamic-replies node tests/dynamic-replies.mjs
+          SMOKE_OUT=smoke-artifacts/live-rank-theme node tests/live-rank-theme.mjs
+          SMOKE_OUT=smoke-artifacts/live-home-theme node tests/live-home-theme.mjs
+      - name: Native share button sizing
+        run: pnpm run test:watch-share
+        env:
+          SMOKE_OUT: smoke-artifacts/watch-share
+      - name: Native like costume positioning and comment loading colors
+        run: node tests/native-watch-feedback.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/native-watch-feedback
+      - name: Cover previews, dynamic attachments and native picture popups
+        run: node tests/latest-feedback.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/latest-feedback
+      - name: Cover preview timing and stale request cancellation
+        run: node tests/preview-timing.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/preview-timing
+      - name: Comment feedback, search drops and filter scanning
+        run: node tests/comment-feedback.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/comment-feedback
+      - name: Comment metadata and collapse positioning
+        run: node tests/comment-layout.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/comment-layout
+      - name: Opening animation and graphics fallback
+        run: node tests/intro.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/intro
+      - name: Dynamic livestream reservations
+        run: node tests/dynamic-reserve.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/dynamic-reserve
+      - name: Player loading corners and hydration-safe card startup
+        run: |
+          SMOKE_OUT=smoke-artifacts/watch-startup node tests/watch-startup.mjs
+          SMOKE_OUT=smoke-artifacts/watch-card-startup node tests/watch-card-startup.mjs
+          SMOKE_OUT=smoke-artifacts/watch-playlist node tests/watch-playlist.mjs
+      - name: Reported theme, overlay, automatic mode and authorization regressions
+        run: |
+          SMOKE_OUT=smoke-artifacts/header-feedback node tests/header-feedback.mjs
+          SMOKE_OUT=smoke-artifacts/watch-auto-mode node tests/watch-auto-mode.mjs
+          SMOKE_OUT=smoke-artifacts/lightbox node tests/lightbox.mjs
+          SMOKE_OUT=smoke-artifacts/app-auth-feedback node tests/app-auth-feedback.mjs
+          SMOKE_OUT=smoke-artifacts/settings-thumbnails node tests/settings-thumbnails.mjs
+      - name: Live fullscreen, automatic wide alignment, subscriptions and pointer release
+        run: |
+          SMOKE_OUT=smoke-artifacts/watch-screen node tests/watch-screen.mjs
+          SMOKE_OUT=smoke-artifacts/watch-toolbar node tests/watch-toolbar.mjs
+          SMOKE_OUT=smoke-artifacts/favorites-subscriptions node tests/favorites-subscriptions.mjs
+          SMOKE_OUT=smoke-artifacts/triple-release node tests/triple-release.mjs
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-screenshots
           path: smoke-artifacts/
+          if-no-files-found: warn
+  privacy-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: ppnpm run build
+      - name: Animation layout and cleanup
+        run: pnpm run test:animation-performance
+        env:
+          SMOKE_OUT: privacy-performance/animation
+      - name: Incremental comment processing
+        run: pnpm run test:comment-performance
+        env:
+          COMMENT_OUT: privacy-performance/comments.json
+      - name: Profile card interactions
+        run: pnpm run test:content-performance
+        env:
+          SMOKE_OUT: privacy-performance/profile
+      - name: Extension privacy boundaries
+        run: pnpm run test:privacy
+        env:
+          SMOKE_OUT: privacy-performance/privacy
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privacy-performance-results
+          path: privacy-performance/
           if-no-files-found: warn

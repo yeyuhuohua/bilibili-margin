@@ -1,4 +1,4 @@
-import { createFolder, deleteFolder, folderVideos, folders, type Folder } from '../api/fav';
+import { collectedFolders, createFolder, deleteFolder, folderUrl, folderVideos, folders, seasonVideos, type Folder } from '../api/fav';
 import { videoCard, skeleton, cardData } from './card';
 import { h, icon, ICONS } from './dom';
 import { glassFolder, type GFFile, type GlassFolderApi } from './glass-folder';
@@ -7,9 +7,12 @@ import type { Video } from '../api/feed';
 import { createSheet, type Sheet } from './sheet';
 import type { FilterRuntime } from '../filter-runtime';
 import { targetOfVideo } from '../filter-targets';
+import { openBili } from '../navigation';
+import { loadSettings,onSettingsChange } from '../../shared/settings';
+import { segmented } from './controls';
 
 /** 收藏夹抽屉：玻璃文件夹 → 视频网格（无限加载） */
-export function createFavorites(onRender: (grid: HTMLElement) => void, direct: () => boolean = () => false, filter?: FilterRuntime): Sheet {
+export function createFavorites(onRender: (grid: HTMLElement) => void, direct: () => boolean = () => true, filter?: FilterRuntime): Sheet {
   let loaded = false;
   const shelf = h('div', { class: 'shelf' });
   const grid = h('div', { class: 'grid fav-grid' });
@@ -22,37 +25,88 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
   let busy = false;
   let gen = 0;
   let folderList: Folder[] = [];
+  let group: 'created' | 'collected' = 'created';
+  let listGen = 0, folderPage = 1, foldersBusy = false;
+  const moreFolders = h('button', { type: 'button', class: 'btn', hidden: '', onclick: () => loadMoreFolders() }, '加载更多订阅') as HTMLButtonElement;
+  const folderStatus = h('div', { class: 'status' });
+  const tabs = segmented([['created', '我的收藏'], ['collected', '订阅内容']], group, (next) => {
+    if (next === group) return;
+    group = next; init();
+  });
 
   const sheet = createSheet({ title: '收藏夹', eyebrow: 'Favorites', width: 820, onOpen: () => { if (!loaded) init(); } });
   sheet.body.classList.add('fav-body');
-  sheet.body.append(shelf, crumb, grid, status, sentinel);
+  sheet.body.append(tabs, shelf, folderStatus, moreFolders, crumb, grid, status, sentinel);
+  const setColumns = (columns:number) => shelf.style.setProperty('--fav-cols',String(columns));
+  loadSettings().then((s) => setColumns(s.favColumns)).catch(() => {});
+  onSettingsChange((next,prev) => { if (next.favColumns !== prev.favColumns) setColumns(next.favColumns); });
   onRender(grid);
 
   async function init() {
+    const g = ++listGen;
+    gen++; current = null; more = false; busy = false; foldersBusy = false; folderPage = 1;
+    folderList = [];
+    for (const { gf } of previews.values()) gf.dispose();
+    previews.clear();
+    crumb.replaceChildren(); grid.replaceChildren(); status.replaceChildren(); folderStatus.replaceChildren(); moreFolders.hidden = true; moreFolders.disabled = false;
     loaded = true;
     shelf.replaceChildren(...Array.from({ length: 4 }, () => h('div', { class: 'gf-sk sk' })));
     try {
-      const list = await folders();
-      if (!list) {
+      const result = group === 'collected' ? await collectedFolders() : await folders().then((list) => list && ({ list, more: false }));
+      if (g !== listGen) return;
+      if (!result) {
         shelf.replaceChildren(h('div', { class: 'empty' }, h('p', {}, '登录后才能看到你的收藏夹'), h('a', { class: 'user', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '去登录')));
         return;
       }
-      folderList = list;
-      shelf.replaceChildren(...list.map((f, i) => folderCard(f, i)), newTile());
-      if (list[0]) open(list[0]);
+      folderList = result.list;
+      shelf.replaceChildren(...folderList.map((f, i) => folderCard(f, i)));
+      if (group === 'created') shelf.append(newTile());
+      else if (!folderList.length) folderStatus.textContent = '还没有订阅合集或收藏夹';
+      moreFolders.hidden = !result.more;
+      if (folderList[0]) open(folderList[0]);
     } catch (e) {
+      if (g !== listGen) return;
       loaded = false;
-      shelf.replaceChildren(h('div', { class: 'empty' }, h('p', {}, `加载失败：${(e as Error).message}`)));
+      shelf.replaceChildren(h('div', { class: 'empty' }, h('p', {}, `加载失败：${(e as Error).message}`), h('button', { type: 'button', class: 'btn', onclick: init }, '重试')));
+    }
+  }
+
+  async function loadMoreFolders() {
+    if (foldersBusy || group !== 'collected') return;
+    foldersBusy = true; moreFolders.disabled = true;
+    const g = listGen;
+    try {
+      const result = await collectedFolders(folderPage + 1);
+      if (g !== listGen) return;
+      if (!result) throw new Error('登录后才能查看订阅内容');
+      folderPage++;
+      for (const f of result.list) if (!folderList.some((old) => keyOf(old) === keyOf(f))) {
+        folderList.push(f); shelf.append(folderCard(f, 0));
+      }
+      moreFolders.hidden = !result.more; folderStatus.replaceChildren();
+    } catch (e) {
+      if (g === listGen) folderStatus.textContent = `加载失败：${(e as Error).message}`;
+    } finally {
+      if (g === listGen) { foldersBusy = false; moreFolders.disabled = false; }
     }
   }
 
   const ARTS: ArtPreset[] = ['aurora', 'ember', 'dusk', 'glacier', 'verdant'];
-  const firstPage = new Map<number, Promise<{ list: Video[]; more: boolean }>>();
-  const page1 = (id: number) => { let p = firstPage.get(id); if (!p) { p = folderVideos(id, 1); p.catch(() => firstPage.delete(id)); firstPage.set(id, p); } return p; };
+  const keyOf = (f: Folder) => `${f.kind ?? 'created'}:${f.id}`;
+  const seasons = new Map<number, Promise<Video[]>>();
+  const videos = async (f: Folder, page: number) => {
+    if (f.kind !== 'season') return folderVideos(f.id, page);
+    let pending = seasons.get(f.id);
+    if (!pending) { pending = seasonVideos(f.id); pending.catch(() => seasons.delete(f.id)); seasons.set(f.id, pending); }
+    const list = await pending;
+    return { list: list.slice((page - 1) * 20, page * 20), more: page * 20 < list.length };
+  };
+  const firstPage = new Map<string, Promise<{ list: Video[]; more: boolean }>>();
+  const page1 = (f: Folder) => { const key = keyOf(f); let p = firstPage.get(key); if (!p) { p = videos(f, 1); p.catch(() => firstPage.delete(key)); firstPage.set(key, p); } return p; };
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   // 文件夹预览的原始数据：屏蔽词变化时只重算扇形文件，不重新请求
-  const previews = new Map<number, { gf: GlassFolderApi; raw: Video[] }>();
-  const paintPreview = (id: number) => {
+  const previews = new Map<string, { gf: GlassFolderApi; raw: Video[] }>();
+  const paintPreview = (id: string) => {
     const entry = previews.get(id);
     if (!entry) return;
     const paint = () => {
@@ -86,17 +140,18 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
       onDirect: () => { open(f); requestAnimationFrame(() => crumb.scrollIntoView({ behavior: 'smooth', block: 'start' })); },
       menu: [
         { label: '查看全部视频', onSelect: () => { open(f); crumb.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
-        { label: '在 B 站打开', onSelect: () => window.open(`https://space.bilibili.com/${f.mid}/favlist?fid=${f.id}`, '_blank', 'noopener') },
-        ...(f.isDefault ? [] : [{ label: '删除收藏夹', danger: true, onSelect: () => remove(f) }]),
+        { label: '在 B 站打开', onSelect: () => openBili(folderUrl(f)) },
+        ...(f.isDefault || f.kind ? [] : [{ label: '删除收藏夹', danger: true, onSelect: () => remove(f) }]),
       ],
     });
-    gf.el.dataset.id = String(f.id);
-    previews.set(f.id, { gf, raw: [] });
-    page1(f.id).then((r) => {
-      const entry = previews.get(f.id);
-      if (!entry) return;
+    const key = keyOf(f);
+    gf.el.dataset.id = String(f.id); gf.el.dataset.key = key;
+    previews.set(key, { gf, raw: [] });
+    page1(f).then((r) => {
+      const entry = previews.get(key);
+      if (!entry || entry.gf !== gf) return;
       entry.raw = r.list;
-      paintPreview(f.id);
+      paintPreview(key);
     }).catch(() => {});
     return gf.el;
   }
@@ -122,9 +177,11 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
         const title = input.value.trim();
         if (!title) return;
         if (folderList.some((f) => f.title === title)) { err.textContent = '已经有同名的收藏夹了'; return; }
+        const g = listGen;
         submit.disabled = true; submit.textContent = '创建中…';
         try {
           const f = await createFolder(title, priv.checked);
+          if (g !== listGen) return;
           folderList.push(f);
           tile.before(folderCard(f, 0));
           idle();
@@ -147,6 +204,7 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
   }
 
   async function remove(f: Folder) {
+    if (f.kind || f.isDefault) return;
     if (!confirm(`删除收藏夹「${f.title}」？\n里面的 ${f.count} 个收藏会一起删除，无法恢复。`)) return;
     try {
       await deleteFolder(f.id);
@@ -154,21 +212,23 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
       alert(`删除失败：${(x as Error).message}`);
       return;
     }
-    folderList = folderList.filter((x) => x.id !== f.id);
-    firstPage.delete(f.id);
-    previews.delete(f.id);
-    shelf.querySelector<HTMLElement>(`.gf-root[data-id="${f.id}"]`)?.remove();
-    if (current?.id === f.id) { current = null; if (folderList[0]) open(folderList[0]); else { crumb.replaceChildren(); grid.replaceChildren(); status.replaceChildren(); } }
+    const key = keyOf(f);
+    folderList = folderList.filter((x) => keyOf(x) !== key);
+    firstPage.delete(key);
+    previews.get(key)?.gf.dispose();
+    previews.delete(key);
+    shelf.querySelector<HTMLElement>(`.gf-root[data-key="${key}"]`)?.remove();
+    if (current && keyOf(current) === key) { gen++; current = null; if (folderList[0]) open(folderList[0]); else { crumb.replaceChildren(); grid.replaceChildren(); status.replaceChildren(); } }
   }
 
   function open(f: Folder) {
-    if (current?.id === f.id && grid.children.length) return;
+    if (current && keyOf(current) === keyOf(f) && grid.children.length) return;
     current = f;
     gen++;
     page = 1;
     more = true;
     busy = false;
-    shelf.querySelectorAll<HTMLElement>('.gf-root').forEach((el) => el.toggleAttribute('data-current', el.dataset.id === String(f.id)));
+    shelf.querySelectorAll<HTMLElement>('.gf-root').forEach((el) => el.toggleAttribute('data-current', el.dataset.key === keyOf(f)));
     crumb.replaceChildren(h('span', {}, f.title), h('small', {}, `${f.count} 个视频`));
     grid.replaceChildren();
     status.replaceChildren();
@@ -183,10 +243,11 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     const sk = [...skeleton(page === 1 ? 6 : 3).childNodes];
     grid.append(...sk);
     try {
-      const r = await (page === 1 ? page1(current.id) : folderVideos(current.id, page)); page++;
+      const r = await (page === 1 ? page1(current) : videos(current, page));
       if (g !== gen) return;
       await filter?.prepare(r.list.map((v) => v.bvid));
       if (g !== gen) return;
+      page++;
       sk.forEach((n) => (n as Element).remove());
       const start = grid.children.length;
       r.list.forEach((v, i) => {

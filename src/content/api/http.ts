@@ -5,15 +5,25 @@ const API = 'https://api.bilibili.com';
 
 interface Resp<T> { code: number; message?: string; data: T }
 
-export async function getJSON<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+async function readResponse<T>(response: Response): Promise<Resp<T>> {
+  if (response.status === 412) setGuard(false);
+  if (!response.ok) throw new Error(`B 站接口请求失败（HTTP ${response.status}），请稍后重试`);
+  let body: Resp<T>;
+  try { body = await response.json(); }
+  catch (error) {
+    if (error instanceof SyntaxError) throw new Error('B 站接口返回了非 JSON 页面，请稍后重试');
+    throw error;
+  }
+  if (!body || typeof body.code !== 'number') throw new Error('B 站接口返回的数据格式异常，请稍后重试');
+  if (body.code === -352) setGuard(false);
+  return body;
+}
+
+export async function getJSON<T>(path: string, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<T> {
   const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
   const url = `${API}${path}${q.size ? `?${q}` : ''}`;
-  const res = await fetch(url, { credentials: 'include' });
-  // 412 / -352 是风控：下次进页面放行原版脚本，让它补齐指纹 cookie
-  if (res.status === 412) setGuard(false);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = (await res.json()) as Resp<T>;
-  if (body.code === -352) setGuard(false);
+  const res = await fetch(url, { credentials: 'include', signal });
+  const body = await readResponse<T>(res);
   if (body.code !== 0) throw new Error(body.message || `code ${body.code}`);
   return body.data;
 }
@@ -34,28 +44,34 @@ let navCache: Promise<NavInfo> | null = null;
 export function nav(): Promise<NavInfo> {
   // /nav answers code -101 when logged out but still carries wbi_img, so read it raw.
   navCache ??= fetch(`${API}/x/web-interface/nav`, { credentials: 'include' })
-    .then((r) => r.json())
-    .then((b) => b.data as NavInfo);
+    .then((r) => readResponse<NavInfo>(r))
+    .then((b) => {
+      if (!b.data) throw new Error(b.message || 'B 站登录信息暂时不可用，请重试');
+      return b.data;
+    })
+    .catch((error) => { navCache = null; throw error; });
   return navCache;
 }
 
 function getMixinKey(): Promise<string> {
   mixinKey ??= nav().then(({ wbi_img }) => {
+    if (!wbi_img?.img_url || !wbi_img?.sub_url) throw new Error('B 站签名信息暂时不可用，请重试');
     const name = (u: string) => u.slice(u.lastIndexOf('/') + 1).split('.')[0];
     const raw = name(wbi_img.img_url) + name(wbi_img.sub_url);
     return MIXIN.map((i) => raw[i]).join('').slice(0, 32);
-  });
+  }).catch((error) => { mixinKey = null; navCache = null; throw error; });
   return mixinKey;
 }
 
-export async function getWbi<T>(path: string, params: Record<string, string | number>): Promise<T> {
+export async function getWbi<T>(path: string, params: Record<string, string | number>, signal?: AbortSignal): Promise<T> {
   const key = await getMixinKey();
+  signal?.throwIfAborted();
   const all: Record<string, string> = { ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), wts: String(Math.round(Date.now() / 1000)) };
   const query = Object.keys(all).sort()
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(all[k].replace(/[!'()*]/g, ''))}`)
     .join('&');
-  const res = await fetch(`${API}${path}?${query}&w_rid=${md5(query + key)}`, { credentials: 'include' });
-  const body = (await res.json()) as Resp<T>;
+  const res = await fetch(`${API}${path}?${query}&w_rid=${md5(query + key)}`, { credentials: 'include', signal });
+  const body = await readResponse<T>(res);
   if (body.code !== 0) throw new Error(body.message || `code ${body.code}`);
   return body.data;
 }

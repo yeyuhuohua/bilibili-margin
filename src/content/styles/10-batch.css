@@ -1,0 +1,30 @@
+/* 推荐批次导航（v0.53）：占据分类栏原来的「换一批」位置。 */
+.batch-bar {
+  display: flex; align-items: center; gap: 2px; padding: 1px;
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.batch-bar[hidden] { display: none; }
+.batch-btn {
+  display: grid; place-items: center; width: 34px; height: 30px; border: 0; border-radius: 999px;
+  color: var(--muted); transition: color .2s var(--ease-out), background .2s var(--ease-out);
+}
+.batch-btn svg { width: 16px; height: 16px; }
+.batch-btn:hover { color: var(--ink); background: var(--chip); }
+/* 隐藏的箭头保留槽位，中间刷新键不会左右位移 */
+.batch-btn[data-off="true"] { visibility: hidden; }
+.batch-btn:disabled { cursor: default; opacity: .55; }
+.batch-btn.go { background: var(--ink); color: var(--canvas); }
+.batch-btn.go:hover { background: var(--ink); }
+.batch-btn[aria-busy="true"] { pointer-events: none; }
+.batch-btn[aria-busy="true"] svg { animation: refresh-spin .9s linear infinite; }
+/* 批次条取代分类栏里的换一批 / 上一批 */
+.app.batchnav .bar-acts > .ghost { display: none; }
+.batch-opts[hidden] { display: none; }
+.batch-size-in { flex: none; width: 96px; }
+/* 不足一批时补的空白卡片：不显示但占住网格单元 */
+.home-grid > .card.blank { visibility: hidden; pointer-events: none; animation: none; }
+.home-grid > .card.blank .cover, .home-grid > .card.blank .line { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .batch-btn { transition: none; }
+  .batch-btn[aria-busy="true"] svg { animation: none; }
+}

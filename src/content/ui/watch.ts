@@ -1,6 +1,6 @@
 import { every } from '../sched';
 import type { Settings } from '../../shared/settings';
-import { saveSettings } from '../../shared/settings';
+import { loadSettings } from '../../shared/settings';
 import { h, ICONS, guardTyping } from './dom';
 import { toast } from './controls';
 import { addWatchLater } from '../api/search';
@@ -21,9 +21,11 @@ import css from '../styles/index';
 import { BackgroundLayer } from '../bg/background';
 import { startTriple } from './triple';
 import { startWatchCard } from './watch-card';
-import { reducedMotion } from '../motion';
+import { uiReducedMotion as reducedMotion } from '../motion';
 import { createBackTop } from './back-top';
 import { FilterRuntime } from '../filter-runtime';
+import { openBili } from '../navigation';
+import { ThemeWriter } from './theme-writer';
 
 export type SkinKind = 'watch' | 'search' | 'page' | 'live';
 
@@ -45,6 +47,7 @@ export class WatchSkin {
   private autoDone = '';
   private wideDone = '';
   private media = matchMedia('(prefers-color-scheme: dark)');
+  private themeWriter = new ThemeWriter();
 
   constructor(private settings: Settings, private kind: SkinKind = 'watch') {
     const de = document.documentElement;
@@ -69,8 +72,8 @@ export class WatchSkin {
 
     this.filter = new FilterRuntime(settings);
     this.panel = createSettingsPanel(() => this.settings, () => this.bg.shader);
-    this.fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), undefined, this.filter);
-    const open = (u: string) => window.open(u, '_blank', 'noopener');
+    this.fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), () => this.settings.favDirect, this.filter);
+    const open = (u: string) => openBili(u);
     const clickSel = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.click();
     const later = createLaterDrawer(() => this.app, this.filter);
     const watchCmds: Command[] = isWatch ? [
@@ -94,7 +97,8 @@ export class WatchSkin {
     const cm = createContextMenu();
     this.head = createHeader({
       onTheme: () => this.toggleTheme(),
-      onSearch: (q) => palette.open(q),
+      onSettings: () => this.panel.sheet.open(),
+      onSearch: (q, origin) => palette.open(q, origin),
       msgRemind: () => this.settings.msgRemind,
       filter: this.filter,
       tabs: [
@@ -102,7 +106,6 @@ export class WatchSkin {
         'separator',
         { title: '收藏', icon: ICONS.fav, run: () => this.fav.open() },
         { title: '稍后', icon: ICONS.later, run: () => later.open() },
-        { title: '设置', icon: ICONS.gear, run: () => this.panel.sheet.open() },
         { title: '原版', icon: ICONS.exit, run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
       ],
     });
@@ -114,11 +117,11 @@ export class WatchSkin {
       { label: '宽屏模式', en: 'Wide Mode', run: () => click('.bpx-player-ctrl-wide') },
       { label: '收藏夹', en: 'Favorites', run: () => this.fav.open() },
     ]) : null;
-    this.app = h('div', { class: 'app wt', 'data-bg': 'off' }, this.head.el, quick?.el ?? null, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el, createBackTop(window));
-    // 侧板开着时背景定格：侧板的毛玻璃（backdrop-filter）只有在底下画面变化时才需要每帧重算（v0.45）
-    this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); this.bg.hold('sheet', on); });
+    this.app = h('div', { class: 'app wt', 'data-bg': 'off','data-glass':settings.glass,'data-kind':kind }, this.head.el, quick?.el ?? null, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el, createBackTop(window));
+    // 标记抽屉状态；大面板使用实底，可见背景保持动态。
+    this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     root.append(this.app);
-    if (isWatch) skinComments();
+    if (isWatch) { skinComments(); alignAuthorCard(); }
     const lg = filtersIn(root);
     this.head.glass.forEach((g) => attachGlass(g, lg));
     attachGlass(this.head.thumb, lg, { blur: 2, strength: 0.4 });
@@ -134,6 +137,9 @@ export class WatchSkin {
   }
 
   update(s: Settings): void {
+    s = this.themeWriter.sync(s);
+    this.app.dataset.glass = s.glass;
+    this.app.classList.toggle('margin-ui-still', !s.uiEffects);
     const prev = this.settings;
     this.settings = s;
     this.filter.update(s);
@@ -158,6 +164,7 @@ export class WatchSkin {
     this.app.dataset.theme = t;
     this.bgApp.dataset.theme = t;
     this.app.classList.toggle('margin-reduce', this.settings.reduceMotion);
+    this.app.classList.toggle('margin-ui-still', !this.settings.uiEffects);
     this.bgApp.classList.toggle('margin-reduce', this.settings.reduceMotion);
     this.head.sunMoon.set(t, animate && !reducedMotion());
     const mode = this.settings.bg.mode;
@@ -172,7 +179,11 @@ export class WatchSkin {
     const next = this.resolved() === 'dark' ? 'light' : 'dark';
     this.settings = { ...this.settings, theme: next };
     this.applyTheme(true);
-    await saveSettings({ theme: next });
+    try { await this.themeWriter.save(next); }
+    catch {
+      this.update(await loadSettings().catch(() => this.settings));
+      toast(this.app, '主题设置保存失败，请重试');
+    }
   }
 
   /** 网页全屏 / 全屏时收起顶栏，不挡播放器 */
@@ -190,38 +201,79 @@ export class WatchSkin {
       }
       return 'normal';
     };
-    let lastScreen = '';
+    let lastState = '';
     const sync = (force = false) => {
       const screen = playerScreen();
-      // 状态没变且不在全屏时不做重复重排；设置变化时 force 强制重算
-      if (!force && screen === lastScreen && !document.fullscreenElement) return;
-      lastScreen = screen;
-      const hide = screen === 'web' || screen === 'full' || !!document.fullscreenElement;
+      const full = !!document.fullscreenElement;
+      const liveWeb = this.kind === 'live' && !!document.body?.matches('.player-full-win, .fullscreen-fix');
+      const state = `${screen}:${full}:${liveWeb}`;
+      // 原生全屏可以独立于 data-screen 变化，退出时也需要恢复顶栏。
+      if (!force && state === lastState) return;
+      lastState = state;
+      const hide = screen === 'web' || screen === 'full' || full || liveWeb;
       this.host.toggleAttribute('hidden', hide);
-      webScroll(screen === 'web' && !document.fullscreenElement && this.settings.webScroll);
+      webScroll(screen === 'web' && !full && this.settings.webScroll);
       this.bg.hold('screen', hide);
       document.documentElement.classList.toggle('margin-webscreen', hide);
-      wide(screen === 'wide');
+      // 小窗只移动播放器本体，文档仍沿用进入小窗前的宽屏布局。
+      wide(screen === 'wide' || (screen === 'mini' && de.classList.contains('margin-wide')));
     };
-    // 宽屏：B 站把播放器拉满左右两栏，但右栏不会让位（原版靠被我们隐藏/重排掉的结构），这里把右栏推到播放器下面
+    // 宽屏：按右栏实际内容对齐，扣除原生内层已有的让位，避免重复叠加高度。
     let ro: ResizeObserver | null = null;
+    let sideObserver: MutationObserver | null = null;
+    let placeFrame = 0;
     const de = document.documentElement;
+    const schedulePlace = () => {
+      if (placeFrame || !de.classList.contains('margin-wide')) return;
+      placeFrame = requestAnimationFrame(() => { placeFrame = 0; place(); });
+    };
     const place = () => {
-      const pl = player(), rc = document.querySelector<HTMLElement>('.right-container');
-      if (!pl || !rc) return;
-      const prev = parseFloat(getComputedStyle(rc).paddingTop) || 0;
-      const top = rc.getBoundingClientRect().top + prev;
-      const pad = Math.max(0, Math.round(pl.getBoundingClientRect().bottom - (top - prev) + 24));
-      de.style.setProperty('--m-wide-pad', `${pad}px`);
+      if (!de.classList.contains('margin-wide')) return;
+      const pl = player(), rc = document.querySelector<HTMLElement>('.right-container, .playlist-container--right');
+      if (!pl) return;
+      ro?.observe(pl);
+      const mini = playerScreen() === 'mini';
+      const anchor = mini ? document.querySelector<HTMLElement>('#playerWrap') : pl;
+      if (!anchor) return;
+      ro?.observe(anchor);
+      // 小窗尺寸与页面布局无关，读取原文档占位并沿用宽屏标题宽度。
+      if (!mini) {
+        const width = `${pl.offsetWidth}px`;
+        if (de.style.getPropertyValue('--m-wide-width') !== width) de.style.setProperty('--m-wide-width', width);
+      }
+      if (!rc) return;
+      ro?.observe(rc);
+      const inner = rc.querySelector('.right-container-inner') ?? rc;
+      const first = [...inner.children].find((el) => el.getClientRects().length) ?? inner;
+      if (!first.getClientRects().length) return;
+      const current = parseFloat(getComputedStyle(rc).paddingTop) || 0;
+      const scale = rc.getBoundingClientRect().width / rc.offsetWidth || 1;
+      const toolbar = document.querySelector('.video-toolbar-container');
+      const top = toolbar?.getClientRects().length ? toolbar.getBoundingClientRect().top : anchor.getBoundingClientRect().bottom + 16 * scale;
+      const pad = `${Math.max(0, Math.round(current + (top - first.getBoundingClientRect().top) / scale))}px`;
+      if (de.style.getPropertyValue('--m-wide-pad') !== pad) de.style.setProperty('--m-wide-pad', pad);
     };
     const wide = (on: boolean) => {
       de.classList.toggle('margin-wide', on);
       if (on) {
-        requestAnimationFrame(place);
-        if (!ro) { ro = new ResizeObserver(() => { if (de.classList.contains('margin-wide')) place(); }); }
+        schedulePlace();
+        if (!ro) ro = new ResizeObserver(schedulePlace);
         const pl = player();
         if (pl) ro.observe(pl);
-      } else { ro?.disconnect(); de.style.removeProperty('--m-wide-pad'); }
+        // 合集侧栏可晚于播放器挂载；只观察侧栏的内容变化，出现后立即重新定位。
+        sideObserver ??= new MutationObserver((records) => {
+          if (records.some((r) => (r.target as Element).closest?.('.right-container, .playlist-container--right') ||
+            [...r.addedNodes].some((n) => n instanceof Element && (n.matches('.right-container, .playlist-container--right, .bpx-player-container') || n.querySelector('.right-container, .playlist-container--right, .bpx-player-container'))))) schedulePlace();
+        });
+        sideObserver.observe(document.body, { childList: true, subtree: true });
+        addEventListener('resize', schedulePlace, { passive: true });
+      } else {
+        ro?.disconnect(); sideObserver?.disconnect();
+        removeEventListener('resize', schedulePlace);
+        cancelAnimationFrame(placeFrame); placeFrame = 0;
+        de.style.removeProperty('--m-wide-pad');
+        de.style.removeProperty('--m-wide-width');
+      }
     };
     // v0.43 网页全屏可滚动：播放器改成贴在文档顶端的 absolute，下面的评论接着排
     const webScroll = (on: boolean) => {
@@ -233,6 +285,7 @@ export class WatchSkin {
       if (!wrap) return;
       const was = de.classList.contains('margin-webscroll');
       requestAnimationFrame(() => {
+        if (playerScreen() !== 'web' || document.fullscreenElement || !this.settings.webScroll) return;
         if (!was) de.classList.add('margin-webscroll');
         // 先按 0 偏移算 player-wrap 的文档坐标，再把播放器拉回文档左上角
         de.style.setProperty('--m-ws-h', 'auto');
@@ -301,21 +354,50 @@ export class WatchSkin {
     this.screenSync = () => sync(true);
     addEventListener('resize', () => { if (de.classList.contains('margin-webscroll')) webScroll(true); });
     new MutationObserver(() => sync()).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-screen'] });
-    if (document.body) new MutationObserver(() => sync()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    if (this.kind === 'live') {
+      const observeLive = () => {
+        new MutationObserver(() => sync()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        sync();
+      };
+      if (document.body) observeLive();
+      else document.addEventListener('DOMContentLoaded', observeLive, { once: true });
+    }
     every(1000, sync); // 旧版播放器只改 class、不发 data-screen 变化，兜底轮询
     // v0.43 自动网页全屏；v0.47 宽屏模式：每个视频进来一次，用户自己退出后同一视频不再强开
     const keyOf = () => location.pathname.match(/BV\w+|ep\d+|ss\d+/)?.[0] ?? location.search;
     const webBtn = () => document.querySelector<HTMLElement>('.bpx-player-ctrl-web, .bilibili-player-video-btn-webscreen, [aria-label="网页全屏"]');
     const wideBtn = () => document.querySelector<HTMLElement>('.bpx-player-ctrl-wide, .bilibili-player-video-btn-widescreen, [aria-label="宽屏"]');
     const video = () => document.querySelector<HTMLVideoElement>('.bpx-player-video-wrap video, .bpx-player-video-wrap bwp-video, #bilibili-player video, .bilibili-player video');
+    const alignWide = (bv: string, startY: number) => {
+      if (startY > 4) return;
+      const started = performance.now();
+      let stableSince = started, lastTop = NaN, lastHeight = NaN, entered = playerScreen() === 'wide';
+      const align = () => {
+        if (!this.settings.wide || this.settings.autoWeb || keyOf() !== bv || document.fullscreenElement || Math.abs(scrollY - startY) > 2) return;
+        const p = player(), screen = playerScreen(), now = performance.now();
+        if (!p || screen !== 'wide') {
+          if (!entered && screen === 'normal' && now - started < 1000) requestAnimationFrame(align);
+          return;
+        }
+        entered = true;
+        const r = p.getBoundingClientRect();
+        if (r.top !== lastTop || r.height !== lastHeight) { stableSince = now; lastTop = r.top; lastHeight = r.height; }
+        if (now - stableSince < 120 && now - started < 1000) { requestAnimationFrame(align); return; }
+        const top = Math.max(this.host.getBoundingClientRect().bottom + 12, (innerHeight - r.height) / 2);
+        scrollTo({ top: Math.max(0, scrollY + r.top - top), behavior: 'instant' });
+      };
+      requestAnimationFrame(align);
+    };
     every(800, () => {
       const bv = keyOf();
+      if (document.querySelector('[data-server-rendered]')) return;
       // 自动网页全屏优先；和宽屏同时开启时不再点宽屏
       if (this.settings.autoWeb && bv !== this.autoDone) {
         const p = player(), btn = webBtn(), v = video();
         if (!p || !btn || !v || (v as HTMLVideoElement).readyState < 1) return;
         this.autoDone = bv;
-        if (playerScreen() === 'normal' && !document.fullscreenElement) btn.click();
+        const screen = playerScreen();
+        if ((screen === 'normal' || screen === 'wide') && !document.fullscreenElement) btn.click();
         return;
       }
       if (!this.settings.wide || this.settings.autoWeb) return;
@@ -323,25 +405,52 @@ export class WatchSkin {
       const btn = wideBtn();
       if (!btn || !player()) return;
       this.wideDone = bv;
-      if (playerScreen() === 'normal' && !document.fullscreenElement) btn.click();
-    });
-    // v0.43 卡顿：视频播放时背景定格，GPU 留给解码和弹幕；暂停后接着动
-    const playSync = (e: Event) => {
-      const v = e.target as (Element & { paused?: boolean; ended?: boolean }) | null;
-      // bwp-video（B 站自己的 MSE 播放器元素）不是 HTMLMediaElement，但同样有 paused/ended
-      if (!(v instanceof Element) || typeof v.paused !== 'boolean' || !v.closest('.bpx-player-container, #bilibili-player')) return;
-      this.bg.hold('play', !v.paused && !v.ended);
-    };
-    for (const t of ['play', 'playing', 'pause', 'ended', 'emptied']) document.addEventListener(t, playSync, true);
-    let st = 0;
-    addEventListener('scroll', () => {
-      if (!st) this.bg.hold('scroll', true);
-      clearTimeout(st);
-      st = window.setTimeout(() => { st = 0; this.bg.hold('scroll', false); }, 160);
-    }, { passive: true });
+      const screen = playerScreen(), startY = scrollY;
+      if ((screen === 'normal' || screen === 'wide') && !document.fullscreenElement) {
+        if (screen === 'normal') btn.click();
+        alignWide(bv, startY);
+      }
+    }, { immediate: true });
     document.addEventListener('fullscreenchange', () => sync());
     sync();
   }
+}
+
+/** 普通模式下对齐 UP 卡片与播放器；标题换行、懒挂载和模式切换后按帧合并重算。 */
+function alignAuthorCard(): void {
+  const de = document.documentElement;
+  let frame = 0;
+  const observed = new Set<Element>();
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+  const ro = new ResizeObserver(schedule);
+  const place = () => {
+    frame = 0;
+    if (de.classList.contains('margin-wide') || de.classList.contains('margin-webscreen')) { de.style.removeProperty('--m-author-pad'); return; }
+    // 原生吸顶也会移动左栏；滚动期间保留首屏间距，回到顶部再校准。
+    if (scrollY > 1) return;
+    // 浮动小窗会移动播放器本体；对齐它在文档中的占位，不能追随小窗的屏幕坐标。
+    const player = document.querySelector('#playerWrap') ?? document.querySelector('.bpx-player-container');
+    const right = document.querySelector<HTMLElement>('.right-container, .playlist-container--right');
+    const panel = right?.querySelector('.up-panel-container');
+    if (!player || !right || !panel) return;
+    if (getComputedStyle(player).position === 'fixed') return;
+    for (const el of observed) if (!el.isConnected) { ro.unobserve(el); observed.delete(el); }
+    for (const el of [player, right, document.querySelector('.video-info-container')]) {
+      if (el && !observed.has(el)) { ro.observe(el); observed.add(el); }
+    }
+    const current = parseFloat(getComputedStyle(right).paddingTop) || 0;
+    const scale = right.getBoundingClientRect().width / right.offsetWidth || 1;
+    const pad = `${Math.max(0, Math.round(current + (player.getBoundingClientRect().top - panel.getBoundingClientRect().top) / scale))}px`;
+    if (de.style.getPropertyValue('--m-author-pad') !== pad) de.style.setProperty('--m-author-pad', pad);
+  };
+  new MutationObserver(schedule).observe(de, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver((records) => {
+    if (records.some((r) => [...r.addedNodes].some((n) => n instanceof Element &&
+      (n.matches('.up-panel-container, .right-container, .playlist-container--right, .video-info-container, .bpx-player-container') || n.querySelector('.up-panel-container, .right-container, .playlist-container--right, .video-info-container, .bpx-player-container'))))) schedule();
+  }).observe(de, { childList: true, subtree: true });
+  addEventListener('resize', schedule, { passive: true });
+  addEventListener('scroll', () => { if (scrollY <= 1) schedule(); }, { passive: true });
+  schedule();
 }
 
 /** 选集进度条：把「（3/14）」换算成 0–1 写到 .video-pod__header 的 --pod-p。

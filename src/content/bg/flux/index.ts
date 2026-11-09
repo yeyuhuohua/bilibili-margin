@@ -1,8 +1,9 @@
-import { compute, draw, effect, frame, init, storage, surface, target, type Gpu, type Surface, type Target } from 'vgpu';
+import { compute, draw, effect, frame, init, storage, surface, target, type Gpu, type InitOptions, type Surface, type Target } from 'vgpu';
 import simWgsl from './sim.wgsl';
 import dotsWgsl from './dots.wgsl';
 import fadeWgsl from './fade.wgsl';
 import compositeWgsl from './composite.wgsl';
+import { fluxTiming } from './timing';
 
 /**
  * 「流光」：WebGPU 计算着色器版背景（基于 vgpu，vercel-labs，MIT）。
@@ -11,6 +12,22 @@ import compositeWgsl from './composite.wgsl';
  */
 const COUNT = 24000;
 const FLOATS = 8;
+
+/**
+ * Windows 上的 Chromium 会忽略 requestAdapter() 的 powerPreference，并且每次调用都往
+ * 控制台打一条警告（crbug.com/369219127）。在 Windows 上干脆不提这个要求，其他平台
+ * 仍保留 low-power 偏好。优先用扩展自带的 getPlatformInfo（不受 UA 冻结/缩减影响），
+ * 取不到（非扩展上下文、旧运行时）再退回 UA 与 navigator.platform。
+ */
+async function isWindows(): Promise<boolean> {
+  try {
+    return (await chrome.runtime.getPlatformInfo()).os === 'win';
+  } catch { /* 非扩展上下文或 API 不可用 */ }
+  const ua = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = ua.userAgentData?.platform ?? navigator.platform ?? '';
+  return /win/i.test(platform) || /Windows NT/i.test(navigator.userAgent);
+}
+
 type RGB = readonly [number, number, number];
 export interface FluxColors { bg: RGB; c1: RGB; c2: RGB; c3: RGB }
 
@@ -33,7 +50,11 @@ export class FluxField {
 
   async start(): Promise<boolean> {
     try {
-      const gpu = await init({ powerPreference: 'low-power', requiredLimits: { maxStorageBuffersInVertexStage: 1 } });
+      const options: InitOptions = (await isWindows())
+        ? { requiredLimits: { maxStorageBuffersInVertexStage: 1 } }
+        : { powerPreference: 'low-power', requiredLimits: { maxStorageBuffersInVertexStage: 1 } };
+      if (this.dead) return false;
+      const gpu = await init(options);
       if (this.dead) { gpu.dispose(); return false; }
       this.gpu = gpu;
       const buf = new Float32Array(COUNT * FLOATS);
@@ -44,11 +65,11 @@ export class FluxField {
       }
       const particles = storage(gpu, buf.byteLength, 'read-write');
       particles.write(buf);
-      this.sim = compute(gpu, simWgsl, { label: 'flux-sim', set: { particles, sim: { time: 0, dt: 0, aspect: 1.6, count: COUNT } } });
+      this.sim = compute(gpu, simWgsl, { label: 'flux-sim', set: { particles, sim: { time: 0, dt: 0, aspect: 1.6, count: COUNT, damping: 0.2, pad0: 0, pad1: 0, pad2: 0 } } });
       this.dots = draw(gpu, {
         shader: dotsWgsl, vertices: 6, instances: COUNT, label: 'flux-dots',
         blend: { color: { src: 'one', dst: 'one' }, alpha: { src: 'one', dst: 'one' } },
-        set: { particles, view: { res: [1, 1], aspect: 1.6, size: 1.6, c1: [1, 1, 1, 1], c2: [1, 1, 1, 1], c3: [1, 1, 1, 1], dt: 1 / 24, pad0: 0, pad1: 0, pad2: 0 } },
+        set: { particles, view: { res: [1, 1], aspect: 1.6, size: 1.6, c1: [1, 1, 1, 1], c2: [1, 1, 1, 1], c3: [1, 1, 1, 1], dt: 1 / 60, exposure: 1, pad1: 0, pad2: 0 } },
       });
       gpu.lost.then(() => { this.ready = false; });
       await this.sim.compile();
@@ -79,11 +100,12 @@ export class FluxField {
   render(w: number, h: number, t: number, col: FluxColors, dark: number): boolean {
     if (!this.ready || !this.gpu) return false;
     if (w !== this.size[0] || h !== this.size[1]) this.resize(w, h);
-    const dt = this.lastT < 0 ? 1 / 24 : Math.max(0, t - this.lastT);
+    const { dt, decay, damping, exposure } = fluxTiming(t, this.lastT);
     this.lastT = t;
     const a = this.flip, b = 1 - a;
-    this.sim.set({ sim: { time: t, dt } });
-    this.dots.set({ view: { c1: [...col.c1, 1], c2: [...col.c2, 1], c3: [...col.c3, 1], dt: Math.min(dt, 0.1) } });
+    this.sim.set({ sim: { time: t, dt, damping } });
+    this.fades[a].set({ fade: { decay } });
+    this.dots.set({ view: { c1: [...col.c1, 1], c2: [...col.c2, 1], c3: [...col.c3, 1], dt, exposure } });
     // 暗色上粒子发光更明显；亮色上压一点，免得把页面搞花
     this.comps[b].set({ comp: { bg: [...col.bg, 1], gain: 1.25 - 0.4 * dark } });
     try {

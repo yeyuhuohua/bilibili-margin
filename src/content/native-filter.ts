@@ -134,11 +134,17 @@ export function startNativeFilter(kind: NativeKind, settings: Settings): () => v
     if (current.enabled && hasFilters(current)) schedule();
   };
 
+  const rootSelector = RULES[kind].map((rule) => rule.root).join(', ');
   const observer = new MutationObserver((records) => {
     // 没有过滤条件时完全不扫描，避免评论/弹幕持续变化时空转
     if (!current.enabled || !hasFilters(current)) return;
     // 只看 childList：自己写 data-margin-filtered 属于 attributes，观察它会造成死循环
-    if (records.some((r) => r.type === 'childList')) schedule();
+    // 评论、弹幕等区域更新不影响视频过滤；同时覆盖列表的延迟挂载与整块替换。
+    const changed = records.some((r) =>
+      r.target instanceof Element && r.target.closest(rootSelector) ||
+      [...r.addedNodes, ...r.removedNodes].some((node) =>
+        node instanceof Element && (node.matches(rootSelector) || node.querySelector(rootSelector))));
+    if (changed) schedule();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   addEventListener('popstate', checkRoute);

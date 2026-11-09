@@ -1,5 +1,11 @@
 /* card extras */
 .card.still { animation: none; }
+.card .meta { flex-wrap: wrap; gap: 4px 6px; white-space: normal; }
+.card .meta > .author { display: inline-flex; flex-basis: 100%; align-items: center; gap: 6px; max-width: 100%; font-size: 14px; font-weight: 500; color: var(--ink); }
+.card .meta > .author + .dot { display: none; }
+.card .author-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-followed { display: inline-flex; flex: none; align-items: center; gap: 3px; font-size: 11px; font-weight: 400; color: var(--muted); }
+.card-followed svg { width: 12px; height: 12px; }
 .card-block { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgb(0 0 0 / .55); opacity: 0; transform: translateY(-4px); transition: opacity .2s var(--ease-out), transform .2s var(--ease-out), background .2s var(--ease-out); z-index: 3; }
 .card-block svg { width: 13px; height: 13px; }
 .card:hover .card-block, .card-block:focus-visible { opacity: 1; transform: none; backdrop-filter: blur(10px); }
@@ -8,6 +14,8 @@
 .cover.playing .pv, .dy-vcover.playing .pv { opacity: 1; }
 .pv-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform-origin: left; transform: scaleX(0); z-index: 2; }
 .cover.playing .dur { opacity: 0; }
+.cover.playing .card-block { width: 28px; padding: 0; justify-content: center; }
+.cover.playing .card-block span { display: none; }
 .coop { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; font: 500 11px/1.5 var(--sans); color: #fff; background: rgb(0 0 0 / .62); pointer-events: none; }
 .cover.playing .coop { opacity: 0; }
 /* v0.51：充电专属等封面角标（空间接口的 elec_arc_badge）；右上角与「稍后再看」同位置，悬停时淡出让位 */
@@ -90,7 +98,9 @@
 
 /* favorites */
 .fav-body { padding-top: 20px; }
-.shelf { display: grid; grid-template-columns: repeat(auto-fill, 236px); justify-content: space-between; align-items: end; gap: 40px 16px; padding: 32px 10px 28px; margin: 0 -4px; }
+.shelf { display: grid; grid-template-columns: repeat(var(--fav-cols,3), minmax(0,1fr)); justify-content: space-between; align-items: end; gap: 40px 16px; padding: 32px 10px 28px; margin: 0 -4px; }
+.shelf .gf-root,.shelf .fav-new { width:100%!important; }
+@media(max-width:600px) { .shelf { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .crumb { display: flex; align-items: baseline; gap: 10px; padding: 6px 0 16px; }
 .crumb span { font: 600 18px/1.2 var(--serif); }
 .crumb small { font: 11px/1 var(--mono); color: var(--faint); }

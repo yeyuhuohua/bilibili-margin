@@ -9,7 +9,7 @@
 <p>给 B 站换一个更清晰的界面。编辑式排版，保留熟悉的原生播放体验。</p>
 
 <p>
-  <a href="https://github.com/jiuyang5354/bilibili-margin/releases/latest"><img src="https://img.shields.io/github/v/release/jiuyang5354/bilibili-margin?label=version&amp;color=00aeec" alt="Latest release" /></a>
+  <a href="https://github.com/jiuyang5354/bilibili-margin/releases/latest"><img src="https://img.shields.io/github/v/release/jiuyang5354/bilibili-margin?display_name=release&amp;label=version&amp;color=00aeec" alt="Latest release" /></a>
   <a href="https://addons.mozilla.org/en-US/firefox/addon/%E6%98%A0%E9%97%B4-margin/"><img src="https://img.shields.io/amo/v/margin@jiuyang5354.github.io?label=Firefox%20Add-ons&amp;color=ff7139" alt="Firefox Add-ons" /></a>
   <img src="https://img.shields.io/badge/browser-Edge%20%2F%20Chrome%20%2F%20Firefox-535b66" alt="Edge, Chrome and Firefox" />
   <img src="https://img.shields.io/badge/extension-Manifest%20V3-535b66" alt="Manifest V3" />
@@ -73,9 +73,10 @@ Other Chromium browsers (Brave, Opera, Vivaldi, Arc and others) can follow the C
 | --- | --- |
 | Home and search | Personalized recommendations, popular videos, infinite scrolling, refresh, and filters for keywords, uploaders, view counts and duration. |
 | Native playback | Redesigned titles, uploader cards, episode lists and recommendations, while retaining the native player, danmaku, comments, quality and fullscreen controls. |
+| Danmaku airborne | Optional, off by default: danmaku that mention a time (such as "03:20" or "jump to 2:15") get an underline. Click to seek, with undo available. Parsed entirely on your device, with no network requests. |
 | Favorites and watch later | Glass folder cards, watch-later lists, viewing progress and video context menus. |
 | Activity | Year and month heatmaps, first opening time and daily usage, viewing-history backfill and data-source labels. |
-| Reading and account pages | Reading layouts for posts, opus articles and columns, plus matching interfaces for spaces, history, feeds and messages. |
+| Reading and account pages | Reading layouts for posts, opus articles and columns, plus matching interfaces for spaces, history, feeds and messages; private chats support image preview/sending and native Bilibili emoji selection. |
 | Appearance | Light, dark and system themes; 13 animated backgrounds, custom images and intensity controls, including Gateway flow and click shockwaves. |
 | Shortcuts | Search suggestions, command palette, hover previews, a flippable profile card and an editable-city weather widget. |
 | Local data | Settings and activity records stored locally, with JSON import and export. |
@@ -98,9 +99,13 @@ Manually loaded extensions need the update steps above; the popup checks for new
 
 ### Do backgrounds keep animating?
 
-Backgrounds remain animated while scrolling and playing videos on a visible page. They pause in hidden tabs and respect reduced-motion preferences. The opening animation temporarily suspends the covered background. Rendering adapts to device and page load; a fixed 60fps is not guaranteed in every scenario. See the [performance notes](docs/performance-v0.31.0.md).
+On visible pages with GPU acceleration, backgrounds remain animated while scrolling, playing videos and opening drawers. They pause in hidden tabs and respect reduced-motion preferences. Software rendering retains a static safeguard to avoid slowing the page. The opening animation temporarily suspends the covered background. Rendering adapts to device and page load; a fixed 60fps is not guaranteed in every scenario. See the [performance notes](docs/performance-v0.31.0.md).
 
 ## Privacy
+
+From 0.6.4, optional external services and recent-search storage are off by default under Settings → Privacy. Allow external services to enable weather, community sponsor data, and manual update checks. Opted-in searches stay in extension storage, capped at eight entries with 30-day expiration and cleanup on read. App-feed authorization lasts for the browser session and requires a new QR sign-in after upgrading or restarting the browser.
+
+Community advertisement skipping is off by default. When enabled, it queries [BilibiliSponsorBlock](https://bsbsb.top/) using a four-character BVID hash prefix and skips marked sponsor ranges in ordinary BV videos, with undo. It sends no Bilibili cookies, account identifiers or full video ID to that service and cannot guarantee Bilibili completion metrics.
 
 The developer does not operate an analytics or data-collection server. Settings, activity records and custom background images stay on your device; exported backups are yours to store.
 

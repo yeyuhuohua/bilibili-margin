@@ -77,6 +77,39 @@ html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting 
 html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .keyword-submit-btn .txt { color: inherit !important; }
 html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .list-content { background: var(--m-chip) !important; border: 1px solid var(--m-line) !important; border-radius: 12px !important; overflow: hidden !important; }
 html.margin-live[data-margin-theme="dark"] #chat-control-panel-vm .blockSetting .block-list-ctnr { background: transparent !important; }
+/* 原生排行榜仍读取 Ga 系列色值和大航海皮肤，单独换底色会留下黑字或浅金文字。 */
+html.margin-live #rank-list-vm { --Ga9: var(--m-ink); --Ga5: var(--m-muted); --Ga2: var(--m-line); --Ga0: var(--m-canvas); color: var(--m-ink); }
+html.margin-live #rank-list-vm .rank-list-ctnr { background-image: none !important; }
+html.margin-live #rank-list-vm .tabs .item { color: var(--m-muted) !important; opacity: 1; }
+html.margin-live #rank-list-vm .tabs .item.active,
+html.margin-live #rank-list-vm :is(.uname a, .name, .rank, .score, .live-skin-main-text, .live-skin-main-a-text) { color: var(--m-ink) !important; }
+html.margin-live #rank-list-vm :is(.tip, .list-desc, .live-skin-normal-text) { color: var(--m-muted) !important; }
 html.margin-live .link-footer { background: var(--m-canvas) !important; border-top: 1px solid var(--m-line); }
 html.margin-live .link-footer, html.margin-live .link-footer a { color: var(--m-muted) !important; }
 html.margin-live #sections-vm, html.margin-live .room-info-ctnr { background: transparent !important; }
+
+/* 直播首页复用原生分区、卡片与导航，通过它们已有的颜色变量适配主题。 */
+html.margin-live-home {
+  --Ga0: var(--m-surface); --Ga1: var(--m-canvas); --Ga2: var(--m-line); --Ga3: var(--graph_bg_thick);
+  --Ga4: var(--text4); --Ga5: var(--m-faint); --Ga6: var(--m-muted); --Ga7: var(--m-muted);
+  --Ga8: var(--m-ink); --Ga9: var(--m-ink); --Ga10: var(--m-ink); --Ba0_s: var(--m-ink);
+}
+html.margin-live-home body { font-family: var(--m-sans) !important; }
+html.margin-live-home .link-navbar { background: var(--m-surface) !important; color: var(--m-ink); border-bottom-color: var(--m-line) !important; }
+html.margin-live-home .link-navbar :is(.nav-item .label, .text-label, .more-label-text, .nav-logo span) { color: var(--m-ink) !important; }
+html.margin-live-home .link-navbar #nav-searchform { background: transparent !important; border-color: transparent !important; border-radius: 999px !important; }
+html.margin-live-home .link-navbar .search-bar { background: var(--m-chip) !important; border-color: var(--m-line) !important; border-radius: 999px !important; }
+html.margin-live-home .link-navbar .nav-search-content { color: var(--m-ink) !important; background: transparent !important; }
+html.margin-live-home .link-navbar .nav-search-content::placeholder { color: var(--m-faint) !important; }
+html.margin-live-home[data-margin-theme="dark"] .link-navbar :is(.search-icon, .nav-search-clean, .item-icon-linkPanel, .item-icon-recharge, .item-icon-electronDownload) { filter: invert(1); }
+html.margin-live-home .highlight-area-item .area-name { color: var(--m-ink) !important; }
+html.margin-live-home :is(.hab-ctnr, .news-ctnr, .rank-ctnr, .highlight-area-item, .rec-area-item, .side-bar-popup-cntr, .link-navbar .panel-shadow, .link-navbar .slot-component, .link-navbar .login-panel, .search-pannel) {
+  background-color: var(--m-surface) !important; border-color: var(--m-line) !important; border-radius: var(--m-radius) !important; color: var(--m-ink);
+}
+html.margin-live-home :is(.area-title, .title-text, .section-title) { font-family: var(--m-serif); }
+html.margin-live-home :is(.room-card-ctnr .cover-ctnr, .banner-img, .large-banner-ctnr, .small-banner) { border-radius: var(--m-radius) !important; }
+html.margin-live-home :is(.more-btn-cntr, .more-ctnr, .link-navbar .login-btn, .link-navbar .startlive-btn) { border-radius: 999px !important; }
+html.margin-live-home :is(.nav-item, .shortcut-item, .tab-item, .more-ctnr, .more-btn-cntr, .room-card-ctnr) { transition: color .16s, background-color .16s, border-color .16s; }
+html.margin-live-home :is(.nav-item, .tab-item, .more-ctnr, .more-btn-cntr):hover { color: var(--m-accent) !important; }
+html.margin-live-home :is(.link-navbar, .rank-ctnr, .room-card-wrapper, .highlight-areas-ctnr) :is(a, button, input):focus-visible { outline: 2px solid var(--m-accent); outline-offset: 3px; }
+html.margin-live-home .link-footer { background: var(--m-canvas) !important; color: var(--m-muted); border-color: var(--m-line) !important; }

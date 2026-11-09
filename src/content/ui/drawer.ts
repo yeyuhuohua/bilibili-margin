@@ -1,7 +1,7 @@
 import { removeWatchLater, watchLater, type LaterItem } from '../api/search';
 import { toast } from './controls';
 import { fmtAgo, fmtDuration, h, icon, ICONS } from './dom';
-import { reducedMotion } from '../motion';
+import { uiReducedMotion as reducedMotion } from '../motion';
 import type { FilterRuntime } from '../filter-runtime';
 import { targetOfLater } from '../filter-targets';
 
@@ -21,9 +21,14 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
   const body = h('div', { class: 'dw-body' });
   const closeBtn = h('button', { type: 'button', class: 'dw-close', 'aria-label': '关闭', title: '关闭 (Esc)' }, icon(ICONS.close));
   const head = h('div', { class: 'dw-head' }, h('div', { class: 'dw-grip', 'aria-hidden': 'true' }), h('div', { class: 'dw-ht' }, h('h2', {}, '稍后再看', count), sub), closeBtn);
+  const creator = h('select', { 'aria-label': '按 UP 主筛选' }) as HTMLSelectElement;
+  const grouped = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  const tools = h('div', { class: 'dw-tools', hidden: true }, creator, h('label', {}, grouped, '按 UP 主分组'));
+  creator.addEventListener('change', () => { body.scrollTop = 0; if (raw) renderNow(raw); });
+  grouped.addEventListener('change', () => { body.scrollTop = 0; if (raw) renderNow(raw); });
   const foot = h('div', { class: 'dw-foot' },
     h('a', { class: 'ghost', href: 'https://www.bilibili.com/watchlater/#/list', target: '_blank', rel: 'noopener' }, icon(ICONS.arrow), h('span', {}, '在 B 站打开完整列表')));
-  const panel = h('aside', { class: 'dw-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': '稍后再看', tabindex: '-1', style: `width:${WIDTH}px` }, head, body, foot);
+  const panel = h('aside', { class: 'dw-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': '稍后再看', tabindex: '-1', style: `width:${WIDTH}px` }, head, tools, body, foot);
   const scrim = h('div', { class: 'dw-scrim' });
   const el = h('div', { class: 'dw', hidden: '' }, scrim, panel);
 
@@ -57,8 +62,10 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
   };
 
   let raw: LaterItem[] | null = null;
+  let generation = 0;
   function render(list: LaterItem[] | null): void {
     if (list === null) {
+      tools.hidden = true;
       count.textContent = '';
       sub.textContent = '登录 B 站后可以看到你的稍后再看';
       body.replaceChildren(h('div', { class: 'dw-empty' }, icon(ICONS.later), h('p', {}, '还没登录'), h('a', { class: 'ghost', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '去登录')));
@@ -74,10 +81,32 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
   }
   function renderNow(list: LaterItem[]): void {
     const shown = filter ? list.filter((it) => filter.allows(targetOfLater(it))) : list;
-    count.textContent = String(shown.length);
+    const groups = new Map<string, { name: string; items: LaterItem[] }>();
+    for (const item of shown) {
+      const key = item.mid > 0 ? String(item.mid) : `name:${item.author}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = { name: item.author || '未知 UP 主', items: [] };
+        groups.set(key, group);
+      }
+      group.items.push(item);
+    }
+    const selected = creator.value;
+    const names = new Set<string>();
+    const repeated = new Set<string>();
+    for (const group of groups.values()) {
+      if (names.has(group.name)) repeated.add(group.name);
+      names.add(group.name);
+    }
+    creator.replaceChildren(h('option', { value: '' }, '全部 UP 主'), ...[...groups].map(([key, group]) =>
+      h('option', { value: key }, `${group.name}${repeated.has(group.name) ? ` · UID ${key}` : ''}（${group.items.length}）`)));
+    creator.value = groups.has(selected) ? selected : '';
+    const visible = groups.get(creator.value)?.items ?? shown;
+    tools.hidden = !shown.length;
+    count.textContent = String(visible.length);
     sub.textContent = shown.length ? '右键视频卡片也能加进来' : '右键视频卡片 →「稍后再看」';
     if (!shown.length) { body.replaceChildren(h('div', { class: 'dw-empty' }, icon(ICONS.later), h('p', {}, list.length ? '都被屏蔽词藏起来了' : '列表是空的'))); return; }
-    body.replaceChildren(...shown.map((it, i) => {
+    const rowFor = (it: LaterItem, i: number) => {
       const href = `https://www.bilibili.com/list/watchlater?bvid=${it.bvid}`;
       const pct = it.progress === -1 ? 100 : it.duration ? Math.min(100, (it.progress / it.duration) * 100) : 0;
       const row = h('a', { class: 'dw-item', href, target: '_blank', rel: 'noopener', style: `--i:${Math.min(i, 12)}` },
@@ -91,22 +120,40 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
         h('button', { type: 'button', class: 'dw-x', title: '移出稍后再看', 'aria-label': '移出稍后再看',
           onclick: async (e: Event) => {
             e.preventDefault(); e.stopPropagation();
+            const button = e.currentTarget as HTMLButtonElement;
+            if (button.disabled) return;
+            button.disabled = true;
             row.classList.add('out');
             const ok = await removeWatchLater(it.aid).catch(() => false);
             if (ok) {
-              raw = raw?.filter((x) => x !== it) ?? null;
-              setTimeout(() => row.remove(), 220);
-              count.textContent = String(Math.max(0, Number(count.textContent) - 1));
+              generation++;
+              raw = raw?.filter((x) => x.aid !== it.aid) ?? null;
+              render(raw);
             }
-            else { row.classList.remove('out'); toast(toastRoot(), '没移掉，稍后再试'); }
+            else { button.disabled = false; row.classList.remove('out'); toast(toastRoot(), '没移掉，稍后再试'); }
           } }, icon(ICONS.close)),
       );
       return row;
-    }));
+    };
+    if (grouped.checked) {
+      const active = creator.value ? [groups.get(creator.value)!] : [...groups.values()];
+      body.replaceChildren(...active.map(group => h('section', { class: 'dw-group' },
+        h('h3', {}, group.name, h('span', {}, String(group.items.length))), ...group.items.map(rowFor))));
+    } else body.replaceChildren(...visible.map(rowFor));
   }
   async function refresh(): Promise<void> {
+    const current = ++generation;
+    tools.hidden = true;
+    count.textContent = '';
     body.replaceChildren(...Array.from({ length: 5 }, () => h('div', { class: 'dw-item sk' }, h('span', { class: 'dw-cover' }), h('span', { class: 'dw-meta' }, h('span', { class: 'line' }), h('span', { class: 'line short' })))));
-    try { raw = await watchLater(); render(raw); loaded = true; } catch { body.replaceChildren(h('div', { class: 'dw-empty' }, h('p', {}, '加载失败'), h('button', { type: 'button', class: 'ghost', onclick: () => refresh() }, '重试'))); }
+    try {
+      const list = await watchLater();
+      if (current !== generation) return;
+      raw = list; render(raw); loaded = true;
+    } catch {
+      if (current !== generation) return;
+      body.replaceChildren(h('div', { class: 'dw-empty' }, h('p', {}, '加载失败'), h('button', { type: 'button', class: 'ghost', onclick: () => refresh() }, '重试')));
+    }
   }
   filter?.onChange(() => { if (raw !== null) render(raw); });
 
@@ -156,7 +203,7 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
   scrim.addEventListener('click', close);
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
-      const f = [...panel.querySelectorAll<HTMLElement>('a[href],button:not([disabled])')];
+      const f = [...panel.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),select,input')].filter(node => node.getClientRects().length);
       if (!f.length) return;
       const active = (el.getRootNode() as ShadowRoot).activeElement;
       if (e.shiftKey && (active === f[0] || active === panel)) { e.preventDefault(); f[f.length - 1].focus(); }

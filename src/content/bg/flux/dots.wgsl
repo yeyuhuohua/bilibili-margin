@@ -1,6 +1,6 @@
 // 每颗粒子一个小四边形，加法混合累进拖尾画布：rgb = 颜色×权重，a = 权重（合成时再除回来）
 struct Particle { pos: vec2f, vel: vec2f, age: f32, life: f32, seed: f32, pad: f32 }
-struct View { res: vec2f, aspect: f32, size: f32, c1: vec4f, c2: vec4f, c3: vec4f, dt: f32, pad0: f32, pad1: f32, pad2: f32 }
+struct View { res: vec2f, aspect: f32, size: f32, c1: vec4f, c2: vec4f, c3: vec4f, dt: f32, exposure: f32, pad1: f32, pad2: f32 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> view: View;
@@ -30,7 +30,7 @@ struct Out {
   let sp = clamp(length(p.vel) * 13.0, 0.0, 1.0);
   let base = mix(view.c1.rgb, view.c2.rgb, fract(p.seed * 3.7));
   let col = mix(base, view.c3.rgb, sp * sp * sp * sp);
-  let w = fade * (0.07 + 0.2 * sp);
+  let w = fade * (0.07 + 0.2 * sp) * view.exposure;
   o.color = vec4f(col * w, w);
   return o;
 }

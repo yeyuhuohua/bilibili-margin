@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Build output, downloaded tools, caches and locally generated test reports"
+paths = ['(^|/)(node_modules|dist|dist-firefox|artifacts|\.npm-cache|\.uv-cache|\.python|\.security-venv|\.security-tools|\.browsers)/']

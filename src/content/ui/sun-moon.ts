@@ -1,48 +1,267 @@
+import { h } from './dom';
+import { uiReducedMotion, onUiMotionChange } from '../motion';
 
-import { setMarkup } from './dom';/**
- * 昼夜切换：用户提供的 Uiverse「theme-switch」原生移植（太阳滑到右侧被月亮盖住、云沉下去、星星落下来）。
- * 结构、尺寸比例、过渡曲线照搬原代码；只把配色换成站点的色调（天空跟随 --accent 调色板，夜色贴近站点暗底）。
- * 原组件用隐藏 checkbox，这里用 button[role=switch] + data-state，交给外部控制主题。
- */
 type Theme = 'light' | 'dark';
-
 export interface SunMoon {
   el: HTMLButtonElement;
-  /** 同步到某个主题；animate=false 时直接摆到静止位置 */
+  glass: HTMLElement;
   set(theme: Theme, animate?: boolean): void;
-  /** 整页颜色淡入用的时长，与开关的 --transition 一致 */
+  /** 页面颜色淡入时长；滑块弹簧单独计时。 */
   readonly duration: number;
+  destroy(): void;
+}
+// Generate the glass microtexture once. It is static while the control animates.
+const grain = document.createElement('canvas');
+grain.width = grain.height = 64;
+const grainContext = grain.getContext('2d')!;
+const texture = grainContext.createImageData(64, 64);
+let seed = 74;
+for (let i = 0; i < texture.data.length; i += 4) {
+  seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+  texture.data[i] = texture.data[i + 1] = texture.data[i + 2] = seed >>> 24;
+  texture.data[i + 3] = 255;
+}
+grainContext.putImageData(texture, 0, 0);
+const grainUrl = grain.toDataURL();
+const moon: { x: number; y: number }[] = [];
+const sun: { x: number; y: number }[] = [];
+for (let y = -8; y <= 8; y++) {
+  for (let x = -8; x <= 8; x++) {
+    const radius = Math.hypot(x, y);
+    if (radius < 6.4 && Math.hypot(x - 3.1, y + 2.6) > 5.7) moon.push({ x, y });
+    const ray = (x === 0 || y === 0 || Math.abs(x) === Math.abs(y)) && radius > 5.6 && radius < 8.3;
+    if (radius < 3.8 || ray) sun.push({ x, y });
+  }
+}
+moon.push({ x: 4, y: -6 }, { x: 5, y: -6 }, { x: 5, y: -7 }, { x: 5, y: -5 }, { x: 6, y: -6 });
+const byAngle = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x);
+moon.sort(byAngle);
+sun.sort(byAngle);
+const particles = Array.from({ length: Math.max(moon.length, sun.length) }, (_, i) => ({
+  start: moon[i % moon.length], end: sun[i % sun.length],
+  inMoon: i < moon.length, inSun: i < sun.length,
+  phase: Math.sin(i * 1.7), drift: Math.sin(i * 2.4),
+}));
+
+// Analytic damped spring, tuned to a 0.5-second settling envelope and 20% bounce.
+const decay = Math.log(1000) / .5;
+const ratio = -Math.log(.2) / Math.hypot(Math.PI, Math.log(.2));
+const frequency = decay / ratio * Math.sqrt(1 - ratio * ratio);
+function advanceSpring(value: number, velocity: number, target: number, seconds: number): [number, number] {
+  const offset = value - target;
+  const coefficient = (velocity + decay * offset) / frequency;
+  const attenuation = Math.exp(-decay * seconds);
+  const sine = Math.sin(frequency * seconds);
+  const cosine = Math.cos(frequency * seconds);
+  return [
+    target + attenuation * (offset * cosine + coefficient * sine),
+    attenuation * (velocity * cosine - (decay * coefficient + frequency * offset) * sine),
+  ];
 }
 
-const STARS_D = 'M135.831 3.00688C135.055 3.85027 134.111 4.29946 133 4.35447C134.111 4.40947 135.055 4.85867 135.831 5.71123C136.607 6.55462 136.996 7.56303 136.996 8.72727C136.996 7.95722 137.172 7.25134 137.525 6.59129C137.886 5.93124 138.372 5.39954 138.98 5.00535C139.598 4.60199 140.268 4.39114 141 4.35447C139.88 4.2903 138.936 3.85027 138.16 3.00688C137.384 2.16348 136.996 1.16425 136.996 0C136.996 1.16425 136.607 2.16348 135.831 3.00688ZM31 23.3545C32.1114 23.2995 33.0551 22.8503 33.8313 22.0069C34.6075 21.1635 34.9956 20.1642 34.9956 19C34.9956 20.1642 35.3837 21.1635 36.1599 22.0069C36.9361 22.8503 37.8798 23.2903 39 23.3545C38.2679 23.3911 37.5976 23.602 36.9802 24.0053C36.3716 24.3995 35.8864 24.9312 35.5248 25.5913C35.172 26.2513 34.9956 26.9572 34.9956 27.7273C34.9956 26.563 34.6075 25.5546 33.8313 24.7112C33.0551 23.8587 32.1114 23.4095 31 23.3545ZM0 36.3545C1.11136 36.2995 2.05513 35.8503 2.83131 35.0069C3.6075 34.1635 3.99559 33.1642 3.99559 32C3.99559 33.1642 4.38368 34.1635 5.15987 35.0069C5.93605 35.8503 6.87982 36.2903 8 36.3545C7.26792 36.3911 6.59757 36.602 5.98015 37.0053C5.37155 37.3995 4.88644 37.9312 4.52481 38.5913C4.172 39.2513 3.99559 39.9572 3.99559 40.7273C3.99559 39.563 3.6075 38.5546 2.83131 37.7112C2.05513 36.8587 1.11136 36.4095 0 36.3545ZM56.8313 24.0069C56.0551 24.8503 55.1114 25.2995 54 25.3545C55.1114 25.4095 56.0551 25.8587 56.8313 26.7112C57.6075 27.5546 57.9956 28.563 57.9956 29.7273C57.9956 28.9572 58.172 28.2513 58.5248 27.5913C58.8864 26.9312 59.3716 26.3995 59.9802 26.0053C60.5976 25.602 61.2679 25.3911 62 25.3545C60.8798 25.2903 59.9361 24.8503 59.1599 24.0069C58.3837 23.1635 57.9956 22.1642 57.9956 21C57.9956 22.1642 57.6075 23.1635 56.8313 24.0069ZM81 25.3545C82.1114 25.2995 83.0551 24.8503 83.8313 24.0069C84.6075 23.1635 84.9956 22.1642 84.9956 21C84.9956 22.1642 85.3837 23.1635 86.1599 24.0069C86.9361 24.8503 87.8798 25.2903 89 25.3545C88.2679 25.3911 87.5976 25.602 86.9802 26.0053C86.3716 26.3995 85.8864 26.9312 85.5248 27.5913C85.172 28.2513 84.9956 28.9572 84.9956 29.7273C84.9956 28.563 84.6075 27.5546 83.8313 26.7112C83.0551 25.8587 82.1114 25.4095 81 25.3545ZM136 36.3545C137.111 36.2995 138.055 35.8503 138.831 35.0069C139.607 34.1635 139.996 33.1642 139.996 32C139.996 33.1642 140.384 34.1635 141.16 35.0069C141.936 35.8503 142.88 36.2903 144 36.3545C143.268 36.3911 142.598 36.602 141.98 37.0053C141.372 37.3995 140.886 37.9312 140.525 38.5913C140.172 39.2513 139.996 39.9572 139.996 40.7273C139.996 39.563 139.607 38.5546 138.831 37.7112C138.055 36.8587 137.111 36.4095 136 36.3545ZM101.831 49.0069C101.055 49.8503 100.111 50.2995 99 50.3545C100.111 50.4095 101.055 50.8587 101.831 51.7112C102.607 52.5546 102.996 53.563 102.996 54.7273C102.996 53.9572 103.172 53.2513 103.525 52.5913C103.886 51.9312 104.372 51.3995 104.98 51.0053C105.598 50.602 106.268 50.3911 107 50.3545C105.88 50.2903 104.936 49.8503 104.16 49.0069C103.384 48.1635 102.996 47.1642 102.996 46C102.996 47.1642 102.607 48.1635 101.831 49.0069Z';
-
-export function createSunMoon(onToggle: () => void, duration = 300): SunMoon {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'ts';
-  el.setAttribute('role', 'switch');
-  setMarkup(el,
-    '<span class="ts-c" aria-hidden="true">' +
-      '<span class="ts-clouds"></span>' +
-      '<span class="ts-stars"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 55" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="' + STARS_D + '"/></svg></span>' +
-      '<span class="ts-circle"><span class="ts-sm"><span class="ts-moon"><span class="ts-spot"></span><span class="ts-spot"></span><span class="ts-spot"></span></span></span></span>' +
-    '</span>');
+export function createSunMoon(onToggle: () => void, duration = 380): SunMoon {
+  const canvas = h('canvas');
+  const light = h('span', { class: 'ts-glass-light' });
+  const day = h('span', { class: 'ts-edge ts-edge-day' });
+  const nightLayer = h('span', { class: 'ts-edge ts-edge-night' });
+  const track = h('span', { class: 'ts-c lg', 'aria-hidden': 'true' });
+  const thumb = h('span', { class: 'ts-sm', 'aria-hidden': 'true' }, light, nightLayer, day, canvas);
+  const button = h('button', { class: 'ts', type: 'button', role: 'switch' },
+    track, thumb);
+  button.style.setProperty('--glass-grain', `url("${grainUrl}")`);
+  const lightLayers = [light, day];
   let theme: Theme | null = null;
-  el.addEventListener('click', onToggle);
-  return {
-    el, duration,
-    set(t, animate = true) {
-      const label = t === 'dark' ? '切换到亮色' : '切换到暗色';
-      el.title = label; el.setAttribute('aria-label', label);
-      el.setAttribute('aria-checked', String(t === 'dark'));
-      if (t === theme) return;
-      // 第一次设置时元素还没有旧样式，本来就不会过渡，不用强制刷新布局（播放页加载时这一下约 160ms，v0.44）
-      const first = !theme, instant = !first && !animate;
-      theme = t;
-      if (first || instant) el.classList.add('ts-still');
-      el.dataset.state = t;
-      if (instant) void getComputedStyle(el).opacity;
-      if (first || instant) requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('ts-still')));
-    },
-  };
+  let destroyed = false;
+  let mounted = false;
+  let onScreen = true;
+  const context = canvas.getContext('2d')!;
+  const glyph = document.createElement('canvas');
+  const glyphContext = glyph.getContext('2d')!;
+  let dotBed = new Path2D();
+  let paintedProgress = -1;
+  let position = 0;
+  let velocity = 0;
+  let pressure = 0;
+  let pressureVelocity = 0;
+  let target = 0;
+  let frame = 0;
+  let lastTime = 0;
+  let gesture: { id: number; start: number; position: number; travel: number; moved: boolean } | null = null;
+  let pixels = 64;
+
+  function draw() {
+    const progress = Math.min(1, Math.max(0, position));
+    const overshoot = position - progress;
+    const stretch = uiReducedMotion() ? 0 : Math.min(.16, Math.abs(velocity) * .009) - Math.abs(overshoot) * .5;
+    const scaleX = 1 + stretch + pressure * .075;
+    const scaleY = 1 - stretch * .5 - pressure * .065;
+    thumb.style.transform = `translateX(${(progress + overshoot * .18) * 2.75}em) scale(${scaleX}, ${scaleY})`;
+    // Press and rebound only transform the cached image when the icon is unchanged.
+    if (progress === paintedProgress) return;
+    paintedProgress = progress;
+    button.dataset.progress = progress.toFixed(4);
+    for (const layer of lightLayers) layer.style.opacity = String(progress);
+    nightLayer.style.opacity = String(1 - progress);
+    context.clearRect(0, 0, pixels, pixels);
+    const scale = pixels / 19;
+    const travel = Math.sin(progress * Math.PI);
+    // A dim dot bed behind the moon gives the illuminated particles depth.
+    context.shadowBlur = 0;
+    context.fillStyle = `rgba(193, 211, 222, ${(1 - progress) * .1})`;
+    context.fill(dotBed);
+    glyphContext.clearRect(0, 0, pixels, pixels);
+    glyphContext.fillStyle = `rgb(${Math.round(221 - 79 * progress)}, ${Math.round(236 - 135 * progress)}, ${Math.round(244 - 185 * progress)})`;
+    const opaqueDots = new Path2D();
+    for (const particle of particles) {
+      const { start, end } = particle;
+      const morph = Math.min(1, Math.max(0, progress + particle.phase * travel * .075));
+      const alpha = (particle.inMoon ? 1 - morph : 0) + (particle.inSun ? morph : 0);
+      if (alpha === 0) continue;
+      const drift = particle.drift * travel * 1.3;
+      const x = start.x + (end.x - start.x) * morph + drift;
+      const y = start.y + (end.y - start.y) * morph;
+      const cx = pixels / 2 + x * scale;
+      const cy = pixels / 2 + y * scale;
+      if (alpha === 1) {
+        opaqueDots.moveTo(cx + scale * .35, cy);
+        opaqueDots.arc(cx, cy, scale * .35, 0, Math.PI * 2);
+      } else {
+        glyphContext.globalAlpha = alpha;
+        glyphContext.beginPath();
+        glyphContext.arc(cx, cy, scale * .35, 0, Math.PI * 2);
+        glyphContext.fill();
+      }
+    }
+    glyphContext.globalAlpha = 1;
+    glyphContext.fill(opaqueDots);
+    // Apply the glow once to the complete icon instead of blurring each particle.
+    context.shadowColor = `rgba(198, 225, 241, ${(1 - progress) * .6})`;
+    context.shadowBlur = scale * 1.2 * (1 - progress);
+    context.drawImage(glyph, 0, 0);
+  }
+
+  function tick(time: number) {
+    frame = 0;
+    if (destroyed) return;
+    if (!button.isConnected || document.hidden || !onScreen || uiReducedMotion()) { settle(); return; }
+    const elapsed = Math.min(64, time - lastTime || 16) / 1000;
+    lastTime = time;
+    // Slow the travel and particle morph to roughly 0.9 seconds; press feedback uses real time.
+    if (!gesture) [position, velocity] = advanceSpring(position, velocity, target, elapsed * .55);
+    const pressureTarget = gesture && !uiReducedMotion() ? 1 : 0;
+    [pressure, pressureVelocity] = advanceSpring(pressure, pressureVelocity, pressureTarget, elapsed);
+    const moving = !gesture && (Math.abs(target - position) > .001 || Math.abs(velocity) > .01);
+    const pressing = Math.abs(pressureTarget - pressure) > .001 || Math.abs(pressureVelocity) > .01;
+    if (!moving && !gesture) { position = target; velocity = 0; }
+    if (!pressing) { pressure = pressureTarget; pressureVelocity = 0; }
+    draw();
+    if (moving || pressing) frame = requestAnimationFrame(tick);
+    else button.classList.remove('moving');
+  }
+
+  function settle(): void {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    gesture = null;
+    position = target;
+    velocity = pressure = pressureVelocity = 0;
+    button.classList.remove('moving', 'pressing', 'dragging');
+    draw();
+  }
+
+  function set(t: Theme, animate = true): void {
+    if (destroyed) return;
+    const first = theme === null;
+    theme = t;
+    target = t === 'light' ? 1 : 0;
+    const label = t === 'dark' ? '切换到亮色' : '切换到暗色';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-checked', String(t === 'dark'));
+    button.dataset.state = t;
+    if (first || !animate || uiReducedMotion() || document.hidden || !onScreen) settle();
+    else if (!frame && (position !== target || pressure !== 0)) {
+      button.classList.add('moving');
+      lastTime = 0;
+      frame = requestAnimationFrame(tick);
+    }
+  }
+
+  button.addEventListener('pointerdown', event => {
+    if (destroyed || event.button !== 0 || !event.isPrimary) return;
+    const rect = button.getBoundingClientRect();
+    gesture = { id: event.pointerId, start: event.clientX, position, travel: rect.width / 2, moved: false };
+    button.classList.add('pressing');
+    if (!uiReducedMotion()) button.classList.add('moving');
+    if (!uiReducedMotion() && !frame) { lastTime = 0; frame = requestAnimationFrame(tick); }
+    button.setPointerCapture(event.pointerId);
+  });
+  button.addEventListener('pointermove', event => {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const distance = event.clientX - gesture.start;
+    if (Math.abs(distance) > 4) gesture.moved = true;
+    if (!gesture.moved) return;
+    button.classList.add('dragging');
+    if (!uiReducedMotion()) button.classList.add('moving');
+    position = Math.min(1, Math.max(0, gesture.position + distance / gesture.travel));
+    velocity = 0;
+    if (!frame) { lastTime = 0; frame = requestAnimationFrame(tick); }
+  });
+  function release(event: PointerEvent) {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const next = gesture.moved ? (position >= .5 ? 'light' : 'dark') : (theme === 'dark' ? 'light' : 'dark');
+    gesture = null;
+    button.classList.remove('dragging', 'pressing');
+    if (event.type === 'pointerup' && next !== theme) onToggle();
+    else if (theme) set(theme);
+  }
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('lostpointercapture', release);
+  button.addEventListener('click', event => {
+    if (event.detail === 0 && !destroyed) onToggle();
+  });
+  const resize = new ResizeObserver(() => {
+    if (!button.isConnected && mounted) { destroy(); return; }
+    mounted ||= button.isConnected;
+    const size = canvas.clientWidth;
+    if (!size) return;
+    pixels = Math.max(1, Math.round(size * Math.min(devicePixelRatio, 2)));
+    canvas.width = canvas.height = pixels;
+    glyph.width = glyph.height = pixels;
+    dotBed = new Path2D();
+    const scale = pixels / 19;
+    for (let y = -6; y <= 6; y++) {
+      for (let x = -6; x <= 6; x++) {
+        if (Math.hypot(x, y) >= 6.4) continue;
+        const cx = pixels / 2 + x * scale;
+        const cy = pixels / 2 + y * scale;
+        dotBed.moveTo(cx + scale * .32, cy);
+        dotBed.arc(cx, cy, scale * .32, 0, Math.PI * 2);
+      }
+    }
+    paintedProgress = -1;
+    draw();
+  });
+  resize.observe(canvas);
+  const visibility = () => { if (document.hidden) settle(); };
+  document.addEventListener('visibilitychange', visibility);
+  const stopMotion = onUiMotionChange(() => { if (uiReducedMotion()) settle(); });
+  const intersection = new IntersectionObserver(entries => {
+    onScreen = entries[0]?.isIntersecting ?? false;
+    if (!onScreen) settle();
+  });
+  intersection.observe(button);
+
+  function destroy(): void {
+    if (destroyed) return;
+    destroyed = true;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    resize.disconnect();
+    intersection.disconnect();
+    document.removeEventListener('visibilitychange', visibility);
+    stopMotion();
+  }
+  return { el: button, glass: track, duration, set, destroy };
 }

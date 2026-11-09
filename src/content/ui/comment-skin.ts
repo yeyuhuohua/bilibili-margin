@@ -14,6 +14,11 @@ const TAG_SKIN = `
 `;
 
 const SKINS: Record<string, string> = {
+  'bili-comment-action-buttons-renderer': `
+    #pubdate { width: auto !important; display: inline-flex; flex-wrap: wrap; gap: 8px; }
+    [data-margin-location-label] { color: var(--m-faint, #888); white-space: nowrap; font-size: 12px; }
+    :host-context(html:not(.margin-skin)) [data-margin-location-label] { display: none !important; }
+  `,
   'bili-comments-header-renderer': `
     #navbar { align-items: center !important; margin: 0 0 20px !important; padding-top: 0 !important; }
     #title { display: flex !important; align-items: baseline !important; gap: 8px !important; }
@@ -35,7 +40,7 @@ const SKINS: Record<string, string> = {
     #pub button { border-radius: 999px !important; padding: 0 18px !important; }
   `,
   'bili-comment-rich-textarea': `
-    #input, .brt-root, .brt-editor { background: transparent !important; color: var(--m-ink) !important; font-size: 14px !important; line-height: 1.6 !important; }
+    #input, .brt-root, .brt-editor { background: transparent !important; color: var(--m-ink) !important; font-size:var(--margin-cfs,14px)!important;line-height:1.6!important; }
     .brt-placeholder, [data-placeholder]::before { color: var(--m-faint) !important; }
   `,
 };
@@ -45,28 +50,52 @@ const watched = new WeakSet<ShadowRoot>();
 let extra: Record<string, string> = {};
 const sheets = new Map<string, CSSStyleSheet>();
 
+function skinElement(el: Element, depth: number): void {
+  const sr = el.shadowRoot;
+  if (!sr) return;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'bili-comment-action-buttons-renderer') {
+    el.dispatchEvent(new Event('margin:read-comment-location', { bubbles: true, composed: true }));
+    const text = el.getAttribute('data-margin-location') || '';
+    const date = sr.querySelector('#pubdate');
+    let label = sr.querySelector<HTMLElement>('[data-margin-location-label]');
+    if (!text || !date) label?.remove();
+    else {
+      if (!label) { label = document.createElement('span'); label.setAttribute('data-margin-location-label', ''); date.append(label); }
+      if (label.textContent !== text) label.textContent = text;
+    }
+  }
+  if (tag === 'bili-comment-replies-renderer') watchReplies(sr);
+  if (!done.has(sr)) {
+    let s = sheets.get(tag);
+    if (!s) {
+      // tag 位于每条评论自己的嵌套 Shadow DOM；主题规则需要注入到包含它的那一层。
+      s = new CSSStyleSheet();
+      s.replaceSync((SKINS[tag] ?? '') + TAG_SKIN + (extra[tag] ?? ''));
+      sheets.set(tag, s);
+    }
+    sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, s];
+    done.add(sr);
+  }
+  if (!watched.has(sr)) {
+    watched.add(sr);
+    // 只扫描新插入的子树；定时补扫仍负责发现已有节点迟延挂载的 shadow root。
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node instanceof Element && node.isConnected) skin(node, depth + 1);
+        }
+      }
+    }).observe(sr, { childList: true, subtree: true });
+  }
+  // 评论项也是 Web Component，继续遍历所有 open shadow root，直到找到 tag 所在层级。
+  skin(sr, depth + 1);
+}
+
 function skin(root: ParentNode, depth = 0): void {
   if (depth > 6) return;
-  for (const el of root.querySelectorAll<HTMLElement>('*')) {
-    const sr = el.shadowRoot;
-    if (!sr) continue;
-    const tag = el.tagName.toLowerCase();
-    // tag 位于每条评论自己的嵌套 Shadow DOM；主题规则需要注入到包含它的那一层。
-    const css = (SKINS[tag] ?? '') + TAG_SKIN + (extra[tag] ?? '');
-    if (!done.has(sr)) {
-      let s = sheets.get(tag);
-      if (!s) { s = new CSSStyleSheet(); s.replaceSync(css); sheets.set(tag, s); }
-      sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, s];
-      done.add(sr);
-    }
-    // 评论项也是 Web Component，继续遍历所有 open shadow root，直到找到 tag 所在层级。
-    if (!watched.has(sr)) {
-      watched.add(sr);
-      // 评论是异步、分批插入的；监听当前 root，避免等下一轮 1 秒补扫才显示正确主题。
-      new MutationObserver(() => skin(sr, depth + 1)).observe(sr, { childList: true, subtree: true });
-    }
-    skin(sr, depth + 1);
-  }
+  if (root instanceof Element) skinElement(root, depth);
+  for (const el of root.querySelectorAll<HTMLElement>('*')) skinElement(el, depth);
 }
 
 /** extra：按页面追加到某个组件皮肤后面的样式（详情页隐藏评论区重复的大标题） */
@@ -75,7 +104,20 @@ export function skinComments(more: Record<string, string> = {}): void {
   extra = more;
   loadSettings().then((st) => { treeOn = st.replyTree; run(); }).catch(() => {});
   onSettingsChange((st) => { if (st.replyTree !== treeOn) { treeOn = st.replyTree; retreeAll(); } });
-  const run = () => { const bc = document.querySelector('bili-comments'); if (bc) { skin(bc.parentElement ?? document); tree(bc); } treeOld(); };
+  const containers = new WeakSet<Element>();
+  let updateFrame = 0;
+  const run = () => {
+    const bc = document.querySelector('bili-comments');
+    if (bc) skin(bc);
+    treeOld();
+    const container = document.querySelector('#commentapp, .comment-container');
+    if (container && !containers.has(container)) {
+      containers.add(container);
+      new MutationObserver(() => {
+        if (!updateFrame) updateFrame = requestAnimationFrame(() => { updateFrame = 0; run(); });
+      }).observe(container, { childList: true, subtree: true });
+    }
+  };
   // 前 90 秒每秒补一次（评论区是懒加载的 Web Components）；页面隐藏时暂停
   let n = 0;
   const stop = every(1000, () => { run(); if (++n > 90) stop(); });
@@ -91,6 +133,7 @@ export function skinComments(more: Record<string, string> = {}): void {
  */
 let treeOn = true;
 const TREE_CSS = `
+  #expander-contents[hidden], #expander-contents[data-margin-replies-collapsed] { display: none !important; }
   #expander-contents { display: flex !important; flex-direction: column !important; }
   #expander-contents > #expander-footer { order: 99999 !important; }
   bili-comment-reply-renderer[data-m-depth] { --m-tl: color-mix(in srgb, var(--m-ink, #888) 18%, transparent); }
@@ -106,7 +149,10 @@ const retry = new WeakMap<ShadowRoot, number>();
 function layout(sr: ShadowRoot): void {
   const reps = [...sr.querySelectorAll<HTMLElement & { data?: any }>('#expander-contents > bili-comment-reply-renderer')];
   if (!treeOn || reps.length < 2) {
-    for (const r of reps) { r.style.removeProperty('order'); delete r.dataset.mDepth; }
+    for (const r of reps) {
+      if (r.style.order) r.style.removeProperty('order');
+      if (r.dataset.mDepth !== undefined) delete r.dataset.mDepth;
+    }
     return;
   }
   // 内容脚本在隔离世界里拿不到 lit 的 .data，只能读 DOM：作者名 + 正文开头的「回复 @某人 :」。
@@ -132,19 +178,27 @@ function layout(sr: ShadowRoot): void {
 function nest(reps: HTMLElement[], info: { name: string; to: string }[]): void {
   const kids = new Map<number, number[]>();
   const tops: number[] = [];
+  const lastAuthor = new Map<string, number>();
   info.forEach((x, i) => {
-    let p = -1;
-    if (x.to) for (let j = i - 1; j >= 0; j--) if (info[j].name === x.to) { p = j; break; }
-    if (p < 0) tops.push(i); else { const k = kids.get(p) ?? []; k.push(i); kids.set(p, k); }
+    // 先找父项再更新作者，保持「最近一条前置回复」的语义，包括回复自己。
+    const p = x.to ? lastAuthor.get(x.to) : undefined;
+    if (p === undefined) tops.push(i); else { const k = kids.get(p) ?? []; k.push(i); kids.set(p, k); }
+    lastAuthor.set(x.name, i);
   });
   let n = 0;
-  const walk = (i: number, d: number) => {
+  const stack = tops.map((i) => ({ i, d: 0 })).reverse();
+  while (stack.length) {
+    const { i, d } = stack.pop()!;
     const r = reps[i];
-    r.style.order = String(n++);
-    if (d) r.dataset.mDepth = String(Math.min(d, 3)); else delete r.dataset.mDepth;
-    for (const k of kids.get(i) ?? []) walk(k, d + 1);
-  };
-  for (const t of tops) walk(t, 0);
+    const order = String(n++);
+    if (r.style.order !== order) r.style.order = order;
+    const depth = d ? String(Math.min(d, 3)) : undefined;
+    if (depth === undefined) {
+      if (r.dataset.mDepth !== undefined) delete r.dataset.mDepth;
+    } else if (r.dataset.mDepth !== depth) r.dataset.mDepth = depth;
+    const children = kids.get(i);
+    if (children) for (let k = children.length - 1; k >= 0; k--) stack.push({ i: children[k], d: d + 1 });
+  }
 }
 
 /**
@@ -152,6 +206,7 @@ function nest(reps: HTMLElement[], info: { name: string; to: string }[]): void {
  * v0.49 的对话树只认 bili-comments，这些用户开了也没效果。老评论在普通 DOM 里，直接按同样规则排。
  */
 const OLD_CSS = `
+  .sub-reply-list[hidden], .sub-reply-list[data-margin-replies-collapsed], .sub-reply-list.m-tree[data-margin-replies-collapsed] { display: none !important; }
   .sub-reply-list.m-tree { display: flex !important; flex-direction: column !important; }
   .sub-reply-list.m-tree > :not(.sub-reply-item) { order: 99999 !important; }
   .sub-reply-item[data-m-depth] { --m-tl: color-mix(in srgb, var(--m-ink, #888) 18%, transparent); background-repeat: no-repeat !important; }
@@ -169,7 +224,7 @@ function treeOld(): void {
     oldSeen.add(l);
     treeLists.add(l);
     let raf = 0;
-    const kick = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; layoutOld(l); }); };
+    const kick = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; layoutOld(l); replyCollapse(l); }); };
     new MutationObserver(kick).observe(l, { childList: true });
     kick();
   }
@@ -179,7 +234,10 @@ function layoutOld(l: HTMLElement): void {
   const reps = [...l.querySelectorAll<HTMLElement>(':scope > .sub-reply-item')];
   if (!treeOn || reps.length < 2) {
     l.classList.remove('m-tree');
-    for (const r of reps) { r.style.removeProperty('order'); delete r.dataset.mDepth; }
+    for (const r of reps) {
+      if (r.style.order) r.style.removeProperty('order');
+      if (r.dataset.mDepth !== undefined) delete r.dataset.mDepth;
+    }
     return;
   }
   l.classList.add('m-tree');
@@ -190,21 +248,47 @@ function layoutOld(l: HTMLElement): void {
   }));
 }
 
-function tree(bc: Element): void {
-  const root = bc.shadowRoot;
-  if (!root) return;
+function watchReplies(sr: ShadowRoot): void {
+  if (treeSeen.has(sr)) return;
+  treeSeen.add(sr); treeRoots.add(sr);
   if (!treeSheet) { treeSheet = new CSSStyleSheet(); treeSheet.replaceSync(TREE_CSS); }
-  for (const t of root.querySelectorAll('bili-comment-thread-renderer')) {
-    const sr = t.shadowRoot?.querySelector('bili-comment-replies-renderer')?.shadowRoot;
-    if (!sr || treeSeen.has(sr)) continue;
-    treeSeen.add(sr);
-    treeRoots.add(sr);
-    sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, treeSheet];
-    let raf = 0;
-    const kick = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; layout(sr); }); };
-    new MutationObserver(kick).observe(sr, { childList: true, subtree: true });
-    kick();
+  sr.adoptedStyleSheets = [...sr.adoptedStyleSheets, treeSheet];
+  let raf = 0;
+  const kick = () => { if (!raf) raf = requestAnimationFrame(() => {
+    raf = 0; layout(sr);
+    const contents = sr.querySelector<HTMLElement>('#expander-contents');
+    if (contents) replyCollapse(contents);
+  }); };
+  new MutationObserver(kick).observe(sr, { childList: true, subtree: true });
+  kick();
+}
+
+const replyControls = new WeakMap<HTMLElement, HTMLButtonElement>();
+/** 只折叠现有 DOM，保留原生分页、输入框和 lit 的节点归属。 */
+function replyCollapse(list: HTMLElement): void {
+  let button = replyControls.get(list);
+  const hasReplies = !!list.querySelector('bili-comment-reply-renderer, .sub-reply-item');
+  if (!hasReplies) { if (button) { button.hidden = true; button.style.display = 'none'; } return; }
+  if (!button) {
+    button = document.createElement('button');
+    button.type = 'button'; button.className = 'margin-replies-toggle';
+    button.style.cssText = 'display:block;position:static;margin:8px 0;padding:6px 12px;border:0;border-radius:999px;'
+      + 'background:var(--m-surface,#fff);color:var(--m-muted,#666);font:500 12px/1.5 var(--m-sans,system-ui);cursor:pointer;scroll-margin-top:88px';
+    button.textContent = '收起回复'; button.setAttribute('aria-expanded', 'true');
+    button.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const collapsed = list.toggleAttribute('data-margin-replies-collapsed');
+      button!.textContent = collapsed ? '展开回复' : '收起回复';
+      button!.setAttribute('aria-expanded', String(!collapsed));
+      button!.scrollIntoView({ block: 'nearest' });
+    });
+    replyControls.set(list, button);
   }
+  if (button.nextElementSibling !== list) list.before(button);
+  // 原生尚未展开时不显示扩展按钮；我们自己折叠后仍保留重开入口。
+  const visible = list.hasAttribute('data-margin-replies-collapsed') || getComputedStyle(list).display !== 'none';
+  button.style.display = visible ? 'block' : 'none';
+  button.hidden = !visible;
 }
 
 function retreeAll(): void {

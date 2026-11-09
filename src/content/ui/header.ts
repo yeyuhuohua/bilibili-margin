@@ -1,6 +1,7 @@
 import { every } from '../sched';
 import { loadSettings, onSettingsChange, type Settings } from '../../shared/settings';
 import { account, dynamicUpdates, resetDynamicBaseline, unreadTotal } from '../api/account';
+import { onMsgRead } from '../api/msg';
 import { h, icon, ICONS, setMarkup } from './dom';
 import { createExpandableTabs, type TabItem, type TabSpec } from './expandable-tabs';
 import { createUserMenu } from './user-menu';
@@ -11,6 +12,10 @@ import { liveTv } from './tv-eyes';
 import { attachHoverList, POPS, type PopHandle } from './dyn-pop';
 import { createSettingsButton } from './settings-btn';
 import type { FilterRuntime } from '../filter-runtime';
+import { openBili } from '../navigation';
+import { acceptTextDrop } from './text-drop';
+import { hotSearch } from '../api/search';
+import { onUiMotionChange, uiReducedMotion } from '../motion';
 
 /** 顶栏左上角的小电视：开场动画结束时图标就飞落到这里 */
 function tv(): HTMLElement { const s = h('span', { class: 'tv', 'aria-hidden': 'true' }); setMarkup(s, BILI_TIGHT); liveTv(s); return s; }
@@ -38,8 +43,9 @@ export const SITE_LINKS: TabSpec[] = [
 ];
 
 /** 首页和播放页共用的顶栏：标志、搜索、Expandable Tabs、日月主题按钮、投稿、头像 */
-export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch?: (q: string) => void; onSettings?: () => void; msgRemind?: () => boolean; filter?: FilterRuntime }): Header {
+export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch?: (q: string, origin?: HTMLElement) => void; onSettings?: () => void; msgRemind?: () => boolean; filter?: FilterRuntime }): Header {
   let msgOn = o.msgRemind?.() ?? true;
+  let searchStyle: Settings['searchStyle'] = 'classic';
   const user = h('a', { class: 'user', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '登录');
   const userSlot = h('div', { class: 'um-wrap' }, user);
   const upload = h('a', { class: 'upload', href: 'https://member.bilibili.com/platform/upload/video/frame', target: '_blank', rel: 'noopener' }, icon(ICONS.upload), h('span', {}, '投稿'));
@@ -50,16 +56,64 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     onsubmit: (e: Event) => {
       e.preventDefault();
       const q = input.value.trim();
-      if (q) window.open(`https://search.bilibili.com/all?keyword=${encodeURIComponent(q)}`, '_blank', 'noopener');
+      if (q) openBili(`https://search.bilibili.com/all?keyword=${encodeURIComponent(q)}`);
     },
   }, icon(ICONS.search), input, h('kbd', {}, '/'));
   if (o.onSearch) {
     // 顶栏搜索框只做入口：点一下、或开始打字，就交给命令面板
     input.readOnly = true;
-    const openP = () => { const q = input.value; input.value = ''; input.blur(); o.onSearch!(q); };
+    const openP = () => { const q = input.value; input.value = ''; input.blur(); o.onSearch!(q, searchStyle === 'new' ? search : undefined); };
     search.addEventListener('pointerdown', (e) => { e.preventDefault(); openP(); });
     input.addEventListener('focus', openP);
+    const words = h('span', { class: 'search-ph-ws' });
+    const placeholder = h('span', { class: 'search-ph', 'aria-hidden': 'true' }, words);
+    let names: string[] = [], index = 0;
+    let stopRotation: (() => void) | undefined;
+    const paint = () => {
+      const previous = words.querySelector('.search-ph-w:not(.out)');
+      const next = h('span', { class: `search-ph-w${previous && !uiReducedMotion() ? ' in' : ''}` }, names[index]);
+      words.append(next);
+      if (previous) {
+        previous.classList.add('out');
+        if (uiReducedMotion()) previous.remove();
+        else setTimeout(() => previous.remove(), 420);
+      }
+    };
+    const startRotation = () => {
+      stopRotation?.();
+      if (searchStyle !== 'new' || uiReducedMotion() || !names.length) return;
+      stopRotation = every(3200, () => {
+        if (!el.isConnected) { stopRotation?.(); return; }
+        if (!search.isConnected) return;
+        const rect = search.getBoundingClientRect();
+        if (input.value || rect.bottom <= 0 || rect.top >= innerHeight || getComputedStyle(search).opacity === '0') return;
+        index = (index + 1) % names.length;
+        paint();
+      });
+    };
+    const syncSearch = () => {
+      const hot = searchStyle === 'new' && names.length > 0;
+      search.classList.toggle('has-hot', hot);
+      if (hot) search.append(placeholder); else placeholder.remove();
+      startRotation();
+    };
+    onUiMotionChange(startRotation);
+    loadSettings().then(st => { searchStyle = st.searchStyle; syncSearch(); }).catch(() => {});
+    onSettingsChange((n, p) => { searchStyle = n.searchStyle; if (n.searchStyle !== p.searchStyle) syncSearch(); });
+    hotSearch().then(list => {
+      names = list.slice(0, 10).map(item => item.name);
+      if (!names.length) return;
+      paint();
+      syncSearch();
+    }).catch(() => {});
   }
+
+  acceptTextDrop(search, (text) => {
+    if (o.onSearch) { o.onSearch(text, searchStyle === 'new' ? search : undefined); return; }
+    input.value = text;
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 
   const tabsNav = createExpandableTabs(o.tabs);
   // 直播 / 消息 / 动态 / 历史 / 收藏 / 稍后：停留 1.5 秒弹出悬停列表
@@ -73,16 +127,20 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     popHandles.push(pop);
     if (label === '消息') msgPop = pop;
   }
-  // 顶栏入口自定义（v0.47.1）：隐藏的入口 hidden；B 站入口按设置里的顺序用 CSS order 排，分隔线和个人入口固定在后面
+  // 默认保留旧版顺序；自定义排序包含个人入口时，各项按同一序列排列。
   const applyPrefs = (st: Settings) => {
+    upload.hidden = st.headHide.includes('投稿');
     const siteIdx = new Map(SITE_LINKS.map((l, i) => [l.title, i]));
-    const order = [...st.headOrder.filter((t) => siteIdx.has(t)), ...SITE_LINKS.map((l) => l.title).filter((t) => !st.headOrder.includes(t))];
+    const titles = tabsNav.buttons.map((b) => b.querySelector('span')?.textContent ?? '');
+    const personal = st.headOrder.some((t) => titles.includes(t) && !siteIdx.has(t));
+    const available = personal ? titles : SITE_LINKS.map((l) => l.title);
+    const order = [...st.headOrder.filter((t) => available.includes(t)),...available.filter((t) => !st.headOrder.includes(t))];
     for (const b of tabsNav.buttons) {
       const t = b.querySelector('span')?.textContent ?? '';
       b.hidden = t !== '设置' && st.headHide.includes(t);
-      b.style.order = siteIdx.has(t) ? String(order.indexOf(t)) : '30';
+      b.style.order = personal || siteIdx.has(t) ? String(order.indexOf(t)) : '30';
     }
-    tabsNav.el.querySelectorAll<HTMLElement>('.et-sep').forEach((x) => { x.style.order = '20'; x.hidden = tabsNav.buttons.every((b) => b.hidden || !siteIdx.has(b.querySelector('span')?.textContent ?? '')); });
+    tabsNav.el.querySelectorAll<HTMLElement>('.et-sep').forEach((x) => { x.style.order = '20'; x.hidden = personal || tabsNav.buttons.every((b) => b.hidden || !siteIdx.has(b.querySelector('span')?.textContent ?? '')); });
     tabsNav.el.querySelector<HTMLElement>('.et-thumb')?.style.setProperty('order', '-1');
   };
   loadSettings().then(applyPrefs).catch(() => {});
@@ -101,17 +159,23 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     userSlot.replaceWith(createUserMenu(a));
     // 消息中心里点开消息后（v0.46）重新拉一次未读，顶栏角标立刻跟上；关闭消息提醒时完全忽略
     let unreadT = 0;
-    addEventListener('margin:unread', () => {
+    let unreadGeneration = 0;
+    addEventListener('margin:unread', (e) => {
       if (!msgOn) return;
-      clearTimeout(unreadT); unreadT = window.setTimeout(() => unreadTotal().then((n) => tabsNav.badge('msg', n)).catch(() => {}), 600);
+      clearTimeout(unreadT);
+      // 事件里带了刚取到的未读总数（下拉面板 / 消息页）：直接用，避免再发一次请求、口径或时点又对不上
+      const total = (e as CustomEvent<{ total?: number }>).detail?.total;
+      if (typeof total === 'number' && Number.isFinite(total) && total >= 0) { unreadGeneration++; tabsNav.badge('msg', total); return; }
+      unreadT = window.setTimeout(() => pollMsg(true), 80);
     });
     // 未读角标：页面可见时每 2 分钟问一次；切回标签页时立即刷新。
     // 消息提醒同时管动态：关闭后消息和动态的角标都不再轮询。
     let polled = 0;
-    const pollMsg = () => {
-      if (!msgOn || document.hidden) return;
+    const pollMsg = (force = false) => {
+      if (!msgOn || (document.hidden && !force)) return;
       polled = Date.now();
-      unreadTotal().then((n) => tabsNav.badge('msg', n)).catch(() => {});
+      const generation = ++unreadGeneration;
+      unreadTotal().then((n) => { if (msgOn && generation === unreadGeneration) tabsNav.badge('msg', n); }).catch(() => {});
     };
     const pollDyn = () => {
       if (!msgOn || document.hidden) return;
@@ -121,8 +185,12 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     const poll = () => { pollDyn(); pollMsg(); };
     poll();
     every(120_000, poll);
-    // 切回标签页时刷新一次（30 秒内刚问过就不重复问）
-    document.addEventListener('visibilitychange', () => { if (Date.now() - polled > 30_000) poll(); });
+    // 消息在别的标签页被读掉：立刻按服务端真值对齐（隐藏页也更新，切回来不会挂着旧数字）
+    onMsgRead(() => pollMsg(true));
+    // 刚在别的标签读完消息也要更新；只合并同一次恢复触发的 focus / visibility 事件。
+    const onReturn = () => { if (Date.now() - polled > 500) poll(); };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) onReturn(); });
+    addEventListener('focus', onReturn);
   }).catch(() => {});
 
   const setMsgRemind = (on: boolean) => {
@@ -150,5 +218,5 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     e.preventDefault();
     input.focus();
   });
-  return { el, input, sunMoon, glass: [search, tabsNav.el], thumb: tabsNav.thumb, setMsgRemind };
+  return { el, input, sunMoon, glass: [search, tabsNav.el, sunMoon.glass], thumb: tabsNav.thumb, setMsgRemind };
 }

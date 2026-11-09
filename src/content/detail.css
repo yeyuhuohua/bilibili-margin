@@ -56,7 +56,7 @@ html.margin-detail .opus-module-collection__title, html.margin-detail .opus-modu
 /* 正文：16/28，4px 栅格，段距 20 */
 html.margin-detail .opus-module-content { padding: 32px 56px 0 !important; margin: 0 !important; }
 html.margin-detail .opus-module-content, html.margin-detail .opus-module-content p,
-html.margin-detail .opus-module-content span:not([style*="color:#"]):not([style*="color: #"]):not([style*="color:rgb"]) {
+html.margin-detail .opus-module-content span:not([style*="color:#"]):not([style*="color: #"]):not([style*="color:rgb"]):not(.bili-dyn-card-ugc *) {
   font-size: 16px !important; line-height: 28px !important; color: var(--m-ink) !important; letter-spacing: .01em;
 }
 html.margin-detail .opus-module-content p { margin: 0 0 20px !important; }
@@ -97,6 +97,9 @@ html.margin-detail .bili-tabs__nav__item { font: 400 18px/48px var(--m-serif) !i
 html.margin-detail .bili-tabs__nav__item.is-active, html.margin-detail .bili-tabs__nav__item--active, html.margin-detail .bili-tabs__nav__item[aria-selected="true"] { color: var(--m-ink) !important; }
 html.margin-detail .bili-tabs__nav__bar, html.margin-detail .bili-tabs__nav-bar, html.margin-detail .bili-tabs__active-bar { background: var(--m-ink) !important; height: 2px !important; border-radius: 2px; }
 html.margin-detail .bili-tabs__content, html.margin-detail .comment-wrap { padding-left: 32px !important; padding-right: 32px !important; }
+/* 原生评论嵌套容器只保留一层横向留白，给时间、IP 标签与回复操作留足宽度。 */
+html.margin-detail .bili-tabs__content .comment-wrap,
+html.margin-detail .comment-wrap .bili-comment-container { padding-left: 0 !important; padding-right: 0 !important; }
 
 /* ── 单条动态：一张卡 ── */
 html[data-margin-detail="dyn"] #app .content .card {
@@ -122,6 +125,9 @@ html[data-margin-detail="dyn"] .dyn-card-opus__pics img, html[data-margin-detail
 html[data-margin-detail="dyn"] .bili-dyn-card-video { background: var(--m-chip) !important; box-shadow: var(--ring); overflow: hidden; }
 html[data-margin-detail="dyn"] .bili-dyn-card-video__title { color: var(--m-ink) !important; }
 html[data-margin-detail="dyn"] .bili-dyn-card-video__desc, html[data-margin-detail="dyn"] .bili-dyn-card-video__stat { color: var(--m-muted) !important; }
+html.margin-detail .bili-dyn-card-ugc__detail__stat { gap: 16px; flex-wrap: wrap; }
+html.margin-detail .bili-dyn-card-ugc .bili-dyn-card-video__stat__item { width: auto; flex: none; margin-right: 0; white-space: nowrap; }
+html.margin-detail .bili-dyn-card-ugc .bili-dyn-card-video__stat__item svg { flex: none; }
 html[data-margin-detail="dyn"] .bili-dyn-item__footer { display: none !important; } /* 底部操作行由侧栏代替 */
 html.margin-detail-narrow[data-margin-detail="dyn"] .bili-dyn-item__footer { display: flex !important; }
 

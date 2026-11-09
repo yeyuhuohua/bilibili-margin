@@ -1,16 +1,37 @@
 {
   "name": "margin",
-  "version": "0.52.0",
+  "version": "0.60.15",
   "private": true,
   "description": "映间 MARGIN — 一个重新设计的 B 站首页浏览器扩展",
   "type": "module",
   "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
   "scripts": {
     "build": "tsc --noEmit && node scripts/build.mjs",
-    "pack": "pnpm run build && cd dist && rm -f ../margin.zip && zip -qrX ../margin.zip .",
+    "pack": "pnpm run build && cd dist && rm -f ../margin.zip && zip -9qrX ../margin.zip .",
     "pack:firefox": "pnpm run pack && node scripts/firefox.mjs",
     "test:smoke": "node tests/smoke.mjs",
-    "test:unit": "vitest run",
+    "test:drawers": "node tests/drawers.mjs",
+    "test:app-window": "node tests/app-window.mjs",
+    "test:sponsor-skip": "node tests/sponsor-skip.mjs",
+    "test:danmaku-jump": "node tests/danmaku-jump.mjs",
+    "test:danmaku-airborne": "node tests/danmaku-airborne.mjs",
+    "test:frame-budget": "node tests/frame-budget.mjs",
+    "test:performance-ui": "node tests/performance-ui.mjs",
+    "test:animation-performance": "node tests/animation-performance.mjs",
+    "test:content-performance": "node tests/content-performance.mjs",
+    "test:comment-performance": "node tests/comment-performance.mjs",
+    "test:message-media": "node tests/message-media.mjs",
+    "test:message-loading": "node tests/message-loading.mjs",
+    "test:header-surface": "node tests/header-surface.mjs",
+    "test:reported-issues": "node tests/reported-issues.mjs",
+    "test:watch-share": "node tests/watch-share.mjs",
+    "test:watch-startup": "node tests/watch-startup.mjs && node tests/watch-card-startup.mjs",
+    "test:feedback": "node tests/header-feedback.mjs && node tests/watch-auto-mode.mjs && node tests/lightbox.mjs && node tests/app-auth-feedback.mjs && node tests/settings-thumbnails.mjs",
+    "test:new-issues": "node tests/watch-screen.mjs && node tests/favorites-subscriptions.mjs && node tests/triple-release.mjs",
+    "test:watch-later": "node tests/watch-later-groups.mjs",
+    "test:unit": "vitest run --dir tests",
+    "test:privacy": "node tests/privacy-preview.mjs",
+    "security:check": "node scripts/security-checks.mjs",
     "fonts": "python3 scripts/slice-fonts.py"
   },
   "devDependencies": {
@@ -23,7 +44,11 @@
     "vitest": "^5.1.0"
   },
   "license": "MIT",
+  "overrides": {
+    "@modelcontextprotocol/server": "2.3.1"
+  },
   "dependencies": {
+    "dompurify": "3.4.17",
     "qrcode-generator": "^2.0.4"
   }
 }

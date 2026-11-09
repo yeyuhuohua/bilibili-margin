@@ -9,7 +9,7 @@
 <p>A quieter interface for Bilibili, with clean layouts, liquid glass controls and animated backgrounds.</p>
 
 <p>
-  <a href="https://github.com/jiuyang5354/bilibili-margin/releases/latest"><img src="https://img.shields.io/github/v/release/jiuyang5354/bilibili-margin?label=version&amp;color=00aeec" alt="最新版本" /></a>
+  <a href="https://github.com/jiuyang5354/bilibili-margin/releases/latest"><img src="https://img.shields.io/github/v/release/jiuyang5354/bilibili-margin?display_name=release&amp;label=version&amp;color=00aeec" alt="最新版本" /></a>
   <a href="https://addons.mozilla.org/en-US/firefox/addon/%E6%98%A0%E9%97%B4-margin/"><img src="https://img.shields.io/amo/v/margin@jiuyang5354.github.io?label=Firefox%20Add-ons&amp;color=ff7139" alt="Firefox 附加组件商店" /></a>
   <img src="https://img.shields.io/badge/browser-Edge%20%2F%20Chrome%20%2F%20Firefox-535b66" alt="支持 Edge、Chrome 和 Firefox" />
   <img src="https://img.shields.io/badge/extension-Manifest%20V3-535b66" alt="Manifest V3" />
@@ -73,9 +73,10 @@
 | --- | --- |
 | 首页与搜索 | 个性推荐、热门视频、无限加载、换一批，以及关键词、UP 主、播放量和时长过滤。 |
 | 原生播放 | 重新排版标题、UP 主卡片、选集与推荐列表，保留原生播放器、弹幕、评论、清晰度及全屏操作。 |
+| 弹幕空降 | 可选，默认关闭；认得出时间点的弹幕（如「03:20」「空降 2:15」）加下划线，点击跳转后可撤销。只在本机解析弹幕文本，不联网。 |
 | 收藏与稍后再看 | 玻璃文件夹收藏抽屉、稍后再看列表、观看进度和视频右键菜单。 |
 | 足迹 | 年 / 月热力图、每日首次打开时间与停留时长、观看历史补全、数据来源提示。 |
-| 阅读与账号页面 | 动态、图文、专栏的阅读布局，以及个人空间、历史、动态流和消息页面的统一界面。 |
+| 阅读与账号页面 | 动态、图文、专栏的阅读布局，以及个人空间、历史、动态流和消息页面的统一界面；私信支持图片预览发送和原版表情选择。 |
 | 外观与背景 | 亮色、暗色、跟随系统；13 款动态背景、自定义图片与强度调节，包含汇流和点击冲击波。 |
 | 快捷操作 | 搜索联想、命令面板、悬停预览、可翻面的头像工牌和可修改城市的天气卡片。 |
 | 本地数据 | 设置与足迹保存在本机，可导出和导入 JSON 备份。 |
@@ -98,13 +99,17 @@
 
 ### 动态背景是否一直运行？
 
-页面可见时，背景在滚动和视频播放期间保持动态；标签页隐藏时暂停，并遵循系统的“减少动态效果”设置。开场动画覆盖页面时会暂缓底层背景绘制。渲染采用自适应调度，实际帧率取决于设备和页面负载，不保证所有场景固定 60fps。参见[性能说明](docs/performance-v0.31.0.md)。
+页面可见且有显卡加速时，背景在滚动、视频播放和打开抽屉期间保持动态；标签页隐藏时暂停，并遵循系统的“减少动态效果”设置。无显卡加速时保留静态保护，避免软件绘制拖慢页面。开场动画覆盖页面时会暂缓底层背景绘制。渲染采用自适应调度，实际帧率取决于设备和页面负载，不保证所有场景固定 60fps。参见[性能说明](docs/performance-v0.31.0.md)。
 
 ## 隐私
 
 开发者不运营统计或数据收集服务器。设置、足迹与自定义背景保存在本机；导出备份由你自行保存。
 
+0.6.4 起，「设置 → 隐私」中的外部辅助服务和最近搜索记录默认关闭。允许外部辅助服务后可使用天气、社区广告片段和手动版本查询。最近搜索开启后只存扩展内，最多 8 条，30 天过期并在读取时清理。App 推荐流授权仅保留在当前浏览器会话，升级后的首次使用及重启浏览器后需重新扫码。
+
 天气功能会请求 `ipwho.is` 获取粗略城市定位，并向 Open-Meteo 请求城市搜索和天气预报；这些服务会收到必要的 IP、城市或坐标信息。B 站账号、收藏与观看历史不会发送给天气服务。完整说明见[隐私政策](PRIVACY.md)。
+
+可选的「跳过视频内广告」默认关闭。开启后向[小电视空降助手](https://bsbsb.top/)查询 BVID 的四位哈希前缀，只按社区广告标记跳过普通 BV 视频，支持撤销；不向该服务发送 B 站 Cookie、账号或完整视频 ID，不保证 B 站完播率。
 
 本扩展为独立开源项目，**非 bilibili 官方产品，与哔哩哔哩无关联**。
 

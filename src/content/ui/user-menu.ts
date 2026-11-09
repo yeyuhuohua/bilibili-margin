@@ -1,7 +1,8 @@
 import { loadSettings, onSettingsChange } from '../../shared/settings';
 import { account, accountStat, dynamicUpdates, logout, resetDynamicBaseline, unreadTotal, type Account } from '../api/account';
 import { fmtCount, h, icon, ICONS, setMarkup } from './dom';
-import { reducedMotion } from '../motion';
+import { uiReducedMotion as reducedMotion } from '../motion';
+import { LANYARD_STEP_MS, LanyardClock, lanyardCardBounds, lanyardEase, type LanyardBounds } from './user-menu-motion';
 
 /**
  * 头像卡片：移植用户贴来的 21st「ID Card Lanyard」——
@@ -53,7 +54,7 @@ function barcode(mid: number): HTMLElement {
 }
 
 // 设置「账号卡片可拖拽」（v0.46，B 站评论建议）：关掉后卡片固定挂着，只能点击翻面
-let idDrag = true;
+let idDrag = false;
 // 消息提醒（v0.47）：关闭后账号卡片不再请求未读总数和新动态
 let msgRemind = true;
 const msgCards = new Set<(on: boolean) => void>();
@@ -100,7 +101,6 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
 
   const front = h('div', { class: 'idcl-face idcl-front' },
     h('div', { class: 'idcl-hole' }),
-    h('div', { class: 'idcl-holo' }),
     h('div', { class: 'idcl-header' },
       h('div', { class: 'idcl-brand' },
         h('span', { class: 'idcl-brand-mark' }, '▲'),
@@ -144,7 +144,6 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   });
   const back = h('div', { class: 'idcl-face idcl-back' },
     h('div', { class: 'idcl-hole' }),
-    h('div', { class: 'idcl-holo' }),
     h('div', { class: 'idcl-stripe' }),
     h('div', { class: 'idcl-idnum' }, h('span', {}, `NO. ${a.mid}`), h('em', {}, `LV${a.level}`)),
     barcode(a.mid),
@@ -184,6 +183,8 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   const ctx = canvas.getContext('2d')!;
   const anchor = { x: 0, y: 0 };
   const points: Pt[] = [];
+  const previous: { x: number; y: number }[] = [], rendered: { x: number; y: number }[] = [];
+  const clock = new LanyardClock();
   // 链长会随视口/头像位置变化：头像贴右边缘时静止点被夹回视口内，链子必须同步变长，
   // 否则水平重力过大，卡片会被甩到页面中间（YouTube 顶栏暴露了这个边界情况）
   let restLen = REST_LENGTH, segLen = SEGMENT_LENGTH;
@@ -194,6 +195,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   const tiltTarget = { x: 0, y: 0 }, tiltCurrent = { x: 0, y: 0 };
   let mouse = { x: -9999, y: -9999 };
   let raf = 0, isOpen = false, dpr = 1, t = 0, restX = 0, gx = 0, restAngle = 0;
+  let triggerBounds: LanyardBounds, cardBounds: LanyardBounds, triggerBoundsDirty = false;
   const syncMsgRemind = (on: boolean) => {
     if (!on) {
       unreadN.textContent = '—'; unreadN.classList.remove('hot');
@@ -207,10 +209,13 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
 
   const resize = () => {
     const r = trigger.getBoundingClientRect();
+    triggerBounds = r; triggerBoundsDirty = false;
     dpr = Math.min(2, devicePixelRatio || 1);
-    canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+    if (canvas.width !== Math.round(innerWidth * dpr)) canvas.width = Math.round(innerWidth * dpr);
+    if (canvas.height !== Math.round(innerHeight * dpr)) canvas.height = Math.round(innerHeight * dpr);
     canvas.style.width = `${innerWidth}px`; canvas.style.height = `${innerHeight}px`;
     dirty = { l: 0, t: 0, r: innerWidth, b: innerHeight };
+    chainDirty = true;
     // 珠链从头像底部垂下，穿进工牌顶上的孔；卡片太靠右会出视口，就让链子静止时往左斜一点
     anchor.x = r.left + r.width / 2;
     anchor.y = r.bottom - 3;
@@ -256,25 +261,34 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   // 珠链：沿绳子每 4.4px 一颗金属小珠，珠子之间一根细连杆
   const BEAD_GAP = 4.4, BEAD_R = 1.9;
   let dirty = { l: 0, t: 0, r: 0, b: 0 };
+  let chainDirty = true, chainDark: boolean | undefined;
+  const drawn: { x: number; y: number }[] = [];
   const drawChain = () => {
+    const dark = stage.closest('.app')?.getAttribute('data-theme') === 'dark';
+    if (!chainDirty && dark === chainDark && rendered.every((p, i) => p.x === drawn[i]?.x && p.y === drawn[i]?.y)) return;
+    chainDirty = false; chainDark = dark;
+    for (let i = 0; i < rendered.length; i++) {
+      const p = rendered[i];
+      if (drawn[i]) { drawn[i].x = p.x; drawn[i].y = p.y; } else drawn.push({ x: p.x, y: p.y });
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // 只擦上一帧画过的范围（整屏 clearRect 在高分屏上每帧要清几百万像素）
     ctx.clearRect(dirty.l, dirty.t, dirty.r - dirty.l, dirty.b - dirty.t);
-    const dark = stage.closest('.app')?.getAttribute('data-theme') === 'dark';
     const beads: { x: number; y: number }[] = [];
     let carry = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i], b = points[i + 1];
+    for (let i = 0; i < rendered.length - 1; i++) {
+      const a = rendered[i], b = rendered[i + 1];
       const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!len) continue;
       let d = carry;
       while (d <= len) { const k = d / len; beads.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k }); d += BEAD_GAP; }
       carry = d - len;
     }
-    const last = points[points.length - 1];
+    const last = rendered[rendered.length - 1];
     beads.push({ x: last.x, y: last.y });
     // 连杆
-    ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.beginPath(); ctx.moveTo(rendered[0].x, rendered[0].y);
+    for (let i = 1; i < rendered.length; i++) ctx.lineTo(rendered[i].x, rendered[i].y);
     ctx.strokeStyle = dark ? 'rgba(200,204,210,.55)' : 'rgba(90,94,100,.6)'; ctx.lineWidth = 0.8; ctx.stroke();
     // 珠子
     for (const b of beads) {
@@ -286,35 +300,40 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     }
     // 末端扣环：穿过工牌的孔
     ctx.save(); ctx.translate(last.x, last.y);
-    const prev = points[points.length - 2]; ctx.rotate(Math.atan2(last.y - prev.y, last.x - prev.x) - Math.PI / 2);
+    const prev = rendered[rendered.length - 2]; ctx.rotate(Math.atan2(last.y - prev.y, last.x - prev.x) - Math.PI / 2);
     ctx.beginPath(); ctx.ellipse(0, 1.5, 3.2, 4.6, 0, 0, Math.PI * 2);
     ctx.strokeStyle = dark ? '#d5d8dd' : '#7c8087'; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.restore();
     let l = Infinity, r = -Infinity, tp = Infinity, bt = -Infinity;
-    for (const p of points) { l = Math.min(l, p.x); r = Math.max(r, p.x); tp = Math.min(tp, p.y); bt = Math.max(bt, p.y); }
+    for (const p of rendered) { l = Math.min(l, p.x); r = Math.max(r, p.x); tp = Math.min(tp, p.y); bt = Math.max(bt, p.y); }
     dirty = { l: l - 8, t: tp - 8, r: r + 8, b: bt + 10 };
   };
   const HOLE_Y = 20.5; // 孔中心离卡片顶部的距离（未缩放）
   // 卡片几何缓存：以前每帧先写 left/top 再读 offsetLeft/offsetWidth，强制同步重排，Firefox 上尤其卡（用户反馈）
   let cardW = 236, cardH = 460, cardX = 0, cardY = 0;
+  let lastCardTransform = '', lastFlipperTransform = '';
   const measure = () => { cardW = card.offsetWidth || 236; cardH = card.offsetHeight || 460; };
   const positionCard = () => {
-    const last = points[points.length - 1], prev = points[points.length - 2];
+    const last = rendered[rendered.length - 1], prev = rendered[rendered.length - 2];
     // 减去静止时绳子的斜角，卡片静止时保持竖直，甩动时照常转
     const angle = Math.atan2(last.y - prev.y, last.x - prev.x) - Math.PI / 2 - restAngle;
     cardX = last.x - cardW / 2; cardY = last.y - HOLE_Y;
-    card.style.transform = `translate3d(${cardX.toFixed(2)}px,${cardY.toFixed(2)}px,0) rotate(${angle.toFixed(4)}rad) scale(${CARD_SCALE})`;
+    const transform = `translate3d(${cardX.toFixed(2)}px,${cardY.toFixed(2)}px,0) rotate(${angle.toFixed(4)}rad) scale(${CARD_SCALE})`;
+    if (transform !== lastCardTransform) { card.style.transform = transform; lastCardTransform = transform; }
+    cardBounds = lanyardCardBounds(last.x, last.y, cardW, cardH, angle, CARD_SCALE, HOLE_Y);
   };
-  let hovering = false, lastMx = '', lastMy = '';
-  const updateTilt = () => {
-    flipCurrent += (flipTarget - flipCurrent) * 0.16;
+  let hovering = false, overControl = false, lastMx = '', lastMy = '';
+  const updateTilt = (elapsed: number) => {
+    if (!overControl) flipCurrent += (flipTarget - flipCurrent) * lanyardEase(0.16, elapsed);
     const over = !dragging && mouse.x > -1000;
     if (over) {
       const cx = cardX + cardW / 2, cy = cardY + cardH / 2;
       const dx = Math.max(-1, Math.min(1, (mouse.x - cx) / (cardW / 2)));
       const dy = Math.max(-1, Math.min(1, (mouse.y - cy) / (cardH / 2)));
       // v0.49：固定模式（默认）不再跟着鼠标倾斜，只保留高光（B 站评论：卡片动效没必要）
-      if (stage.classList.contains('idcl-fixed')) { tiltTarget.x = 0; tiltTarget.y = 0; } else { tiltTarget.y = dx * MAX_TILT; tiltTarget.x = -dy * MAX_TILT; }
+      if (stage.classList.contains('idcl-fixed')) { tiltTarget.x = 0; tiltTarget.y = 0; }
+      else if (overControl) { tiltTarget.x = tiltCurrent.x; tiltTarget.y = tiltCurrent.y; }
+      else { tiltTarget.y = dx * MAX_TILT; tiltTarget.x = -dy * MAX_TILT; }
       const mx = `${Math.round(Math.max(0, Math.min(100, ((mouse.x - cardX) / cardW) * 100)))}%`;
       const my = `${Math.round(Math.max(0, Math.min(100, ((mouse.y - cardY) / cardH) * 100)))}%`;
       if (mx !== lastMx) { card.style.setProperty('--mx', mx); lastMx = mx; }
@@ -323,54 +342,108 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
       tiltTarget.x = 0; tiltTarget.y = 0;
     }
     if (over !== hovering) { hovering = over; card.classList.toggle('idcl-hovering', over); }
-    tiltCurrent.x += (tiltTarget.x - tiltCurrent.x) * 0.12;
-    tiltCurrent.y += (tiltTarget.y - tiltCurrent.y) * 0.12;
-    flipper.style.transform = `rotateY(${(flipCurrent + tiltCurrent.y).toFixed(3)}deg) rotateX(${tiltCurrent.x.toFixed(3)}deg)`;
+    const ease = lanyardEase(0.12, elapsed);
+    tiltCurrent.x += (tiltTarget.x - tiltCurrent.x) * ease;
+    tiltCurrent.y += (tiltTarget.y - tiltCurrent.y) * ease;
+    const transform = `rotateY(${(flipCurrent + tiltCurrent.y).toFixed(3)}deg) rotateX(${tiltCurrent.x.toFixed(3)}deg)`;
+    if (transform !== lastFlipperTransform) { flipper.style.transform = transform; lastFlipperTransform = transform; }
   };
   // 链子和卡片停稳后就不再每帧重算重画（以前打开期间一直 60fps 跑），指针一动或翻面再唤醒
   let still = 0;
   const settled = () => {
     if (dragging) return false;
+    if (overControl) return true;
     for (const p of points) if (Math.abs(p.x - p.oldx) + Math.abs(p.y - p.oldy) > 0.02) return false;
     return Math.abs(flipTarget - flipCurrent) < 0.05 && Math.abs(tiltTarget.x - tiltCurrent.x) + Math.abs(tiltTarget.y - tiltCurrent.y) < 0.01;
   };
-  const loop = () => {
-    updatePoints(); applyConstraints(); positionCard(); drawChain(); updateTilt();
-    still = settled() ? still + 1 : 0;
-    raf = still > 20 ? 0 : requestAnimationFrame(loop);
+  const step = () => {
+    for (let i = 0; i < points.length; i++) { previous[i].x = points[i].x; previous[i].y = points[i].y; }
+    if (stage.classList.contains('idcl-fixed')) {
+      // 固定模式不参与重力求解，否则即使初速度为零，约束误差仍会把卡片慢慢拉走。
+      const dx = restX - anchor.x, dy = Math.sqrt(Math.max(0, restLen ** 2 - dx * dx));
+      points.forEach((p, i) => {
+        const k = i / (NUM_POINTS - 1);
+        p.x = p.oldx = anchor.x + dx * k; p.y = p.oldy = anchor.y + dy * k;
+      });
+    } else if (overControl && !dragging) {
+      // 链接下方的卡片不继续滑动或倾斜，避免光标在链接与拖拽表面间反复切换。
+      for (const p of points) { p.oldx = p.x; p.oldy = p.y; }
+    } else { updatePoints(); applyConstraints(); }
   };
-  const wake = () => { still = 0; if (isOpen && !raf) raf = requestAnimationFrame(loop); };
+  const loop = (now: number) => {
+    raf = 0;
+    if (!isOpen || document.hidden) return;
+    if (!wrap.isConnected || !stage.isConnected) { dragging = false; close(); return; }
+    flushMove();
+    const { elapsed, alpha } = clock.advance(now, step);
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i], prev = previous[i], r = rendered[i];
+      r.x = prev.x + (p.x - prev.x) * alpha; r.y = prev.y + (p.y - prev.y) * alpha;
+    }
+    // The grabbed end follows the pointer immediately; the other points remain interpolated.
+    if (dragging) { const last = rendered[rendered.length - 1]; last.x = pointer.x; last.y = pointer.y; }
+    positionCard(); drawChain(); updateTilt(elapsed);
+    still = settled() ? still + elapsed : 0;
+    if (still < 350) raf = requestAnimationFrame(loop);
+  };
+  const wake = () => {
+    still = 0;
+    if (isOpen && !raf && !document.hidden) { clock.reset(performance.now()); raf = requestAnimationFrame(loop); }
+  };
 
   /* ── 指针 ──────────────────────────────────────── */
   const pos = (e: PointerEvent) => ({ x: e.clientX, y: e.clientY });
   card.addEventListener('pointerdown', (e) => {
     if ((e.target as HTMLElement).closest('a, button')) return;
+    pendingMove = null;
+    overControl = false;
     e.preventDefault();
-    if (!idDrag) { downPos = pos(e); tapDown = true; return; }
-    dragging = true; wake();
+    if (stage.classList.contains('idcl-fixed')) { downPos = pos(e); tapDown = true; return; }
+    dragging = true; dragPointerId = e.pointerId; wake();
     if (!interacted) { interacted = true; hint.classList.add('idcl-hint-hidden'); localStorage.setItem(HINT_KEY, '1'); }
     card.setPointerCapture(e.pointerId);
     // 记住抓的位置相对绳端的偏移，免得一按下卡片顶端就跳到鼠标处（原组件会跳）
-    const raw = pos(e), last = points[points.length - 1];
+    const raw = pos(e), last = rendered[rendered.length - 1];
     grab = { x: raw.x - last.x, y: raw.y - last.y };
     const p = { x: last.x, y: last.y };
     pointer = p; lastPointer = p; downPos = raw;
+    lastPointerTime = e.timeStamp;
+    velocity.x = velocity.y = 0;
   });
   // 是否还在「头像 + 绳子 + 卡片」范围里：卡片会甩到鼠标下面又甩走，用 pointerleave 判断会误收
   const inside = (x: number, y: number) => {
     const pad = 16;
-    const hit = (r: DOMRect) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
-    if (hit(trigger.getBoundingClientRect()) || hit(card.getBoundingClientRect())) return true;
+    const hit = (r: LanyardBounds) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+    if (triggerBoundsDirty) { triggerBounds = trigger.getBoundingClientRect(); triggerBoundsDirty = false; }
+    if (hit(triggerBounds) || hit(cardBounds)) return true;
     let l = anchor.x, r = anchor.x, t = anchor.y, b = anchor.y;
-    for (const p of points) { l = Math.min(l, p.x); r = Math.max(r, p.x); t = Math.min(t, p.y); b = Math.max(b, p.y); }
+    for (const p of rendered) { l = Math.min(l, p.x); r = Math.max(r, p.x); t = Math.min(t, p.y); b = Math.max(b, p.y); }
     return x >= l - 28 && x <= r + 28 && y >= t - 28 && y <= b + 4;
   };
   let away = false, tapDown = false;
   let grab = { x: 0, y: 0 };
+  let pendingMove: { x: number; y: number; time: number; overControl: boolean } | null = null;
+  let lastPointerTime = 0;
+  let dragPointerId: number | null = null;
   const onMove = (e: PointerEvent) => {
     if (!e.isTrusted) return; // 页面脚本派发的合成事件不算
+    // High-polling mice can send several events per frame. Only the latest position is rendered.
+    pendingMove = { ...pos(e), time: e.timeStamp, overControl: !dragging && e.composedPath().some((n) => n instanceof Element && card.contains(n) && !!n.closest('a, button')) };
     wake();
-    mouse = pos(e);
+  };
+  const flushMove = () => {
+    if (!pendingMove) return;
+    const move = pendingMove; pendingMove = null;
+    mouse = { x: move.x, y: move.y };
+    if (move.overControl && !overControl) {
+      // 锁定屏幕上已显示的位置，避免停下物理模拟时插值追赶到下一步。
+      for (let i = 0; i < points.length; i++) {
+        const point = points[i], shown = rendered[i], prev = previous[i];
+        point.x = point.oldx = prev.x = shown.x;
+        point.y = point.oldy = prev.y = shown.y;
+      }
+    }
+    overControl = move.overControl;
     if (!dragging) {
       const out = !inside(mouse.x, mouse.y);
       if (out && !away) scheduleClose();
@@ -379,10 +452,16 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
       return;
     }
     const p = clamp({ x: mouse.x - grab.x, y: mouse.y - grab.y });
-    velocity.x = p.x - lastPointer.x; velocity.y = p.y - lastPointer.y;
+    // Verlet stores displacement per 60 Hz physics step, not per input event.
+    const dt = Math.max(1, move.time - lastPointerTime);
+    velocity.x = (p.x - lastPointer.x) * LANYARD_STEP_MS / dt;
+    velocity.y = (p.y - lastPointer.y) * LANYARD_STEP_MS / dt;
+    lastPointerTime = move.time;
     lastPointer = p; pointer = p;
   };
   const onUp = (e: PointerEvent) => {
+    // A release may arrive before the next frame; retain the final queued drag position.
+    flushMove();
     if (tapDown) {
       tapDown = false;
       const p = pos(e);
@@ -391,8 +470,10 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     }
     if (!dragging) return;
     dragging = false;
+    dragPointerId = null;
     const p = pos(e);
     const last = points[points.length - 1];
+    last.x = pointer.x; last.y = pointer.y;
     if (Math.hypot(p.x - downPos.x, p.y - downPos.y) < TAP_THRESHOLD) {
       flipped = !flipped; flipTarget = flipped ? 180 : 0; wake();
       last.oldx = last.x; last.oldy = last.y;
@@ -403,7 +484,23 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     if (away) scheduleClose();
   };
   // 鼠标离开窗口时只取消倾斜；回到页面并移出范围时再收起
-  const onOut = () => { mouse = { x: -9999, y: -9999 }; wake(); };
+  const onOut = () => {
+    pendingMove = null; mouse = { x: -9999, y: -9999 }; overControl = false; tapDown = false;
+    if (dragging) {
+      dragging = false;
+      const last = points[points.length - 1]; last.oldx = last.x; last.oldy = last.y;
+      if (dragPointerId !== null && card.hasPointerCapture(dragPointerId)) card.releasePointerCapture(dragPointerId);
+      dragPointerId = null;
+    }
+    wake();
+  };
+  const onScroll = () => { triggerBoundsDirty = true; };
+  const onVisibility = () => {
+    if (document.hidden) onOut();
+    cancelAnimationFrame(raf); raf = 0;
+    clock.reset(performance.now());
+    if (!document.hidden) wake();
+  };
 
   /* ── 打开 / 收起：在头像上停 200ms 才垂下（划过不弹），，离开头像和卡片 .4s 后收起 ── */
   let loaded = false;
@@ -411,10 +508,12 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     clearTimeout(t);
     if (isOpen) return;
     isOpen = true;
+    overControl = false;
     away = false;
     if (!stage.isConnected) (wrap.closest('.app') ?? wrap.getRootNode() as ShadowRoot).append(stage);
     resize();
-    points.length = 0;
+    points.length = previous.length = rendered.length = 0;
+    pendingMove = null;
     const fixed = !idDrag || reducedMotion();
     // 按原长沿静止方向摆直，再给一点横向初速度，挂出来时轻轻晃一下
     {
@@ -422,6 +521,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
       for (let i = 0; i < NUM_POINTS; i++) {
         const k = i / (NUM_POINTS - 1), x = anchor.x + dx * k, y = anchor.y + dy * k;
         points.push({ x, y, oldx: fixed ? x : x + k * 1.5, oldy: y, pinned: i === 0 });
+        previous.push({ x, y }); rendered.push({ x, y });
       }
     }
     flipped = false; flipTarget = 0; flipCurrent = 0;
@@ -432,9 +532,13 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     measure();
     addEventListener('pointermove', onMove);
     addEventListener('pointerup', onUp);
+    addEventListener('pointercancel', onOut);
     addEventListener('resize', resize); addEventListener('resize', wake);
+    addEventListener('scroll', onScroll, true);
     addEventListener('blur', onOut);
-    cancelAnimationFrame(raf); loop();
+    document.addEventListener('visibilitychange', onVisibility);
+    cancelAnimationFrame(raf); raf = 0; still = 0;
+    const now = performance.now(); clock.reset(now); loop(now);
     wrap.setAttribute('data-open', '');
     // 未读和新动态每次打开都刷新（会变）；关闭消息提醒时两者都不请求
     if (msgRemind) {
@@ -452,16 +556,22 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   const close = () => {
     if (!isOpen || dragging) return;
     isOpen = false;
+    pendingMove = null;
+    cancelAnimationFrame(raf); raf = 0;
     wrap.removeAttribute('data-open');
     stage.classList.add('idcl-leaving');
     window.setTimeout(() => {
       if (isOpen) return;
       stage.hidden = true;
       cancelAnimationFrame(raf);
+      raf = 0;
       removeEventListener('pointermove', onMove);
       removeEventListener('pointerup', onUp);
+      removeEventListener('pointercancel', onOut);
       removeEventListener('resize', resize); removeEventListener('resize', wake);
+      removeEventListener('scroll', onScroll, true);
       removeEventListener('blur', onOut);
+      document.removeEventListener('visibilitychange', onVisibility);
     }, 220);
   };
   const scheduleClose = () => { clearTimeout(t); t = window.setTimeout(close, 500); };
@@ -476,10 +586,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
 }
 
 function svgCheck(): SVGElement {
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  s.setAttribute('viewBox', '0 0 24 24');
-  setMarkup(s, '<path d="M4 12l5 5L20 6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>');
-  return s;
+  return icon(ICONS.check) as SVGElement;
 }
 
 export { account };

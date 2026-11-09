@@ -11,7 +11,7 @@ import { onMotionChange, reducedMotion } from '../motion';
 
 const LAST_KEY = 'margin:last-shader';
 
-/** 首页背景层：WebGL 着色器（半分辨率、约 60fps（掉帧自动降到 30）、隐藏时暂停）或自定义图片 */
+/** 首页背景层：WebGL 着色器（半分辨率、跟随屏幕刷新率，持续掉帧降到 30fps，隐藏时暂停）或自定义图片 */
 export class BackgroundLayer {
   readonly el = h('div', { class: 'bg', 'aria-hidden': 'true' });
   private canvas = h('canvas', {});
@@ -33,6 +33,14 @@ export class BackgroundLayer {
     this.el.append(this.canvas, this.img, h('div', { class: 'bg-scrim' }));
     // #31：设置没变时 chrome.storage.onChanged 不会触发，换图后得靠这个事件立刻重读到新图
     addEventListener('margin:bg-image', () => this.reloadImage());
+    addEventListener('margin:bg-intensity', (e) => {
+      const value = (e as CustomEvent<number>).detail;
+      if (!this.cfg || !Number.isFinite(value) || value < 0 || value > 1) return;
+      // 滑杆拖动只预览强度，不触发存储写入和整份设置面板同步；松手后再保存。
+      this.cfg = { ...this.cfg, intensity: value };
+      this.el.style.setProperty('--bg-o', String(value));
+      if (this.lensEl) this.redraw();
+    });
     document.addEventListener('visibilitychange', () => (document.hidden ? this.stop() : this.loop()));
     new ResizeObserver(([e]) => { this.size = { w: e.contentRect.width, h: e.contentRect.height }; this.resize(); }).observe(this.el);
     onMotionChange(() => {
@@ -195,7 +203,7 @@ export class BackgroundLayer {
   private hadRect = false;
 
   private draw(now: number, moveOnly = false): void {
-    if (!this.gl || !this.prog) return;
+    if (!this.gl || !this.prog || this.cfg.mode === 'off' || this.cfg.mode === 'image') return;
     const gl = this.gl, w = this.canvas.width, hh = this.canvas.height;
     const still = reducedMotion();
     const t = still ? 12 : (now - this.start) / 1000;
@@ -293,15 +301,16 @@ export class BackgroundLayer {
   private radFor: HTMLElement | null = null;
   private radW = 0;
   private rad = 18;
-  /** 帧间隔：默认约 60fps；连续掉帧（GPU 跟不上）时自动降到约 30fps，恢复后再升回去 */
-  private frameMs = 1000 / 60;
+  /** 正常时每个 rAF 都画：100/120/144Hz 不再被 60fps 上限截断，也不强凑 100fps 造成不均匀跳帧。 */
+  private frameMs = 0;
   private nextFrame = 0;
   private slow = 0;
   private fastRun = 0;
+  private rafTime = 0;
+  private refreshMs = 1000 / 60;
 
   /**
-   * 暂停原因（v0.43）：播放视频、全屏等场景；只要还有一个原因在，背景就停在当前帧。
-   * 背景停着，上面那些毛玻璃也就不用每帧重算模糊。
+   * 全屏等背景不可见的场景暂停；可见时播放、滚动和抽屉不暂停背景。
    */
   private holds = new Set<string>();
   hold(reason: string, on: boolean): void {
@@ -311,7 +320,13 @@ export class BackgroundLayer {
   }
   /** 帧率上限（v0.43）：首屏之外背景大多被卡片盖住，降到 30fps */
   private capMs = 0;
-  cap(fps: number): void { this.capMs = fps > 0 ? 1000 / fps : 0; }
+  cap(fps: number): void {
+    const ms = Number.isFinite(fps) && fps > 0 ? 1000 / fps : 0;
+    if (ms === this.capMs) return;
+    this.capMs = ms;
+    // 取消主动上限后下一帧就恢复，不等旧的 30fps deadline，也不把旧间隔当掉帧。
+    this.nextFrame = this.last = 0;
+  }
 
   private loop = (): void => {
     if (this.soft || this.holds.size) return;
@@ -320,22 +335,34 @@ export class BackgroundLayer {
     const tick = (now: number) => {
       this.raf = 0;
       // 开场盖住整页时不画，开场一结束接着画
-      if (introActive()) { onIntroEnd(() => this.loop()); return; }
+      if (introActive()) { this.stop(); onIntroEnd(() => this.loop()); return; }
+      // 用每次 rAF 的间隔估计屏幕节拍，包含被主动 cap 跳过的回调。
+      // 只接受更快的节拍，避免连续掉帧反过来放宽检测阈值；暂停后重新采样。
+      const rafGap = this.rafTime ? now - this.rafTime : 0;
+      this.rafTime = now;
+      if (rafGap > 1 && rafGap < this.refreshMs) this.refreshMs = rafGap;
       if (now + 0.1 >= this.nextFrame) {
-        const gap = now - this.last;
+        const gap = this.last ? now - this.last : 0;
         this.last = now;
         const t0 = performance.now();
         this.draw(now);
         const cost = performance.now() - t0;
-        if (gap < 200 && (cost > 6 || gap > this.frameMs * 1.8)) this.slow++; else this.slow = Math.max(0, this.slow - 0.25);
+        // 主动 30fps 上限带来的间隔不是掉帧，不应把自适应档位也降到 30fps。
+        // 高刷时也为页面布局与合成留出余量；CPU 提交时间不代表完整 GPU 耗时。
+        const budget = Math.min(6, this.refreshMs * 0.6);
+        const expected = Math.max(this.refreshMs, this.frameMs, this.capMs);
+        // 降档后也把压力计数封顶，避免长时间高负载后需要数分钟才能开始恢复。
+        if (cost > budget || (gap > 0 && gap < 200 && gap > expected * 1.8)) this.slow = Math.min(31, this.slow + 1); else this.slow = Math.max(0, this.slow - 0.25);
         if (this.slow > 30 && this.frameMs < 30) { this.frameMs = 1000 / 30; this.slow = 0; }
-        else if (this.frameMs > 30 && this.slow === 0 && gap < 40) { this.fastRun++; if (this.fastRun > 600) { this.frameMs = 1000 / 60; this.fastRun = 0; } }
+        // 30fps 在 100Hz 上必然交替占 3/4 个刷新周期，40ms 的正常间隔也应允许恢复。
+        else if (this.frameMs > 30 && this.slow === 0 && gap > 0 && gap <= expected + this.refreshMs + 0.1) { this.fastRun++; if (this.fastRun > 600) { this.frameMs = 0; this.fastRun = 0; } }
         else this.fastRun = 0;
-        // Advance the deadline instead of restarting the interval on each drawn frame.
-        // Restarting rounds 60fps down to 48fps on 144Hz displays.
+        // 只有主动限帧或慢机降级时才维护 deadline，累加而不按当前帧重新计时。
         const fm = Math.max(this.frameMs, this.capMs);
-        if (!this.nextFrame || now - this.nextFrame > fm * 2) this.nextFrame = now;
-        this.nextFrame += fm;
+        if (fm) {
+          if (!this.nextFrame || now - this.nextFrame > fm * 2) this.nextFrame = now;
+          this.nextFrame += fm;
+        } else this.nextFrame = 0;
       }
       if (reducedMotion() && !this.kT0) return;
       this.raf = requestAnimationFrame(tick);
@@ -347,6 +374,9 @@ export class BackgroundLayer {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.nextFrame = 0;
+    this.last = this.rafTime = 0;
+    this.refreshMs = 1000 / 60;
+    this.fastRun = 0;
   }
 }
 

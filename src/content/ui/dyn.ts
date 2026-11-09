@@ -1,7 +1,8 @@
-import { dynLike, dynReplies, dynReply, dynRepost, type Dyn, type Reply } from '../api/dyn';
-import { fmtAgo, fmtCount, h, icon, ICONS } from './dom';
+import { dynCommentTarget, dynLike, dynReplies, dynReply, dynRepost, dynReserve, dynSubReplies, type Dyn, type DynText, type Reply } from '../api/dyn';
+import { fmtAgo, fmtCount, h, icon, ICONS, safeUrl } from './dom';
 import { laterButton } from './later-btn';
 import { openLightbox } from './lightbox';
+import { appUrl, openBili } from '../navigation';
 
 const img = (src: string, w: number, hgt?: number) => h('img', { src: src ? `${src}@${w}w${hgt ? `_${hgt}h_1c` : ''}.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
 const ext = { target: '_blank', rel: 'noopener' };
@@ -43,6 +44,17 @@ function replyUser(r: Reply): HTMLElement {
 /** 动态卡 → 原始数据；屏蔽词变化时重新判断用 */
 export const dynData = new WeakMap<Element, Dyn>();
 
+function richText(text: string, parts?: DynText[]): (Node | string)[] {
+  return parts?.length ? parts.map((part) => {
+    if (!part.emoji) return part.text;
+    const emoji = h('img', { class: 'dy-emoji dy-rem', src: part.emoji, alt: part.text, title: part.text,
+      loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer',
+      onerror: () => emoji.replaceWith(document.createTextNode(part.text)),
+    });
+    return emoji;
+  }) : [text];
+}
+
 /** 动态卡：杂志式单栏。日期眉标 + 正文 + 媒体（视频横卡 / 图片网格 / 专栏）+ 等宽统计 */
 export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement {
   const media: (Node | null)[] = [];
@@ -77,16 +89,18 @@ export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement
         h('span', { class: 'dy-vtitle' }, d.live.title || '开播了'),
         h('span', { class: 'dy-vmeta' }, d.live.meta || 'LIVE'))));
   }
-  if (d.link) {
-    media.push(h('a', { class: 'dy-article', href: d.link.url, ...ext },
-      d.link.cover ? img(d.link.cover, 320, 200) : null,
-      h('span', {}, h('b', {}, d.link.title), h('span', {}, [d.link.kind, d.link.desc].filter(Boolean).join(' · ')))));
+  for (const link of [d.link, d.attachment]) {
+    if (!link) continue;
+    media.push(h('a', { class: 'dy-article', href: link.url, ...ext },
+      link.cover ? img(link.cover, 320, 200) : null,
+      h('span', {}, h('b', {}, link.title), h('span', {}, [link.kind, link.desc].filter(Boolean).join(' · ')))));
   }
+  if (d.reserve) media.push(reserveCard(d));
   if (d.orig) media.push(h('div', { class: 'dy-orig' }, h('div', { class: 'dy-orig-by' }, `@${d.orig.author}`), dynCard(d.orig, true)));
 
   // 长文折叠（GitHub #8）：按字数 / 行数判断，不读布局
   const long = !!d.text && (d.text.length > 240 || d.text.split('\n').length > 8);
-  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, ...replyText(d.text, d.emotes)) : null;
+  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, ...(d.richText ? richText(d.text, d.richText) : replyText(d.text, d.emotes))) : null;
   const more = long ? h('button', { type: 'button', class: 'dy-more', 'aria-expanded': 'false', onclick: (e: Event) => {
     e.stopPropagation();
     const on = text!.classList.toggle('fold');
@@ -117,20 +131,74 @@ export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement
   return el;
 }
 
+function reserveCard(d: Dyn): HTMLElement {
+  const reserve = d.reserve!;
+  const card = h('section', { class: 'dy-reserve', 'aria-label': '预约信息' });
+  if (reserve.state === 1 || reserve.state === -1) {
+    card.append(h('span', {}, reserve.state === 1 ? '原预约信息已删除' : '请在最新版哔哩哔哩客户端查看预约'));
+    return card;
+  }
+  const description = h('span', { class: 'dy-reserve-desc' });
+  const detail = h('a', { class: 'dy-reserve-detail', href: reserve.jump_url || d.url, ...ext },
+    h('b', {}, reserve.title || '直播预约'), description);
+  if (reserve.premiere?.cover) card.append(h('a', { class: 'dy-reserve-cover', href: reserve.jump_url || d.url, ...ext }, img(reserve.premiere.cover, 240, 150)));
+  card.append(detail);
+  const state = reserve.button;
+  const status = h('span', { class: 'dy-reserve-status', role: 'status' });
+  const updateDescription = () => { description.textContent = [reserve.badge_text, reserve.desc1?.text,
+    reserve.desc2?.visible ? reserve.desc2.text : '', reserve.premiere?.online].filter(Boolean).join(' · '); };
+  updateDescription();
+  if (state?.type === 1) {
+    card.append(h('a', { class: 'dy-reserve-action', href: reserve.jump_url || d.url, ...ext }, state.jump_style?.text || '查看详情'));
+  } else if (state?.type === 2 && reserve.rid && (state.status === 1 || state.status === 2)) {
+    const button = h('button', { class: 'dy-reserve-action', type: 'button' }) as HTMLButtonElement;
+    const style = () => state.status === 2 ? state.check : state.uncheck;
+    const render = () => {
+      button.textContent = style()?.text || (state.status === 2 ? '已预约' : '预约');
+      button.disabled = style()?.disable === 1;
+      button.title = style()?.toast || '';
+      button.setAttribute('aria-pressed', String(state.status === 2));
+      updateDescription();
+    };
+    let busy = false;
+    button.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (busy || button.disabled) return;
+      const interactive = style()?.interactive;
+      if (interactive && !confirm([interactive.popups, interactive.desc].filter(Boolean).join('\n') || '确认更改预约？')) return;
+      busy = true; button.disabled = true; button.setAttribute('aria-busy', 'true'); status.textContent = '';
+      try { status.textContent = await dynReserve(d.id, reserve); }
+      catch (error) { status.textContent = (error as Error).message || '预约失败，请重试'; }
+      finally { busy = false; button.removeAttribute('aria-busy'); render(); }
+    });
+    render(); card.append(button);
+  }
+  if (reserve.desc3?.text) {
+    card.append(h('a', { class: 'dy-reserve-extra', href: reserve.desc3.jump_url || d.url, ...ext }, reserve.desc3.text));
+  }
+  card.append(status);
+  return card;
+}
+
 /**
  * 整张卡片可点进详情（GitHub #8：「查看详情」按钮太小）。卡片里的链接、按钮照常；
- * 选中文字时不跳转；转发里的原动态点进原动态。Ctrl / 中键也是新标签。
+ * 选中文字时不跳转；转发里的原动态点进原动态。应用窗口内中键沿用站内导航。
  */
 function clickable(el: HTMLElement, url: string): HTMLElement {
-  if (!url) return el;
+  if (!url || !safeUrl(url)) return el;
   el.dataset.href = url;
   const go = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('a, button, input, textarea, video, .dy-box')) return;
     if (String(getSelection() ?? '').trim()) return;
     e.stopPropagation();
-    window.open(url, '_blank', 'noopener');
+    openBili(url, '_blank', 'noopener', e);
   };
   el.addEventListener('click', go);
+  // Windows 自动滚屏会吞掉非链接卡片的 auxclick，应用窗口内先取消它。
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 1 || (e.target as HTMLElement).closest('a, button, input, textarea, video, .dy-box')) return;
+    if (appUrl(url, e)) e.preventDefault();
+  });
   el.addEventListener('auxclick', (e) => { if (e.button === 1) go(e); });
   return el;
 }
@@ -142,6 +210,61 @@ function kindLabel(d: Dyn): string {
   if (d.article) return 'ARTICLE';
   if (d.pics.length) return 'PHOTO';
   return 'NOTE';
+}
+
+function replyRow(r: Reply): HTMLElement {
+  return h('div', { class: 'dy-r' },
+    h('a', { class: `dy-r-face${r.pendant ? ' has-pendant' : ''}`, href: `https://space.bilibili.com/${r.mid}`, ...ext },
+      h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+      r.pendant ? h('img', { class: 'dy-r-pendant', src: r.pendant, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null),
+    h('div', { class: 'dy-r-b' },
+      replyUser(r),
+      h('p', {}, ...(r.richText ? richText(r.text, r.richText) : replyText(r.text, r.emotes))),
+      h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.location, r.like ? `赞 ${fmtCount(r.like)}` : ''].filter(Boolean).join(' · '))));
+}
+
+/** 21st 嵌套回复的缩进与收起交互；B 站楼中楼按根评论分页，首次展开才请求。 */
+function replyThread(r: Reply, type: number, oid: string, active: () => boolean): HTMLElement {
+  const row = replyRow(r);
+  if (!r.rcount) return row;
+  const toggle = h('button', { type: 'button', class: 'dy-replies-toggle', 'aria-expanded': 'false' }, `展开 ${r.rcount} 条回复`);
+  const status = h('div', { class: 'dy-rempty', role: 'status' });
+  const more = h('button', { type: 'button', class: 'dy-replies-more' }, '加载更多回复') as HTMLButtonElement;
+  const list = h('div', { class: 'dy-sublist', hidden: '' }, status, more);
+  const seen = new Set<string>();
+  let page = 0, busy = false;
+  const load = async () => {
+    if (busy || !active()) return;
+    busy = true; more.disabled = true; status.textContent = '加载中…';
+    try {
+      const result = await dynSubReplies(type, oid, r.rpid, page + 1);
+      if (!active()) return;
+      page++;
+      for (const reply of result.list) {
+        if (seen.has(reply.rpid)) continue;
+        seen.add(reply.rpid); list.insertBefore(replyRow(reply), status);
+      }
+      status.textContent = seen.size ? '' : '暂无回复';
+      more.textContent = '加载更多回复';
+      if (!result.more) {
+        if (more.matches(':focus')) toggle.focus();
+        more.remove();
+      }
+    } catch (err) {
+      if (!active()) return;
+      status.textContent = `回复加载失败：${(err as Error).message}`;
+      more.textContent = '重试加载回复';
+    } finally { busy = false; more.disabled = false; }
+  };
+  more.addEventListener('click', () => void load());
+  toggle.addEventListener('click', () => {
+    const open = list.hidden;
+    list.hidden = !open; toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? '收起回复' : `展开 ${r.rcount} 条回复`;
+    if (open && !page) void load();
+  });
+  row.querySelector('.dy-r-b')!.append(toggle, list);
+  return row;
 }
 
 /**
@@ -174,22 +297,24 @@ function actions(d: Dyn): HTMLElement {
     wrap.append(fwdBox); fwd.setAttribute('aria-expanded', 'true'); ta.focus();
   });
   // 评论
-  const canCmt = !!(d.cmtType && d.cmtOid);
+  const canCmt = !!(d.cmtType && d.cmtOid) || (!!d.id && !d.live && !d.link);
   const cmt = canCmt
     ? h('button', { type: 'button', class: 'dy-act', 'aria-expanded': 'false' }, `评论 ${fmtCount(d.stat.comment)}`)
     : d.url ? h('a', { class: 'dy-cmt', href: `${d.url}#comment`, ...ext, title: '查看评论' }, `评论 ${fmtCount(d.stat.comment)}`) : h('span', {}, `评论 ${fmtCount(d.stat.comment)}`);
   let cmtBox: HTMLElement | null = null;
-  function closeCmt(): void { cmtBox?.remove(); cmtBox = null; if (canCmt) cmt.setAttribute('aria-expanded', 'false'); }
+  let commentGen = 0;
+  function closeCmt(): void { commentGen++; cmtBox?.remove(); cmtBox = null; if (canCmt) cmt.setAttribute('aria-expanded', 'false'); }
   if (canCmt) cmt.addEventListener('click', (e) => {
     e.stopPropagation();
     if (cmtBox) { closeCmt(); return; }
+    const gen = ++commentGen;
     fwdBox?.remove(); fwdBox = null; fwd.setAttribute('aria-expanded', 'false');
     const list = h('div', { class: 'dy-rlist' }, h('div', { class: 'dy-rempty' }, '加载中…'));
     const ta = h('textarea', { class: 'dy-in', rows: '1', maxlength: '1000', placeholder: '发一条友善的评论' }) as HTMLTextAreaElement;
-    const send = h('button', { type: 'button', class: 'dy-send' }, '发布');
+    const send = h('button', { type: 'button', class: 'dy-send', disabled: '' }, '发布') as HTMLButtonElement;
     const post = async () => {
       const msg = ta.value.trim();
-      if (!msg) return;
+      if (!msg || send.disabled || !d.cmtType || !d.cmtOid) return;
       send.setAttribute('disabled', '');
       try {
         await dynReply(d.cmtType!, d.cmtOid!, msg);
@@ -204,16 +329,16 @@ function actions(d: Dyn): HTMLElement {
     cmtBox = h('div', { class: 'dy-box dy-cbox' }, h('div', { class: 'dy-box-row' }, ta, send), list,
       d.url ? h('a', { class: 'dy-rall', href: `${d.url}#comment`, ...ext }, '全部评论 ↗') : null);
     wrap.append(cmtBox); cmt.setAttribute('aria-expanded', 'true');
-    dynReplies(d.cmtType!, d.cmtOid!).then(({ list: rs }) => {
-      list.replaceChildren(...(rs.length ? rs.map((r) => h('div', { class: 'dy-r' },
-        h('a', { class: `dy-r-face${r.pendant ? ' has-pendant' : ''}`, href: `https://space.bilibili.com/${r.mid}`, ...ext },
-          h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
-          r.pendant ? h('img', { class: 'dy-r-pendant', src: r.pendant, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null),
-        h('div', { class: 'dy-r-b' },
-          replyUser(r),
-          h('p', {}, ...replyText(r.text, r.emotes)),
-          h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.like ? `赞 ${fmtCount(r.like)}` : '', r.rcount ? `${r.rcount} 条回复` : ''].filter(Boolean).join(' · '))))) : [h('div', { class: 'dy-rempty' }, '还没有评论')]));
-    }).catch((err) => list.replaceChildren(h('div', { class: 'dy-rempty' }, `评论加载失败：${(err as Error).message}`)));
+    void dynCommentTarget(d).then(async (target) => {
+      if (gen !== commentGen) return;
+      if (!target) throw new Error('暂不支持此动态的评论，请点「全部评论」');
+      send.disabled = false;
+      return dynReplies(target.type, target.oid);
+    }).then((result) => {
+      if (gen !== commentGen || !result) return;
+      const rs = result.list;
+      list.replaceChildren(...(rs.length ? rs.map((r) => replyThread(r, d.cmtType!, d.cmtOid!, () => gen === commentGen && !!cmtBox?.isConnected)) : [h('div', { class: 'dy-rempty' }, '还没有评论')]));
+    }).catch((err) => { if (gen === commentGen) list.replaceChildren(h('div', { class: 'dy-rempty' }, `评论加载失败：${(err as Error).message}`)); });
   });
   // 赞
   const like = h('button', { type: 'button', class: 'dy-act dy-like', 'aria-pressed': String(!!d.liked) }, `赞 ${fmtCount(d.stat.like)}`);

@@ -8,7 +8,7 @@
 import { introActive, onIntroEnd } from './intro/gate';
 import { BILI_TIGHT } from './intro/logo';
 import { setMarkup } from './dom';
-import { onMotionChange, reducedMotion } from '../motion';
+import { onUiMotionChange as onMotionChange, uiReducedMotion as reducedMotion } from '../motion';
 
 const VERT = `attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
 
