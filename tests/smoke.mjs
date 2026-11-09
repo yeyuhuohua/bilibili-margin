@@ -1299,11 +1299,9 @@ for (const theme of THEMES) {
         const menu = page.locator(`#${host} .fm`);
         if (await menu.count() !== 1) { miss.push(`${name}: floating menu missing`); continue; }
         if (name === 'home') {
-          const overlap = await page.evaluate(() => {
-            const r = document.getElementById('margin-root').shadowRoot, menu = r.querySelector('.fm-box').getBoundingClientRect(), exit = r.querySelector('.home-exit').getBoundingClientRect();
-            return menu.left < exit.right && menu.right > exit.left && menu.top < exit.bottom && menu.bottom > exit.top;
-          });
-          if (overlap) miss.push('home: floating menu overlaps the original-version entry');
+          if (await page.locator('#margin-root .home-exit').count()) miss.push('home: floating original-version entry still exists');
+          const closed = await menu.locator('.fm-box').boundingBox();
+          if (!closed || closed.x !== 0 || closed.width > 20) miss.push(`home: collapsed menu still covers content ${JSON.stringify(closed)}`);
         }
         await menu.locator('.fm-bar').click();
         const labels = await menu.locator('.fm-item').evaluateAll((items) => items.map((el) => el.getAttribute('aria-label')));

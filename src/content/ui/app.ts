@@ -269,11 +269,6 @@ export class MarginApp {
     this.sentinel = h('div', { class: 'sentinel' });
     attachPreview(this.grid, () => this.settings.hoverPreview);
 
-    const exit = h('button', {
-      class: 'ghost small home-exit', type: 'button', title: '本次回到 B 站原版首页', 'aria-label': '本次回到 B 站原版首页',
-      onclick: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); },
-    }, icon(ICONS.exit), h('span', {}, '原版'));
-
     const footer = h('footer', { class: 'foot' }, h('span', {}, '映间 MARGIN · 非 B 站官方'));
     const main = h('main', { class: 'main' });
     this.mainEl = main;
@@ -292,7 +287,6 @@ export class MarginApp {
       this.bg.el,
       header,
       main,
-      exit,
       this.panel.sheet.el,
       this.fav.el,
       palette.el,

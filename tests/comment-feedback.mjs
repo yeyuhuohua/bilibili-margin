@@ -192,16 +192,10 @@ try {
   });
   await check('home-exit-stable', async () => {
     await seed({}); await page.goto('https://www.bilibili.com/');
-    const exit = page.getByRole('button', { name: '本次回到 B 站原版首页', exact: true });
+    const exit = page.locator('#margin-root .et-btn[aria-label="原版"]');
     await exit.waitFor();
-    const rect = await exit.boundingBox();
-    assert(rect.y >= 0 && rect.y + rect.height <= 900, JSON.stringify(rect));
-    await page.locator('#margin-root .app').evaluate(app => { app.scrollTop = 800; });
-    await page.waitForTimeout(300);
-    const after = await exit.boundingBox();
-    assert(Math.abs(after.y - rect.y) < 1, JSON.stringify({ rect, after }));
     await page.locator('#margin-root .home-grid').evaluate(grid => grid.append(...[...grid.children].map(card => card.cloneNode(true))));
-    assert(Math.abs((await exit.boundingBox()).y - rect.y) < 1, 'appending recommendations moved exit');
+    assert.equal(await page.locator('#margin-root .home-exit').count(), 0);
     await exit.click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(200);

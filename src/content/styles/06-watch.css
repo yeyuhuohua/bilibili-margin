@@ -67,12 +67,10 @@
 }
 
 /* ── 漂浮快捷菜单（21st Floating Menu 移植） ── */
-/* 放在左下角、收起时只是一颗 46px 的圆钮（以前居中压在视频和评论上，用户反馈挡视野）；
-   左下角是播放页两侧留白，B 站自带的回顶 / 客服在右下角，互不重叠。展开时从左下角向上长成面板 */
-.fm { --fm-ease: cubic-bezier(.22, 1, .36, 1); position: fixed; left: 16px; bottom: 16px; z-index: 30; animation: fm-in .4s var(--fm-ease) both; }
-.app.home .fm { bottom: 72px; }
+/* 收起时是贴左边缘的窄把手，展开时从左下角向上长成面板；不遮挡右侧工具栏和小窗。 */
+.fm { --fm-ease: cubic-bezier(.22, 1, .36, 1); position: fixed; left: 0; bottom: 16px; z-index: 30; animation: fm-in .4s var(--fm-ease) both; }
 /* 收起时半透明，鼠标靠近或键盘聚焦再完全显示 */
-.fm[data-open="false"] .fm-box { opacity: .55; }
+.fm[data-open="false"] .fm-box { width: 18px; border-radius: 0 16px 16px 0; opacity: .55; }
 .fm[data-open="false"] .fm-box:hover, .fm[data-open="false"] .fm-box:focus-within { opacity: 1; }
 @keyframes fm-in { from { opacity: 0; transform: translateY(20px); } }
 .fm-box {
@@ -105,7 +103,10 @@
 .fm-label { white-space: nowrap; font: 500 14px/1 "Margin Sans SC", var(--sans); letter-spacing: .08em; color: var(--ink); transition: color .3s var(--fm-ease); }
 .fm[data-open="true"] .fm-label { color: var(--ink); }
 .fm-burger { position: relative; width: 24px; height: 24px; }
+.fm[data-open="false"] .fm-burger { width: 12px; }
 .fm-burger i { position: absolute; left: 3px; top: 11px; width: 18px; height: 2px; border-radius: 2px; background: var(--ink); transition: transform .4s var(--fm-ease), background .4s var(--fm-ease); }
+.fm[data-open="false"] .fm-burger i { left: 1px; width: 10px; }
+.fm[data-open="true"] .fm-burger i { left: 3px; width: 18px; }
 .fm-burger i:first-child { transform: translateY(-3px); }
 .fm-burger i:last-child { transform: translateY(3px); }
 .fm[data-open="true"] .fm-burger i { background: var(--ink); }
