@@ -14,6 +14,8 @@ import { FilterRuntime } from '../filter-runtime';
 import { uiReducedMotion as reducedMotion } from '../motion';
 import { createBackTop } from './back-top';
 import { toast } from './controls';
+import { createCommandPalette } from './command-palette';
+import { openBili } from '../navigation';
 import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
 import pagesCss from '../takeover.css?inline';
@@ -49,8 +51,19 @@ export class PageShell {
     panels.fav = fav;
     panels.later = later;
     panels.hist = hist;
+    const palette = createCommandPalette([
+      { id: 'shell-top', title: '回到顶部', cat: '操作', icon: ICONS.top, run: () => this.app.scrollTo({ top: 0, behavior: 'smooth' }) },
+      { id: 'shell-fav', title: '打开收藏夹', cat: '操作', icon: ICONS.fav, keys: ['收藏'], run: () => fav.open() },
+      { id: 'shell-theme', title: '切换亮色 / 暗色', cat: '操作', icon: ICONS.moon, keys: ['主题', '夜间'], run: () => this.toggleTheme() },
+      { id: 'shell-settings', title: '打开设置', cat: '操作', icon: ICONS.gear, run: () => this.panel.sheet.open() },
+      { id: 'shell-home', title: '回首页', cat: '跳转', icon: ICONS.logo, run: () => openBili('https://www.bilibili.com/') },
+      { id: 'shell-later', title: '稍后再看', cat: '跳转', icon: ICONS.later, keys: ['watchlater'], run: () => later.open() },
+      { id: 'shell-history', title: '观看历史', cat: '跳转', icon: ICONS.history, run: () => openBili('https://www.bilibili.com/history') },
+      { id: 'shell-off', title: '本次回到 B 站原版', cat: '操作', icon: ICONS.exit, keys: ['原版'], run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
+    ]);
     this.head = createHeader({
       onTheme: () => this.toggleTheme(),
+      onSearch: (q, origin) => palette.open(q, origin),
       onSettings: () => this.panel.sheet.open(),
       msgRemind: () => this.settings.msgRemind,
       filter: this.filter,
@@ -68,7 +81,7 @@ export class PageShell {
     this.app = h('div', { class: 'app','data-glass':settings.glass },
       this.bg.el, this.head.el, this.main,
       h('footer', { class: 'foot tk-foot' }, exit, h('span', {}, '映间 MARGIN · 非 B 站官方')),
-      this.panel.sheet.el, fav.el, later.el, hist.el,
+      this.panel.sheet.el, fav.el, later.el, hist.el, palette.el,
     );
     this.app.append(createBackTop(this.app, this.main));
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。

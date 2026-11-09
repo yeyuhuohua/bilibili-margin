@@ -223,7 +223,17 @@ const composeHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   .bili-dyn-publishing { background: #fff; }
   .bili-dyn-publishing__title { height: 24px; overflow: hidden; padding-right: 48px; }
   .bili-rich-textarea__inner { height: 52px; min-height: 24px; }
-  .bili-topic-search__popover { background: #1a1a1c; border: 1px solid #2c2c30; border-radius: 14px; }
+  .bili-topic-search__popover { position: absolute; display: flex; width: 96px; height: 24px; z-index: 11; background: #1a1a1c; border: 1px solid #2c2c30; border-radius: 14px; }
+  .bili-topic-search__input { height: 22px; box-sizing: border-box; }
+  .bili-topic-search__input__inner { display: none; }
+  .bili-topic-search__popover.active .bili-topic-search__input { height: 32px; margin: 16px 16px 12px; }
+  .bili-topic-search__popover.active .bili-topic-search__input__text { display: none; }
+  .bili-topic-search__popover.active .bili-topic-search__input__inner { display: block; }
+  .bili-topic-search__result { height: 0; overflow: hidden auto; }
+  .bili-topic-item__cloud { padding: 10px 16px; }
+  .bili-topic-item__cloud__info { padding-left: 20px; }
+  .bili-topic-item__cloud__name { height: 20px; overflow: hidden; }
+  .bili-topic-item__cloud__desc { height: 17px; overflow: hidden; }
   .bili-input, .bili-picker-input { background: #1a1a1c; }
   .bili-input__inner { background: #111112; }
   .bili-input:focus-within { box-shadow: 0 0 0 2px #00aeec; }
@@ -235,14 +245,20 @@ const composeHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   .bili-popup-modal__footer { position: absolute; bottom: 0; }
   .bili-cascader-options { background: #242628; }
 </style></head><body><div id="bili-header-container"></div><div id="app"><div class="bgc"></div><div class="bg"></div><div class="bili-dyn-home--member"><aside class="left"></aside><main>
-<section><div class="bili-dyn-publishing"><div class="bili-dyn-publishing__topic"><div class="bili-topic-search__popover"><div class="bili-topic-search__input"><span class="bili-topic-search__input__text">选择话题</span></div></div></div>
+<section><div class="bili-dyn-publishing"><div class="bili-dyn-publishing__topic"><div class="bili-topic-search__popover"><div class="bili-topic-search__input"><span class="bili-topic-search__input__text">选择话题</span><input class="bili-topic-search__input__inner" placeholder="搜索话题"></div>
+<div class="bili-topic-search__result"><div class="bili-topic-search__list">${Array.from({ length: 8 }, (_, i) => `<div class="bili-topic-item cloud"><div class="bili-topic-item__cloud"><div class="bili-topic-item__cloud__info"><div class="bili-topic-item__cloud__title"><div class="bili-topic-item__cloud__name">测试话题 ${i + 1}</div></div><div class="bili-topic-item__cloud__desc">22.7亿浏览·223.4万讨论</div></div></div></div>`).join('')}</div></div></div></div>
 <div class="bili-dyn-publishing__title"><input class="bili-dyn-publishing__title__input" placeholder="好的标题更容易获得支持，选填20字"></div>
 <div class="bili-dyn-publishing__input"><div class="bili-rich-textarea"><div class="bili-rich-textarea__inner empty" contenteditable="true" placeholder="有什么想和大家分享的？">​</div></div></div>
 <div class="bili-dyn-publishing__control"><div class="bili-dyn-publishing__tools">${['emoji', 'pic', 'at', 'poll', 'live-reserve'].map((name) => `<div class="bili-dyn-publishing__tools__item ${name}"><svg><path d="M0 0h22v22H0z"/></svg></div>`).join('')}</div>
 <div class="bili-dyn-publishing__headquarters"><div class="bili-dyn-publishing__hint">0</div><div class="bili-dyn-publishing__settings"><div class="bili-dyn-publishing__settings__btn"><svg><path d="M0 0h22v22H0z"/></svg></div><div class="bili-cascader-options" hidden>${['可见范围', '定时发布', '允许评论', '创作声明'].map((name) => `<div class="bili-cascader-options__item"><div class="bili-cascader-options__item-label">${name}</div></div>`).join('')}</div></div><div class="bili-dyn-publishing__action launcher disabled">发布</div></div></div></div></section>
 <section>关注列表</section><section>动态列表</section></main><aside class="right"></aside><div class="bili-dyn-sidebar"></div></div></div>
 <div class="bili-popup" hidden><div class="bili-popup__wrap"><div class="bili-popup__content"><div class="bili-popup-modal"><div class="bili-popup__header__title">发起投票</div><div class="bili-popup-modal__content"><div class="bili-input"><input class="bili-input__inner" placeholder="请填写预约标题"></div><div class="bili-picker-input"><input class="bili-input__inner" value="20时"></div></div><div class="bili-popup-modal__footer"><button class="bili-popup-modal__button confirm disabled">完成</button></div></div></div></div>
-<script>document.querySelector('.bili-dyn-publishing__settings__btn').addEventListener('click',()=>{const options=document.querySelector('.bili-cascader-options');options.hidden=!options.hidden;});</script></body></html>`;
+<script>
+  document.querySelector('.bili-dyn-publishing__settings__btn').addEventListener('click',()=>{const options=document.querySelector('.bili-cascader-options');options.hidden=!options.hidden;});
+  const topics=document.querySelector('.bili-topic-search__popover');
+  document.querySelector('.bili-topic-search__input').addEventListener('click',()=>topics.classList.toggle('active'));
+  document.querySelector('.bili-dyn-publishing__title__input').addEventListener('click',()=>topics.classList.remove('active'));
+</script></body></html>`;
 
 const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>直播 - bilibili</title><style>
   .rank-list-ctnr .top3-name, .rank-list-ctnr .name, .rank-list-ctnr .rank, .rank-list-ctnr .score { color: #2f3238; }

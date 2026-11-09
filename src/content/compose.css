@@ -7,8 +7,8 @@ html.margin-compose #app > .bg { display: none !important; }
 html.margin-compose .bili-dyn-home--member { display: block !important; min-height: calc(100vh - 96px); }
 html.margin-compose .bili-dyn-home--member > main { display: block !important; width: min(780px, calc(100vw - 32px)) !important; margin: 96px auto 48px !important; }
 html.margin-compose .bili-dyn-publishing { position: relative; padding: 24px; border: 1px solid var(--m-line); border-radius: 20px; background: var(--m-surface) !important; color: var(--m-ink) !important; box-shadow: var(--sh-md); }
-html.margin-compose .bili-dyn-publishing__topic { margin-bottom: 18px; }
-html.margin-compose .bili-topic-search__input { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--m-line); border-radius: 999px; background: transparent; color: var(--m-muted); transition: background-color .15s; }
+html.margin-compose .bili-dyn-publishing__topic { min-height: 32px; margin-bottom: 18px; }
+html.margin-compose .bili-topic-search__input { display: inline-flex; align-items: center; flex: none; gap: 6px; box-sizing: border-box; height: 32px; min-height: 32px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--m-muted); white-space: nowrap; transition: background-color .15s; }
 html.margin-compose .bili-topic-search__input:hover { background: var(--m-chip); }
 html.margin-compose .bili-topic-search__input__text { color: var(--m-muted) !important; }
 html.margin-compose .bili-dyn-publishing__title { height: auto !important; min-height: 56px; padding: 0 !important; overflow: hidden; border: 1px solid var(--m-line); border-radius: 16px 16px 0 0; background: var(--m-canvas); }
@@ -44,6 +44,16 @@ html.margin-compose body > .bili-popup .bili-popup-modal { height: fit-content !
 html.margin-compose body > .bili-popup .bili-popup-modal__content { height: fit-content !important; max-height: calc(100vh - 256px) !important; min-height: 0 !important; overflow-y: auto !important; padding-bottom: 24px !important; }
 html.margin-compose body > .bili-popup .bili-popup-modal__footer { position: static !important; flex: none !important; }
 html.margin-compose .bili-topic-search__popover { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+html.margin-compose .bili-topic-search__popover:not(.active) { height: 32px; }
+html.margin-compose .bili-topic-search__popover.active {
+  width: min(360px, calc(100vw - 48px)) !important; height: auto !important; max-height: calc(100vh - 220px);
+  flex-direction: column; align-items: stretch; overflow: hidden !important; z-index: 1000 !important;
+  background: var(--m-surface) !important; border: 1px solid var(--m-line) !important; border-radius: 14px !important; box-shadow: var(--sh-lg) !important;
+}
+html.margin-compose .bili-topic-search__popover.active .bili-topic-search__input { width: auto !important; flex: none; margin: 16px 16px 12px; border: 1px solid var(--m-line); }
+html.margin-compose .bili-topic-search__popover.active .bili-topic-search__result { width: 100% !important; height: auto !important; max-height: min(420px, calc(100vh - 300px)); overflow-y: auto !important; flex: 1 1 auto; }
+html.margin-compose .bili-topic-search__popover.active :is(.bili-topic-search__list, .bili-topic-item.cloud, .bili-topic-item__cloud) { width: 100% !important; box-sizing: border-box; }
+html.margin-compose .bili-topic-search__popover.active .bili-topic-item__cloud:hover { background: var(--m-chip); }
 html.margin-compose .bili-cascader-options { padding: 6px; }
 html.margin-compose .bili-cascader-options__item { border-radius: 8px; color: var(--m-ink) !important; }
 html.margin-compose .bili-cascader-options__item:hover { background: var(--m-chip) !important; }

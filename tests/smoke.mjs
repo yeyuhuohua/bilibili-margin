@@ -1159,6 +1159,22 @@ for (const theme of THEMES) {
       return miss;
     });
 
+    await feature('feed-search-palette', async () => {
+      await reset(); await seed({ theme: 'dark', searchStyle: 'new' });
+      await page.goto('https://t.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      await page.locator('#margin-root .top .search').click();
+      const palette = page.locator('#margin-root .cp[data-open="true"]');
+      await palette.waitFor();
+      const miss = [];
+      if (!(await palette.locator('.cp-input input').count())) miss.push('search input missing');
+      if (!(await palette.locator('.cp-side .cp-item').count())) miss.push('commands missing');
+      if (!(await palette.locator('.cp-list .cp-item').count())) miss.push('trending searches missing');
+      await palette.locator('.cp-input input').focus();
+      await page.keyboard.press('Escape');
+      await page.locator('#margin-root .cp').waitFor({ state: 'hidden' });
+      return miss;
+    });
+
     await feature('feed-full-composer', async () => {
       await reset();
       await seed({ theme: 'dark' });
@@ -1184,6 +1200,10 @@ for (const theme of THEMES) {
         }
         if (getComputedStyle(document.body).display === 'none') miss.push('original editor is still muted');
         if (getComputedStyle(document.querySelector('.bili-topic-search__popover')).borderWidth !== '0px') miss.push('topic button has duplicate borders');
+        const topic = document.querySelector('.bili-topic-search__input').getBoundingClientRect();
+        const topicText = document.querySelector('.bili-topic-search__input__text').getBoundingClientRect();
+        if (topic.height < 32 || topicText.top < topic.top || topicText.bottom > topic.bottom) miss.push('topic button border clips its label');
+        if (getComputedStyle(document.querySelector('.bili-topic-search__input')).borderWidth !== '0px') miss.push('topic button still has a border');
         for (const el of document.querySelectorAll('.bili-popup .bili-input, .bili-popup .bili-picker-input')) {
           const style = getComputedStyle(el);
           if (style.backgroundColor === 'rgb(17, 17, 18)') miss.push('form control still uses a black background');
@@ -1203,6 +1223,21 @@ for (const theme of THEMES) {
         }
         return miss;
       });
+      await page.evaluate(() => document.querySelector('.bili-topic-search__input').click());
+      await page.waitForFunction(() => document.querySelector('.bili-topic-search__popover').classList.contains('active'));
+      m.push(...await page.evaluate(() => {
+        const miss = [], popover = document.querySelector('.bili-topic-search__popover'), result = document.querySelector('.bili-topic-search__result');
+        const box = popover.getBoundingClientRect();
+        if (box.width < 320 || box.height < 200) miss.push(`topic popup collapsed: ${box.width}x${box.height}`);
+        if (getComputedStyle(popover).backgroundColor !== 'rgb(26, 26, 28)') miss.push('topic popup is transparent');
+        if (!result.clientHeight || getComputedStyle(result).overflowY !== 'auto' || result.scrollHeight <= result.clientHeight) miss.push('topic results are not independently scrollable');
+        const name = document.querySelector('.bili-topic-item__cloud__name'), rect = name.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + 4, rect.top + rect.height / 2);
+        if (!hit?.closest('.bili-topic-item')) miss.push('editor content covers topic results');
+        return miss;
+      }));
+      await page.evaluate(() => document.querySelector('.bili-dyn-publishing__title__input').click());
+      await page.waitForFunction(() => !document.querySelector('.bili-topic-search__popover').classList.contains('active'));
       await page.evaluate(() => document.querySelector('.bili-dyn-publishing__settings__btn').click());
       m.push(...await page.evaluate(() => {
         const miss = [];
