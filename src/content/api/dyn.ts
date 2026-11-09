@@ -16,7 +16,7 @@ export interface DynReserve {
 }
 export interface Dyn {
   id: string; type: string; author: string; face: string; mid: number; ts: number; time: string;
-  text: string; emotes: Record<string, string>; richText?: DynText[]; title?: string;
+  text: string; emotes?: Record<string, string>; richText?: DynText[]; title?: string;
   video?: { bvid: string; title: string; cover: string; dur: string; play: string; desc: string; ad?: boolean };
   pics: string[];
   article?: { title: string; cover: string; desc: string; url: string };
@@ -180,7 +180,7 @@ export async function dynCommentTarget(d: Dyn): Promise<{ type: number; oid: str
 }
 
 export interface Reply {
-  rpid: string; name: string; face: string; mid: number; text: string; emotes: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
+  rpid: string; name: string; face: string; mid: number; text: string; emotes?: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
   location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string };
   medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
 }

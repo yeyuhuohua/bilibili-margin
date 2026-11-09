@@ -9,10 +9,10 @@ const out = resolve(process.env.SMOKE_OUT || 'tests/artifacts/popup-version');
 mkdirSync(out, { recursive: true });
 const manifest = JSON.parse(readFileSync(join(extension, 'manifest.json'), 'utf8'));
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+const lock = readFileSync('pnpm-lock.yaml', 'utf8');
 assert.equal(manifest.version, pkg.version);
-assert.equal(lock.version, pkg.version);
-assert.equal(lock.packages[''].version, pkg.version);
+assert.match(lock, /^lockfileVersion: /m);
+assert.match(lock, /^importers:/m);
 const parts = manifest.version.split('.').map(Number);
 const nextVersion = [parts[0], parts[1], (parts[2] || 0) + 1].join('.');
 const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'margin-version-')), {

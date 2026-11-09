@@ -7,7 +7,7 @@ import { appUrl, openBili } from '../navigation';
 const img = (src: string, w: number, hgt?: number) => h('img', { src: src ? `${src}@${w}w${hgt ? `_${hgt}h_1c` : ''}.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
 const ext = { target: '_blank', rel: 'noopener' };
 
-function replyText(text: string, emotes: Record<string, string>): (Node | string)[] {
+function replyText(text: string, emotes: Record<string, string> = {}): (Node | string)[] {
   const out: (Node | string)[] = [];
   let rest = text;
   while (rest) {
