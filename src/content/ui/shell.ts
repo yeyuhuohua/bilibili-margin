@@ -12,7 +12,6 @@ import { attachPreview } from './preview';
 import type { SunMoon } from './sun-moon';
 import { FilterRuntime } from '../filter-runtime';
 import { uiReducedMotion as reducedMotion } from '../motion';
-import { createBackTop } from './back-top';
 import { toast } from './controls';
 import { createCommandPalette } from './command-palette';
 import { openBili } from '../navigation';
@@ -83,7 +82,6 @@ export class PageShell {
       h('footer', { class: 'foot tk-foot' }, exit, h('span', {}, '映间 MARGIN · 非 B 站官方')),
       this.panel.sheet.el, fav.el, later.el, hist.el, palette.el,
     );
-    this.app.append(createBackTop(this.app, this.main));
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     this.root.append(this.app);

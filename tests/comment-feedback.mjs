@@ -100,11 +100,12 @@ try {
   }
   for (const [name, url, selector] of [
     ['hero', 'https://www.bilibili.com/', '#margin-root .hero-search'],
-    ['editable-header', 'https://message.bilibili.com/#/whisper', '#margin-root .top .search'],
+    ['palette-header', 'https://message.bilibili.com/#/whisper', '#margin-root .top .search'],
   ]) {
     await check(`drop-search-${name}`, async () => {
       await seed({}); await page.goto(url);
-      const form = page.locator(selector), input = form.locator('input');
+      const form = page.locator(selector);
+      const input = name === 'palette-header' ? page.locator('#margin-root .cp[data-open="true"] input') : form.locator('input');
       await form.waitFor();
       const tabs = context.pages().length;
       const drop = async (text, file = false) => form.evaluate((el, { text, file }) => {
@@ -113,6 +114,7 @@ try {
         el.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
       }, { text, file });
       await drop('  评论关键词  ');
+      if (name === 'palette-header') await input.waitFor();
       assert.equal(await input.inputValue(), '评论关键词');
       await drop('   '); await drop('文件拖拽', true);
       assert.equal(await input.inputValue(), '评论关键词');

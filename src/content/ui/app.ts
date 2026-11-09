@@ -28,7 +28,6 @@ import { createContextMenu } from './context-menu';
 import { bindCardMenu } from './card-menu';
 import { createLaterDrawer } from './drawer';
 import { uiReducedMotion as reducedMotion } from '../motion';
-import { createBackTop } from './back-top';
 import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
 
@@ -295,7 +294,6 @@ export class MarginApp {
       later.el,
       cm.el,
     );
-    this.app.append(createBackTop(this.app, main));
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     this.root.append(this.app);

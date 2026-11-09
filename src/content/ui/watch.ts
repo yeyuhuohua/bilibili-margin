@@ -22,7 +22,6 @@ import { BackgroundLayer } from '../bg/background';
 import { startTriple } from './triple';
 import { startWatchCard } from './watch-card';
 import { uiReducedMotion as reducedMotion } from '../motion';
-import { createBackTop } from './back-top';
 import { FilterRuntime } from '../filter-runtime';
 import { openBili } from '../navigation';
 import { ThemeWriter } from './theme-writer';
@@ -117,7 +116,7 @@ export class WatchSkin {
       { label: '宽屏模式', en: 'Wide Mode', run: () => click('.bpx-player-ctrl-wide') },
       { label: '收藏夹', en: 'Favorites', run: () => this.fav.open() },
     ]) : null;
-    this.app = h('div', { class: 'app wt', 'data-bg': 'off','data-glass':settings.glass,'data-kind':kind }, this.head.el, quick?.el ?? null, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el, createBackTop(window));
+    this.app = h('div', { class: 'app wt', 'data-bg': 'off','data-glass':settings.glass,'data-kind':kind }, this.head.el, quick?.el ?? null, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el);
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     root.append(this.app);

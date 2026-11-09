@@ -1223,6 +1223,8 @@ for (const theme of THEMES) {
         }
         return miss;
       });
+      await page.locator('.bili-topic-search__input').hover();
+      if (await page.locator('.bili-topic-search__input').evaluate((el) => getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)')) m.push('topic button shows a hover background');
       await page.evaluate(() => document.querySelector('.bili-topic-search__input').click());
       await page.waitForFunction(() => document.querySelector('.bili-topic-search__popover').classList.contains('active'));
       m.push(...await page.evaluate(() => {
@@ -1234,6 +1236,14 @@ for (const theme of THEMES) {
         const name = document.querySelector('.bili-topic-item__cloud__name'), rect = name.getBoundingClientRect();
         const hit = document.elementFromPoint(rect.left + 4, rect.top + rect.height / 2);
         if (!hit?.closest('.bili-topic-item')) miss.push('editor content covers topic results');
+        return miss;
+      }));
+      await page.locator('.bili-topic-item__cloud').first().click();
+      await page.locator('.bili-topic-selector__bulletin__clear').hover();
+      m.push(...await page.evaluate(() => {
+        const miss = [], clear = document.querySelector('.bili-topic-selector__bulletin__clear'), style = getComputedStyle(clear);
+        if (style.backgroundColor !== 'rgba(0, 0, 0, 0)') miss.push('selected topic clear button shows a hover background');
+        if (style.color !== 'rgb(237, 237, 238)') miss.push(`selected topic clear contrast is too low: ${style.color}`);
         return miss;
       }));
       await page.evaluate(() => document.querySelector('.bili-dyn-publishing__title__input').click());
@@ -1274,81 +1284,15 @@ for (const theme of THEMES) {
       return m;
     });
 
-    await feature('back-top-all-pages', async () => {
+    await feature('no-global-back-top', async () => {
       await reset();
-      const m = [];
-      const shellPages = [
-        ['home', HOME], ['feed', 'https://t.bilibili.com/'], ['history', 'https://www.bilibili.com/account/history'],
-        ['space', 'https://space.bilibili.com/2/video'], ['message', 'https://message.bilibili.com/'],
-      ];
-      for (const [name, url] of shellPages) {
+      const miss = [];
+      for (const [name, url, host] of [['home', HOME, 'margin-root'], ['feed', 'https://t.bilibili.com/', 'margin-root'], ['watch', WATCH, 'margin-watch-top']]) {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.back-top'), null, { timeout: 15_000 });
-        const initialHidden = await page.evaluate(() => {
-          const r = document.getElementById('margin-root')?.shadowRoot;
-          const app = r?.querySelector('.app');
-          const main = r?.querySelector('main');
-          if (app && main) main.style.minHeight = `${app.clientHeight + 1200}px`;
-          return r?.querySelector('.back-top')?.hidden;
-        });
-        if (initialHidden !== true) m.push(`${name}: back-top visible before scrolling`);
-        await sleep(100);
-        await page.evaluate(() => {
-          const app = document.getElementById('margin-root')?.shadowRoot?.querySelector('.app');
-          if (app) { app.scrollTop = 600; app.dispatchEvent(new Event('scroll')); }
-        });
-        await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.back-top')?.hidden === false, null, { timeout: 3000 }).catch(() => {});
-        if (await page.evaluate(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.back-top')?.hidden !== false)) m.push(`${name}: back-top hidden after scrolling`);
-        await page.evaluate(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.back-top')?.click());
-        await page.waitForFunction(() => {
-          const r = document.getElementById('margin-root')?.shadowRoot;
-          return r?.querySelector('.app')?.scrollTop === 0 && r?.querySelector('.back-top')?.hidden;
-        }, null, { timeout: 5000 }).catch(() => {});
-        const after = await page.evaluate(() => {
-          const r = document.getElementById('margin-root')?.shadowRoot;
-          return { top: r?.querySelector('.app')?.scrollTop, hidden: r?.querySelector('.back-top')?.hidden };
-        });
-        if (after.top !== 0 || !after.hidden) m.push(`${name}: back-top did not return to the top and hide`);
-        if (name === 'feed') {
-          await page.evaluate(() => {
-            const r = document.getElementById('margin-root')?.shadowRoot;
-            const main = r?.querySelector('main');
-            if (main) main.style.display = 'none';
-          });
-          await sleep(100);
-          const short = await page.evaluate(() => {
-            const r = document.getElementById('margin-root')?.shadowRoot;
-            const app = r?.querySelector('.app');
-            return { insufficient: app ? app.scrollHeight <= app.clientHeight + 1 : false, hidden: r?.querySelector('.back-top')?.hidden };
-          });
-          if (!short.insufficient || !short.hidden) m.push('feed: back-top remains visible when content is too short');
-        }
+        await page.waitForFunction((id) => document.getElementById(id)?.shadowRoot?.querySelector('header'), host, { timeout: 15_000 });
+        if (await page.locator(`#${host} .back-top`).count()) miss.push(`${name}: global back-top button still exists`);
       }
-
-      const documentPages = [
-        ['watch', WATCH], ['search', SEARCH], ['opus', 'https://www.bilibili.com/opus/1005142803949289489'],
-        ['read', 'https://www.bilibili.com/read/cv100'], ['bangumi', 'https://www.bilibili.com/bangumi/play/ep100'],
-        ['dynamic-detail', 'https://t.bilibili.com/1005142803949289489'], ['native-space', 'https://space.bilibili.com/1/fans/follow'],
-        ['popular', POPULAR], ['live', 'https://live.bilibili.com/123'],
-      ];
-      for (const [name, url] of documentPages) {
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top'), null, { timeout: 15_000 });
-        const initialHidden = await page.evaluate(() => {
-          document.body.style.minHeight = `${innerHeight + 1200}px`;
-          return document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.hidden;
-        });
-        if (initialHidden !== true) m.push(`${name}: back-top visible before scrolling`);
-        await sleep(100);
-        await page.evaluate(() => { window.scrollTo({ top: 600, behavior: 'instant' }); window.dispatchEvent(new Event('scroll')); });
-        await page.waitForFunction(() => document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.hidden === false, null, { timeout: 3000 }).catch(() => {});
-        if (await page.evaluate(() => document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.hidden !== false)) m.push(`${name}: back-top hidden after scrolling`);
-        await page.evaluate(() => document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.click());
-        await page.waitForFunction(() => scrollY === 0 && document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.hidden, null, { timeout: 5000 }).catch(() => {});
-        const after = await page.evaluate(() => ({ top: scrollY, hidden: document.getElementById('margin-watch-top')?.shadowRoot?.querySelector('.back-top')?.hidden }));
-        if (after.top !== 0 || !after.hidden) m.push(`${name}: back-top did not return to the top and hide`);
-      }
-      return m;
+      return miss;
     });
 
     await feature('tag-filter-home', async () => {

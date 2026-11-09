@@ -240,6 +240,7 @@ const composeHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   .bili-input:focus-within::before { border: 3px solid #00aeec; }
   .bili-input__inner:focus-visible { outline: 2px solid #00aeec; }
   .bili-popup { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .bili-popup[hidden] { display: none; }
   .bili-popup__wrap { display: flex; height: 500px; max-height: 500px; overflow: hidden; }
   .bili-popup-modal__content { height: 65vh; overflow: auto; }
   .bili-popup-modal__footer { position: absolute; bottom: 0; }
@@ -258,6 +259,14 @@ const composeHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset
   const topics=document.querySelector('.bili-topic-search__popover');
   document.querySelector('.bili-topic-search__input').addEventListener('click',()=>topics.classList.toggle('active'));
   document.querySelector('.bili-dyn-publishing__title__input').addEventListener('click',()=>topics.classList.remove('active'));
+  document.querySelectorAll('.bili-topic-item__cloud').forEach((item)=>item.addEventListener('click',()=>{
+    topics.classList.remove('active');
+    document.querySelector('.bili-topic-selector__bulletin')?.remove();
+    const selected=document.createElement('div');
+    selected.className='bili-topic-selector__bulletin';
+    selected.innerHTML='<div class="bili-topic-item__normal"><span class="bili-topic-item__normal__name">' + item.querySelector('.bili-topic-item__cloud__name').textContent + '</span><div class="bili-topic-selector__bulletin__clear">×</div></div>';
+    document.querySelector('.bili-dyn-publishing__topic').append(selected);
+  }));
 </script></body></html>`;
 
 const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>直播 - bilibili</title><style>
