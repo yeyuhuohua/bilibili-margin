@@ -20,9 +20,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Unit test (settings / filter / md5 / footprint)
-        run: ppnpm run test:unit
+        run: pnpm run test:unit
       - run: pnpm exec playwright install --with-deps chromium
-      - run: ppnpm run build
+      - run: pnpm run build
       - name: Display version and update comparison
         run: node tests/popup-version.mjs
         env:
@@ -90,7 +90,7 @@ jobs:
         env:
           SMOKE_OUT: smoke-artifacts/header-surface
       - name: Smoke test (offline mocked bilibili)
-        run: ppnpm run test:smoke
+        run: pnpm run test:smoke
         env:
           SMOKE_BUNDLED: '1'
           SMOKE_OUT: smoke-artifacts
@@ -175,7 +175,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: ppnpm run build
+      - run: pnpm run build
       - name: Animation layout and cleanup
         run: pnpm run test:animation-performance
         env:
