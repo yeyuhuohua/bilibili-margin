@@ -1284,13 +1284,68 @@ for (const theme of THEMES) {
       return m;
     });
 
-    await feature('no-global-back-top', async () => {
-      await reset();
+    await feature('global-floating-menu', async () => {
+      await reset(); await seed({ theme: 'dark', reduceMotion: true });
       const miss = [];
-      for (const [name, url, host] of [['home', HOME, 'margin-root'], ['feed', 'https://t.bilibili.com/', 'margin-root'], ['watch', WATCH, 'margin-watch-top']]) {
+      for (const [name, url, host, appScroll, full] of [
+        ['home', HOME, 'margin-root', true, false], ['feed', 'https://t.bilibili.com/', 'margin-root', true, false],
+        ['space', 'https://space.bilibili.com/2/video', 'margin-root', true, false], ['message', MESSAGE, 'margin-root', true, false],
+        ['history', 'https://www.bilibili.com/account/history', 'margin-root', true, false],
+        ['watch', WATCH, 'margin-watch-top', false, true], ['live', 'https://live.bilibili.com/123', 'margin-watch-top', false, false],
+      ]) {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction((id) => document.getElementById(id)?.shadowRoot?.querySelector('header'), host, { timeout: 15_000 });
-        if (await page.locator(`#${host} .back-top`).count()) miss.push(`${name}: global back-top button still exists`);
+        if (await page.locator(`#${host} .back-top`).count()) miss.push(`${name}: standalone back-top still exists`);
+        const menu = page.locator(`#${host} .fm`);
+        if (await menu.count() !== 1) { miss.push(`${name}: floating menu missing`); continue; }
+        if (name === 'home') {
+          const overlap = await page.evaluate(() => {
+            const r = document.getElementById('margin-root').shadowRoot, menu = r.querySelector('.fm-box').getBoundingClientRect(), exit = r.querySelector('.home-exit').getBoundingClientRect();
+            return menu.left < exit.right && menu.right > exit.left && menu.top < exit.bottom && menu.bottom > exit.top;
+          });
+          if (overlap) miss.push('home: floating menu overlaps the original-version entry');
+        }
+        await menu.locator('.fm-bar').click();
+        const labels = await menu.locator('.fm-item').evaluateAll((items) => items.map((el) => el.getAttribute('aria-label')));
+        const expected = full ? ['回到顶部', '看评论', '网页全屏', '宽屏模式', '收藏夹'] : ['回到顶部', '收藏夹'];
+        if (JSON.stringify(labels) !== JSON.stringify(expected)) miss.push(`${name}: wrong menu items ${JSON.stringify(labels)}`);
+        const theme = await menu.evaluate((el) => ({
+          background: getComputedStyle(el.querySelector('.fm-ink')).backgroundColor,
+          color: getComputedStyle(el.querySelector('.fm-item')).color,
+        }));
+        if (theme.background !== 'rgb(26, 26, 28)' || theme.color !== 'rgb(237, 237, 238)') miss.push(`${name}: dark theme mismatch ${JSON.stringify(theme)}`);
+        if (appScroll) {
+          await page.evaluate(() => {
+            const r = document.getElementById('margin-root').shadowRoot, app = r.querySelector('.app'), main = r.querySelector('main');
+            main.style.minHeight = `${app.clientHeight + 1200}px`; app.scrollTop = 600; app.dispatchEvent(new Event('scroll'));
+          });
+          await menu.locator('.fm-item').first().click();
+          await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.app')?.scrollTop === 0);
+        } else {
+          await page.evaluate(() => { document.body.style.minHeight = `${innerHeight + 1200}px`; window.scrollTo({ top: 600, behavior: 'instant' }); window.dispatchEvent(new Event('scroll')); });
+          const overlap = await menu.evaluate((el) => {
+            const box = el.querySelector('.fm-box').getBoundingClientRect(), service = document.querySelector('.customer-service').getBoundingClientRect();
+            const player = document.querySelector('.bpx-player-container, #fullscreen-container');
+            if (player) player.style.cssText = 'position:fixed;right:16px;bottom:16px;width:360px;height:200px';
+            const video = player?.getBoundingClientRect(), intersects = (a, b) => b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+            return { service: intersects(box, service), video: intersects(box, video) };
+          });
+          if (overlap.service) miss.push(`${name}: floating menu overlaps customer service`);
+          if (overlap.video) miss.push(`${name}: floating menu overlaps the mini player`);
+          await menu.locator('.fm-item').first().click();
+          await page.waitForFunction(() => scrollY === 0);
+          for (const el of await page.locator('.to-top-btn, .back-to-top-wrap').all()) if (await el.evaluate((node) => getComputedStyle(node).display !== 'none')) miss.push(`${name}: native top button is still visible`);
+        }
+        if (name === 'home') {
+          await page.goto(HOME, { waitUntil: 'domcontentloaded' });
+          await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('header'));
+          const fresh = page.locator('#margin-root .fm');
+          await fresh.locator('.fm-bar').click();
+          await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fm')?.dataset.open === 'true');
+          await page.waitForTimeout(900);
+          await fresh.locator('.fm-item').last().click();
+          await page.locator('#margin-root .sheet-layer[data-open="true"]').waitFor();
+        }
       }
       return miss;
     });

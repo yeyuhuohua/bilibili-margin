@@ -70,6 +70,7 @@
 /* 放在左下角、收起时只是一颗 46px 的圆钮（以前居中压在视频和评论上，用户反馈挡视野）；
    左下角是播放页两侧留白，B 站自带的回顶 / 客服在右下角，互不重叠。展开时从左下角向上长成面板 */
 .fm { --fm-ease: cubic-bezier(.22, 1, .36, 1); position: fixed; left: 16px; bottom: 16px; z-index: 30; animation: fm-in .4s var(--fm-ease) both; }
+.app.home .fm { bottom: 72px; }
 /* 收起时半透明，鼠标靠近或键盘聚焦再完全显示 */
 .fm[data-open="false"] .fm-box { opacity: .55; }
 .fm[data-open="false"] .fm-box:hover, .fm[data-open="false"] .fm-box:focus-within { opacity: 1; }
@@ -83,11 +84,11 @@
 .fm[data-open="false"] .fm-box:hover { transform: scale(1.05); }
 .fm[data-open="true"] .fm-box { width: 248px; border-radius: 30px; cursor: default; transition: width .8s var(--fm-ease), height .8s var(--fm-ease), border-radius .8s var(--fm-ease); }
 .fm-fill { position: absolute; inset: 0; border-radius: inherit; background: var(--surface); border: var(--hair) solid var(--line); }
-.fm-ink { position: absolute; left: 50%; width: 200%; height: 200%; border-radius: 50%; background: var(--ink); transform: translateX(-50%); bottom: -200%; transition: bottom .8s var(--fm-ease); }
+.fm-ink { position: absolute; left: 50%; width: 200%; height: 200%; border-radius: 50%; background: var(--surface); transform: translateX(-50%); bottom: -200%; transition: bottom .8s var(--fm-ease); }
 .fm[data-open="true"] .fm-ink { bottom: -20%; transition-delay: .1s; }
 .fm-list { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 28px 0 20px; opacity: 0; pointer-events: none; }
 .fm[data-open="true"] .fm-list { opacity: 1; pointer-events: auto; }
-.fm-item { all: unset; cursor: pointer; color: var(--canvas); font: 500 18px/1.2 "Margin Sans SC", var(--sans); letter-spacing: .06em; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0; transition: opacity .4s var(--fm-ease) 0s; }
+.fm-item { all: unset; cursor: pointer; color: var(--ink); font: 500 18px/1.2 "Margin Sans SC", var(--sans); letter-spacing: .06em; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0; transition: opacity .4s var(--fm-ease) 0s; }
 .fm[data-open="true"] .fm-item { opacity: 1; transition-delay: calc(.4s + .08s * var(--i)); }
 .fm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .fm-chars { display: flex; justify-content: center; }
@@ -102,16 +103,15 @@
 .fm[data-open="true"] .fm-bar { justify-content: space-between; }
 .fm[data-open="true"] .fm-bar { padding: 0 24px; }
 .fm-label { white-space: nowrap; font: 500 14px/1 "Margin Sans SC", var(--sans); letter-spacing: .08em; color: var(--ink); transition: color .3s var(--fm-ease); }
-.fm[data-open="true"] .fm-label { color: var(--canvas); }
+.fm[data-open="true"] .fm-label { color: var(--ink); }
 .fm-burger { position: relative; width: 24px; height: 24px; }
 .fm-burger i { position: absolute; left: 3px; top: 11px; width: 18px; height: 2px; border-radius: 2px; background: var(--ink); transition: transform .4s var(--fm-ease), background .4s var(--fm-ease); }
 .fm-burger i:first-child { transform: translateY(-3px); }
 .fm-burger i:last-child { transform: translateY(3px); }
-.fm[data-open="true"] .fm-burger i { background: var(--canvas); }
+.fm[data-open="true"] .fm-burger i { background: var(--ink); }
 .fm[data-open="true"] .fm-burger i:first-child { transform: rotate(45deg); }
 .fm[data-open="true"] .fm-burger i:last-child { transform: rotate(-45deg); }
 .fm-bar:focus-visible .fm-label { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   .fm, .fm *, .fm-box { animation: none !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
 }
-

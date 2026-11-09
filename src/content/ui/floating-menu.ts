@@ -2,8 +2,8 @@ import { h } from './dom';
 
 /**
  * 漂浮快捷菜单：21st「Floating Menu」的原生移植（framer-motion → CSS 过渡）。
- * 小胶囊点开后变形成面板，墨色圆从底部漫上来，菜单项错峰浮现；悬停时逐字向上翻滚。
- * 配色换成经典墨色 / 暖白；中文霞鹜文楷，英文副标 Instrument Serif 斜体。
+ * 小胶囊点开后变形成面板，菜单项错峰浮现；悬停时逐字向上翻滚。
+ * 面板和文字跟随页面主题；中文霞鹜文楷，英文副标 Instrument Serif 斜体。
  */
 export interface MenuItem { label: string; en?: string; run: () => void }
 export interface FloatingMenu { el: HTMLElement; close: () => void }

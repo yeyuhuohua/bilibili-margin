@@ -13,6 +13,7 @@ import type { SunMoon } from './sun-moon';
 import { FilterRuntime } from '../filter-runtime';
 import { uiReducedMotion as reducedMotion } from '../motion';
 import { toast } from './controls';
+import { createFloatingMenu } from './floating-menu';
 import { createCommandPalette } from './command-palette';
 import { openBili } from '../navigation';
 import { ThemeWriter } from './theme-writer';
@@ -77,10 +78,14 @@ export class PageShell {
     this.sunMoon = this.head.sunMoon;
     this.main = h('main', { class: `main tk tk-${kind}` });
     const exit = h('button', { class: 'ghost small', type: 'button', onclick: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } }, '本次回到 B 站原版');
+    const quick = createFloatingMenu([
+      { label: '回到顶部', en: 'Back to Top', run: () => this.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' }) },
+      { label: '收藏夹', en: 'Favorites', run: () => fav.open() },
+    ]);
     this.app = h('div', { class: 'app','data-glass':settings.glass },
       this.bg.el, this.head.el, this.main,
       h('footer', { class: 'foot tk-foot' }, exit, h('span', {}, '映间 MARGIN · 非 B 站官方')),
-      this.panel.sheet.el, fav.el, later.el, hist.el, palette.el,
+      this.panel.sheet.el, fav.el, later.el, hist.el, palette.el, quick.el,
     );
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });

@@ -180,6 +180,7 @@ const searchCard = (k, title, up, views, dur) => `<div class="bili-video-card" d
 </div>`;
 
 const watchHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>哔哩哔哩 (゜-゜)つロ 干杯~-bilibili</title></head><body>
+<div class="to-top-btn"><div class="float-button__text">顶部</div></div><div class="back-to-top-wrap"><div class="float-button__text">顶部</div></div><div class="customer-service" style="position:fixed;right:6px;bottom:56px;width:40px;height:54px">客服</div>
 <div id="app"><div class="video-container-v1"><div class="left-container"><div class="video-info-container"><h1 class="video-title">离线冒烟测试视频</h1></div>
 <div class="bpx-player-container" data-screen="normal" style="width:100%;aspect-ratio:16/9;background:#000">
   <div class="bpx-player-video-wrap"><video muted playsinline></video></div>
@@ -306,7 +307,7 @@ const liveHtml = () => `<!doctype html><html lang="zh-CN"><head><meta charset="u
   .blockSetting .block-list-ctnr { background: #1a1a1c; }
   .blockSetting .header-left, .blockSetting .header-right, .blockSetting .clear-all-btn { color: #9a9ba0; }
   .blockSetting .tab-item.active { color: #ff8cb0; }
-</style></head><body><div class="link-navbar-ctnr"></div>
+</style></head><body><div class="to-top-btn"><div class="float-button__text">顶部</div></div><div class="back-to-top-wrap"><div class="float-button__text">顶部</div></div><div class="customer-service" style="position:fixed;right:6px;bottom:56px;width:40px;height:54px">客服</div><div class="link-navbar-ctnr"></div>
 <div class="live-room-app"><main class="app-content"><div class="app-body">
   <div id="player-ctnr"><div id="live-player"><div id="fullscreen-container" style="height:240px;background:#222">
     <div class="web-player-inject-wrap"><video muted playsinline></video></div>

@@ -28,6 +28,7 @@ import { createContextMenu } from './context-menu';
 import { bindCardMenu } from './card-menu';
 import { createLaterDrawer } from './drawer';
 import { uiReducedMotion as reducedMotion } from '../motion';
+import { createFloatingMenu } from './floating-menu';
 import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
 
@@ -283,6 +284,10 @@ export class MarginApp {
       ['feed', [this.grid, this.status, this.sentinel]],
       ['footer', [footer]],
     ]);
+    const quick = createFloatingMenu([
+      { label: '回到顶部', en: 'Back to Top', run: () => this.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' }) },
+      { label: '收藏夹', en: 'Favorites', run: () => this.fav.open() },
+    ]);
     this.app = h('div', { class: 'app home', 'data-glass':this.settings.glass },
       this.bg.el,
       header,
@@ -293,6 +298,7 @@ export class MarginApp {
       palette.el,
       later.el,
       cm.el,
+      quick.el,
     );
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });

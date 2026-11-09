@@ -1,5 +1,6 @@
 /* 全局屏蔽词/广告过滤标记：只隐藏，不删除原生节点，便于关闭后恢复 */
 html [data-margin-filtered] { display: none !important; }
+html.margin-skin :is(.to-top-btn, .back-to-top-wrap) { display: none !important; }
 /* 搜索结果的列容器也要收起，避免过滤后留下空格。 */
 html .video-list > [class*="col_"]:has(> .bili-video-card[data-margin-filtered="native"]) { display: none !important; }
 

@@ -109,14 +109,16 @@ export class WatchSkin {
       ],
     });
     const click = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.click();
-    const quick = isWatch ? createFloatingMenu([
+    const quick = createFloatingMenu([
       { label: '回到顶部', en: 'Back to Top', run: () => scrollTo({ top: 0, behavior: 'smooth' }) },
-      { label: '看评论', en: 'Comments', run: () => document.querySelector('#commentapp, bili-comments, .comment-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
-      { label: '网页全屏', en: 'Web Fullscreen', run: () => click('.bpx-player-ctrl-web') },
-      { label: '宽屏模式', en: 'Wide Mode', run: () => click('.bpx-player-ctrl-wide') },
+      ...(isWatch ? [
+        { label: '看评论', en: 'Comments', run: () => document.querySelector('#commentapp, bili-comments, .comment-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+        { label: '网页全屏', en: 'Web Fullscreen', run: () => click('.bpx-player-ctrl-web') },
+        { label: '宽屏模式', en: 'Wide Mode', run: () => click('.bpx-player-ctrl-wide') },
+      ] : []),
       { label: '收藏夹', en: 'Favorites', run: () => this.fav.open() },
-    ]) : null;
-    this.app = h('div', { class: 'app wt', 'data-bg': 'off','data-glass':settings.glass,'data-kind':kind }, this.head.el, quick?.el ?? null, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el);
+    ]);
+    this.app = h('div', { class: 'app wt', 'data-bg': 'off','data-glass':settings.glass,'data-kind':kind }, this.head.el, quick.el, createScrollRuler(), this.panel.sheet.el, this.fav.el, palette.el, later.el, cm.el);
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     root.append(this.app);
