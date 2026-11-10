@@ -1,4 +1,5 @@
 import type { Settings } from '../../shared/settings';
+import { invalidateFollowStatus } from '../api/follow-status';
 import { block, follow, followTags, setUserTags, userTags, spaceInfo, spaceLive, spaceRecent, spaceVideos, spaceCollections, spaceCollectionVideos, createSpaceSearch, type SpaceCollection, type SpaceInfo, type VideoOrder } from '../api/space';
 import { spaceDynamics } from '../api/dyn';
 import { videoCard, skeleton } from './card';
@@ -189,7 +190,7 @@ export class SpaceApp {
     };
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); followBtn.focus(); } });
     const item = (label: string, fn: () => void, danger = false) => h('button', { class: `sp-mi${danger ? ' danger' : ''}`, type: 'button', role: 'menuitem', onclick: fn }, label);
-    const setFollowing = (on: boolean) => { followBtn.classList.toggle('on', on); followBtn.textContent = on ? '已关注' : '+ 关注'; };
+    const setFollowing = (on: boolean) => { invalidateFollowStatus(i.mid); followBtn.classList.toggle('on', on); followBtn.textContent = on ? '已关注' : '+ 关注'; };
     const groups = async () => {
       const token = csrf();
       openMenu([h('div', { class: 'sp-mh' }, '设置分组'), h('div', { class: 'sp-mload' }, '加载中…')]);

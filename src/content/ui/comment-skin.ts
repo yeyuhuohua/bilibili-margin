@@ -16,7 +16,7 @@ const TAG_SKIN = `
 const SKINS: Record<string, string> = {
   'bili-comment-action-buttons-renderer': `
     #pubdate { width: auto !important; display: inline-flex; flex-wrap: wrap; gap: 8px; }
-    [data-margin-location-label] { color: var(--m-faint, #888); white-space: nowrap; font-size: 12px; }
+    [data-margin-location-label] { color: var(--m-faint, #888); white-space: nowrap; font: inherit; }
     :host-context(html:not(.margin-skin)) [data-margin-location-label] { display: none !important; }
   `,
   'bili-comments-header-renderer': `

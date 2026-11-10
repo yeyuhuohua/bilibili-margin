@@ -18,7 +18,7 @@ import { onSettingsChange } from '../../shared/settings';
 const GRID = { cols: 30, rows: 26, horizon: 19 };
 const deg = (n: number) => `${Math.round(n)}°`;
 
-export function createWeather(): HTMLElement {
+export function createWeather(onPrivacy?: () => void): HTMLElement {
   const el = h('section', { class: 'wx', 'aria-label': '天气' });
   el.append(h('div', { class: 'wx-sky sk' }), h('div', { class: 'wx-side' }));
   let wx: Wx | null = null;
@@ -162,7 +162,9 @@ export function createWeather(): HTMLElement {
       if (request !== loadSequence) return;
       if (err instanceof PrivacyBlocked) {
         wx = null; run(); closeCity?.();
-        el.replaceChildren(h('p', { class: 'wx-empty' }, '天气联网已关闭'));
+        el.replaceChildren(h('div', { class: 'wx-empty' }, h('p', {}, '天气联网已关闭'),
+          h('p', {}, '天气和城市搜索需要在设置中允许外部辅助服务'),
+          onPrivacy ? h('button', { type: 'button', class: 'ghost small', onclick: onPrivacy }, '天气联网设置') : null));
         return;
       }
       console.warn('[margin] weather', err);

@@ -48,10 +48,25 @@ try {
    const comments=document.createElement('bili-comments'); const root=comments.attachShadow({mode:'open'});
    const renderer=document.createElement('bili-comment-renderer'); renderer.data={reply_control:{location:'IP属地：浙江'}};
    const sr=renderer.attachShadow({mode:'open'}); const actions=document.createElement('bili-comment-action-buttons-renderer');
-   actions.attachShadow({mode:'open'}).innerHTML='<div id="pubdate">15分钟前</div><button>回复</button>';
+   actions.attachShadow({mode:'open'}).innerHTML='<style>:host{font:13px/20px Arial}</style><div id="pubdate"><span>15分钟前</span></div><button>回复</button>';
    sr.append(actions);root.append(renderer);document.querySelector('#commentapp').append(comments);
  });
  const label=page.locator('[data-margin-location-label]'); await label.waitFor(); assert.equal(await label.textContent(),'IP属地：浙江');
+ for(const theme of ['light','dark']) {
+   await seed({theme});
+   await page.waitForFunction(theme=>document.documentElement.dataset.marginTheme===theme,theme);
+   for(const size of [13,15]) {
+     const metrics=await label.evaluate((el,size)=>{
+       const row=el.parentElement;row.style.fontSize=size+'px';
+       const reference=row.querySelector('span:not([data-margin-location-label])');
+       return {font:getComputedStyle(el).fontSize,referenceFont:getComputedStyle(reference).fontSize,line:getComputedStyle(el).lineHeight,referenceLine:getComputedStyle(reference).lineHeight,top:el.getBoundingClientRect().top,referenceTop:reference.getBoundingClientRect().top};
+     },size);
+     assert.equal(metrics.font,metrics.referenceFont,`${theme} IP font follows the metadata row`);
+     assert.equal(metrics.line,metrics.referenceLine);
+     assert.ok(Math.abs(metrics.top-metrics.referenceTop)<1,JSON.stringify(metrics));
+   }
+ }
+ results.push('140 location inherits metadata typography in both themes and font sizes');
  await page.evaluate(()=>document.querySelector('bili-comments').shadowRoot.querySelector('bili-comment-renderer').data.reply_control.location='<b>浙江</b>');
  await page.waitForFunction(()=>document.querySelector('bili-comments').shadowRoot.querySelector('bili-comment-renderer').shadowRoot.querySelector('bili-comment-action-buttons-renderer').shadowRoot.querySelector('[data-margin-location-label]')?.textContent==='<b>浙江</b>');
  assert.equal(await label.locator('b').count(),0);

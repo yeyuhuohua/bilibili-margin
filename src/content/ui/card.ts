@@ -1,6 +1,7 @@
 import type { Video } from '../api/feed';
 import { fmtCount, fmtDateTime, fmtDuration, h, icon, ICONS } from './dom';
 import { laterButton } from './later-btn';
+import { followStatus } from '../api/follow-status';
 
 const thumb = (url: string) => (url ? `${url}@672w_378h_1c.webp` : '');
 export const cardData = new WeakMap<Element, Video>();
@@ -61,9 +62,17 @@ function pubTime(v: Video, opts: CardOpts): HTMLElement | null {
 function metaRow(v: Video, opts: CardOpts): HTMLElement {
   const off = (k: string) => !!opts.hide?.has(k);
   const parts: HTMLElement[] = [];
-  if (!off('author')) parts.push(h('a', { class: 'author', title: v.author, href: `https://space.bilibili.com/${v.mid}`, target: '_blank', rel: 'noopener' },
-    h('span', { class: 'author-name' }, v.author),
-    v.reason === '已关注' ? h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注') : null));
+  if (!off('author')) {
+    const author = h('a', { class: 'author', title: v.author, href: `https://space.bilibili.com/${v.mid}`, target: '_blank', rel: 'noopener' }, h('span', { class: 'author-name' }, v.author));
+    const mark = (on: boolean) => {
+      const badge = author.querySelector('.card-followed');
+      if (on && !badge) author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
+      if (!on) badge?.remove();
+    };
+    mark(v.reason === '已关注');
+    if (!opts.compact) void followStatus(v.mid).then(on => { if (author.isConnected && on !== undefined) mark(on); });
+    parts.push(author);
+  }
   if (!off('views')) parts.push(h('span', {}, `${fmtCount(v.views)} 播放`));
   if (v.danmaku && !off('danmaku')) parts.push(h('span', {}, `${fmtCount(v.danmaku)} 弹幕`));
   const meta = h('div', { class: 'meta' });

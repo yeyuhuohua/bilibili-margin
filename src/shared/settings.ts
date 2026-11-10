@@ -102,6 +102,8 @@ export interface Settings {
   bodyFont: string;
   /** 账号卡片可以拖拽甩动（v0.46）：关掉后卡片固定挂着，只能点击翻面 */
   idDrag: boolean;
+  /** 动态页左侧关注列表，顶部头像条独立保留 */
+  feedFollowList: boolean;
   /** 低配设备减少动画（v0.47）：暂停背景/天气/悬停动画并压缩过渡 */
   reduceMotion: boolean;
   /** 控件动画；独立于背景和天气的动态效果 */
@@ -111,6 +113,8 @@ export interface Settings {
   searchStyle: 'classic' | 'new';
   /** 有 B 站播放器时自动进入宽屏（v0.47），番剧、列表等页面同样生效 */
   wide: boolean;
+  /** 播放器独立圆角，关闭时不影响页面卡片 */
+  playerCorners: boolean;
   /** 隐藏广告与推广（v0.47），默认开启；只做展示层过滤 */
   hideAds: boolean;
   /** 社区广告片段自动跳过，默认关闭；只读小电视空降助手数据 */
@@ -187,11 +191,13 @@ export const DEFAULTS: Settings = {
   cdn: '',
   bodyFont: '',
   idDrag: false,
+  feedFollowList: true,
   reduceMotion: false,
   uiEffects: true,
   paletteSpeed: 100,
   searchStyle: 'classic',
   wide: false,
+  playerCorners: true,
   hideAds: true,
   sponsorSkip: false,
   danmakuJump: false,
@@ -257,11 +263,13 @@ function merge(raw: Partial<Settings> | undefined): Settings {
     cdn: cleanHost(r.cdn),
     bodyFont: cleanFont(r.bodyFont),
     idDrag: r.idDrag === true,
+    feedFollowList: r.feedFollowList !== false,
     reduceMotion: r.reduceMotion === true,
     uiEffects: r.uiEffects !== false,
     paletteSpeed: clampPaletteSpeed(r.paletteSpeed),
     searchStyle: r.searchStyle === 'new' ? 'new' : 'classic',
     wide: r.wide === true,
+    playerCorners: r.playerCorners !== false,
     hideAds: r.hideAds !== false,
     sponsorSkip: r.sponsorSkip === true,
     privacyExternal: r.privacyExternal === true,
@@ -327,6 +335,8 @@ export function sanitizeSettings(raw: unknown): Settings | null {
   if (r.zoom === 100 || r.zoom === 110 || r.zoom === 120) out.zoom = r.zoom;
   if (r.titleFont === 'serif' || r.titleFont === 'sans') out.titleFont = r.titleFont;
   if (r.cols === 0 || r.cols === 4 || r.cols === 5 || r.cols === 6) out.cols = r.cols;
+  if (typeof r.playerCorners === 'boolean') out.playerCorners = r.playerCorners;
+  if (typeof r.feedFollowList === 'boolean') out.feedFollowList = r.feedFollowList;
   if (typeof r.paletteSpeed === 'number') out.paletteSpeed = clampPaletteSpeed(r.paletteSpeed);
   if (r.searchStyle === 'classic' || r.searchStyle === 'new') out.searchStyle = r.searchStyle;
   if (typeof r.batchNav === 'boolean') out.batchNav = r.batchNav;

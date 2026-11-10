@@ -1,5 +1,5 @@
 import type { BgMode, HomeBit, HomeSection, Settings, ShaderId, Theme } from '../../shared/settings';
-import { BG_IMAGE_KEY, clampPaletteSpeed, cleanFont, HOME_BITS, HOME_SECTION_NAMES, normalizeHomeOrder, replaceSettings, sanitizeSettings, saveSettings } from '../../shared/settings';
+import { BG_IMAGE_KEY, clampPaletteSpeed, cleanFont, DEFAULTS, HOME_BITS, HOME_SECTION_NAMES, normalizeHomeOrder, replaceSettings, sanitizeSettings, saveSettings } from '../../shared/settings';
 import { ACTIVITY_KEY, sanitizeActivity, type FpMessage } from '../../shared/activity';
 import { compressImage } from '../bg/background';
 import { SHADER_IDS, SHADER_NAMES } from '../bg/shaders';
@@ -7,29 +7,31 @@ import { cachedThumb, shaderThumb } from '../bg/program';
 import { block, chipInput, pillToggles, rangeSlider, row, segmented, stepSlider, toast, toggle } from './controls';
 import { clampBatchSize } from '../../shared/batch';
 import { fmtCount, h, icon, ICONS } from './dom';
-import { createSheet, type Sheet } from './sheet';
+import { createSettingsPage, type SettingsPage } from './settings-page';
 import { SITE_LINKS } from './header';
 import { appPoll, appQr, appRevoke, appState } from '../api/appfeed';
 import { clearLoc, savedLoc, setLoc as setLocWithName } from '../api/weather';
 import { createCityPicker } from './city-picker';
 import { forgetSearch } from '../api/search-history';
 
-export interface SettingsPanel { sheet: Sheet; sync(s: Settings): void }
+export interface SettingsPanel { sheet: SettingsPage; sync(s: Settings): void }
 
-/** 设置面板第一次打开时才建内容（约 220 个节点、几十个控件），页面加载时只放一个空抽屉（v0.44） */
+/** 设置内容第一次打开时才建（约 220 个节点、几十个控件），页面加载时只放一个空的整页容器 */
 export function createSettingsPanel(get: () => Settings, currentShader: () => ShaderId | null): SettingsPanel {
   let inner: SettingsPanel | null = null;
-  const sheet: Sheet = createSheet({ title: '设置', eyebrow: 'Preferences', width: 420, onOpen: () => {
+  const sheet: SettingsPage = createSettingsPage({ title: '设置', eyebrow: 'Preferences', onOpen: () => {
     if (!inner) inner = buildSettingsPanel(sheet, get, currentShader);
     else inner.sync(get());
   } });
   return { sheet, sync(s) { inner?.sync(s); } };
 }
 
-function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: () => ShaderId | null): SettingsPanel {
+function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentShader: () => ShaderId | null): SettingsPanel {
   const save = (patch: Partial<Settings>) => saveSettings(patch);
   const say = (t: string) => toast((sheet.el.closest('.app') as HTMLElement | null) ?? sheet.el, t);
   const s0 = get();
+  const version = chrome.runtime.getManifest().version_name || chrome.runtime.getManifest().version;
+  const enabledT = toggle(s0.enabled, '启用 MARGIN', (value) => save({ enabled: value }));
   const externalT = toggle(s0.privacyExternal, '允许外部辅助服务', (value) => save({ privacyExternal: value }));
   const historyT = toggle(s0.searchHistory, '保存最近搜索', (value) => save({ searchHistory: value }));
   const clearHistory = h('button', { type: 'button', class: 'ghost small', onclick: async () => {
@@ -44,10 +46,10 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
   } }, '清除搜索记录');
 
   const theme = segmented<Theme>([['auto', '跟随系统'], ['light', '亮色'], ['dark', '暗色']], s0.theme, (v) => save({ theme: v }));
-  const searchStyle = segmented<Settings['searchStyle']>([['classic', '旧版'], ['new', '新版']], s0.searchStyle, (searchStyle) => save({ searchStyle }));
+  const searchStyle = segmented<Settings['searchStyle']>([['classic', '旧版'], ['new', '新版']], s0.searchStyle, (v) => { save({ searchStyle: v }); paintDeps(); });
   const accent = segmented<Settings['accent']>([['classic','经典'],['blue','哔哩蓝'],['pink','哔哩粉']],s0.accent,(accent) => save({ accent }));
   const glass = segmented<Settings['glass']>([['soft','柔和磨砂'],['liquid','液态折射'],['flat','简洁平面']],s0.glass,(glass) => save({ glass }));
-  const watch = toggle(s0.watch, '其他页面重设计', (v) => save({ watch: v }));
+  const watch = toggle(s0.watch, '其他页面重设计', (v) => { save({ watch: v }); paintDeps(); });
   const preview = toggle(s0.hoverPreview, '悬停预览', (v) => save({ hoverPreview: v }));
   const intro = toggle(s0.intro, '首页过场动画', (v) => save({ intro: v }));
   const reduceM = toggle(s0.reduceMotion, '减少动画', (v) => save({ reduceMotion: v }));
@@ -237,9 +239,11 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
     cdnTest.removeAttribute('disabled'); cdnTest.textContent = '重新测速';
   } }, '测速');
   const idD = toggle(s0.idDrag, '账号卡片可拖拽', (v) => save({ idDrag: v }));
+  const followListT = toggle(s0.feedFollowList, '动态页关注列表', (v) => save({ feedFollowList: v }));
   const favD = toggle(s0.favDirect, '收藏夹直接展开', (v) => save({ favDirect: v }));
   const favCols = segmented<string>([['2','2 列'],['3','3 列'],['4','4 列']], String(s0.favColumns),(v) => save({ favColumns:Number(v) as 2 | 3 | 4 }));
   const wideT = toggle(s0.wide, '宽屏模式', (v) => save({ wide: v }));
+  const cornersT = toggle(s0.playerCorners, '播放器圆角', (v) => save({ playerCorners: v }));
   const autoW = toggle(s0.autoWeb, '自动网页全屏', (v) => save({ autoWeb: v }));
   const webS = toggle(s0.webScroll, '网页全屏可滚动', (v) => save({ webScroll: v }));
   const spdK = toggle(s0.speedKeys, '倍速快捷键', (v) => save({ speedKeys: v }));
@@ -302,10 +306,10 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
     const todo: HTMLElement[] = [];
     for (const c of chips) { const url = cachedThumb(c.dataset.id as ShaderId, t); if (url) c.style.backgroundImage = `url(${url})`; else todo.push(c); }
     if (!todo.length) { swatches.dataset.thumbs = t; return; }
-    if (!thumbsVisible) return;
+    if (!thumbsVisible || !sheet.isOpen()) return;
     clearTimeout(thumbJob); cancelAnimationFrame(thumbJob);
     const step = () => {
-      if (!thumbsVisible) return;
+      if (!thumbsVisible || !sheet.isOpen()) return;
       const c = todo.shift();
       if (!c) { swatches.dataset.thumbs = t; return; }
       const url = shaderThumb(c.dataset.id as ShaderId, t);
@@ -315,6 +319,10 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
     thumbJob = window.setTimeout(step, 480);  // 等面板滑入动画结束再编译，免得动画卡
   };
   new IntersectionObserver((es) => { thumbsVisible = es.some((e) => e.isIntersecting); if (thumbsVisible) paintThumbs(); }).observe(swatches);
+  sheet.el.addEventListener('margin:sheet', () => {
+    clearTimeout(thumbJob); cancelAnimationFrame(thumbJob);
+    if (sheet.isOpen() && thumbsVisible) paintThumbs();
+  });
   for (const id of SHADER_IDS) {
     const b = h('button', { type: 'button', class: 'sw-item', role: 'radio', onclick: () => save({ bg: { ...get().bg, mode: 'fixed', shader: id } }) },
       h('span', { class: `sw-chip sw-${id}`, 'data-id': id }), h('span', {}, SHADER_NAMES[id]));
@@ -357,13 +365,20 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
 
   // ── 数据：导出 / 导入设置与足迹（JSON 文件，只在本机处理） ──
   const exportData = async () => {
-    const v = await chrome.storage.local.get(ACTIVITY_KEY);
-    const data = { app: 'margin', format: 1, version: chrome.runtime.getManifest().version, exportedAt: new Date().toISOString(), settings: get(), activity: v[ACTIVITY_KEY] ?? {} };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = h('a', { href: URL.createObjectURL(blob), download: `margin-backup-${new Date().toISOString().slice(0, 10)}.json` });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    say(`已导出设置和 ${Object.keys(data.activity).length} 天足迹`);
+    try {
+      const v = await chrome.storage.local.get(ACTIVITY_KEY);
+      const data = { app: 'margin', format: 1, version: chrome.runtime.getManifest().version, exportedAt: new Date().toISOString(), settings: get(), activity: v[ACTIVITY_KEY] ?? {} };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const manifest = chrome.runtime.getManifest();
+      const filename = `margin-backup-${manifest.version_name || manifest.version}-${new Date().toISOString().slice(0, 10)}.json`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      // 这里只接入本函数创建的 Blob URL，不放宽通用链接的安全过滤。
+      a.href = url; a.download = filename; a.hidden = true;
+      document.body.append(a);
+      try { a.click(); } finally { a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60_000); }
+      say(`已发起导出：${filename}（设置和 ${Object.keys(data.activity).length} 天足迹）。保存位置请在浏览器下载记录中查看。`);
+    } catch { say('导出失败，请重试；若浏览器拦截下载，请检查下载提示。'); }
   };
   const json = h('input', { type: 'file', accept: 'application/json,.json', hidden: true, 'aria-label': '选择要导入的备份文件' });
   json.addEventListener('change', async () => {
@@ -470,95 +485,140 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
     drawers.push(paint); paint(); set(false);
     return wrap;
   };
-  sheet.body.append(
-    h('section', { class: 'group' }, h('h3', {}, '隐私'),
-      row('允许外部辅助服务', '默认关闭；开启后允许天气定位、天气查询、社区广告片段和 GitHub 更新查询。服务会接收请求 IP。', externalT),
-      row('保存最近搜索', '默认关闭；开启后只存扩展内，最多 8 条、30 天过期，读取时清理。', historyT),
-      row('搜索记录', null, clearHistory),
-      h('p', { class: 'sd-note' }, 'App 授权仅保留在当前浏览器会话，重启后需重新扫码。')),
-    h('section', { class: 'group' }, h('h3', {}, '外观'),
-      block('明暗', null, theme),
-      row('强调色', null, accent),
-      row('界面质感', null, glass),
-      row('封面悬停预览', '鼠标停留半秒后静音播放', preview),
-      row('控件动效', '按钮、面板、三连和卡片过渡；背景与天气独立设置', effects),
-      row('减少动画', '暂停背景、天气和悬停动画，并减少界面过渡；系统减少动态效果始终生效', reduceM),
-      row('首页过场动画', '进入首页时播放；关闭后始终直接显示首页内容', intro),
-      row('搜索栏样式', '旧版保留原顶栏搜索框，新版原位展开搜索面板', searchStyle),
-      row('搜索框展开速度', '点击搜索框展开命令面板的动画速度（%），50–200 之间，100 为默认；数字越大越快', palSpeedIn),
-      row('其他页面重设计', '播放页、搜索页、空间、动态等，只换外观不改功能', watch),
-      drawer('字体与缩放', () => { const st = get(); return [st.titleFont === 'sans' ? '无衬线标题' : '衬线标题', st.bodyFont || '', st.zoom !== 100 ? `${st.zoom}%` : ''].filter(Boolean).join(' · '); },
-        block('标题字体', '页面标题和大号文字用衬线（宋体）还是无衬线（黑体）', fontS),
-        block('正文字体', '填本机已经装好的字体名；标题选「无衬线」时标题也用它。留空 = 映间默认', fontBox),
-        row('数字用等宽字体', '播放量、时间、UID 这些小字；关掉后和正文字体一致', monoT),
-        block('内容缩放', '字太小时放大首页、空间、消息、历史、动态的内容区；播放页和搜索页用浏览器缩放（Ctrl +）', zoomS)),
-      drawer('布局与细节', () => { const st = get(); return [st.cols ? `每行 ${st.cols} 个` : '每行自动', st.radius === 0 ? '直角' : st.radius === 50 ? '小圆角' : st.radius === 150 ? '大圆角' : ''].filter(Boolean).join(' · '); },
-        block('圆角', '卡片、按钮、面板的圆角大小；头像这类圆形不受影响', radS),
-        block('首页每行视频', '自动按窗口宽度排 6–8 个；也可以固定 4 / 5 / 6 个，卡片更大', cols),
-        row('收藏夹直接展开', '点收藏夹直接列出全部视频，不再先弹出最近 4 个', favD),
-        row('收藏夹列数', null, favCols),
-        row('账号卡片可拖拽', '关掉后头像下的卡片固定挂着，不能甩动，点一下仍可翻面', idD))),
-    h('section', { class: 'group' }, h('h3', {}, '顶栏'),
-      row('Ctrl+K 打开命令面板', 'B 站自己没有 Ctrl+K；和浏览器或其他扩展冲突时关掉，按 / 照样能打开', cmdKT),
-      row('悬停指示', '指示条跟随鼠标移到的顶栏图标；关闭后跟随点击', hoverT),
-      drawer('顶栏入口', () => { const n = get().headHide.length; return n ? `已隐藏 ${n} 个` : '全部显示'; },
-        h('p', { class: 'sd-note' }, '关掉的入口不在顶栏显示；用箭头调整快捷入口顺序。「设置」始终保留'), headList, h('div', { class: 'hl-foot' }, headReset))),
-    h('section', { class: 'group' }, h('h3', {}, '播放页'),
-      row('评论字号', '视频、动态评论与输入文字大小（px）', cfsS),
-      row('宽屏模式', '有播放器时自动进入宽屏；番剧、列表和稍后再看等页面同样生效；和自动网页全屏同时开启时优先网页全屏', wideT),
-      row('自动网页全屏', '有播放器的页面打开后自动铺满浏览器窗口，按 Esc 退出', autoW),
-      row('网页全屏时可滚动', '网页全屏下往下滚就能看评论，播放器跟着滚走', webS),
-      row('倍速快捷键', 'X 减速、C 加速（每次 0.1×），Z 在当前倍速和 1× 之间切换', spdK),
-      row('楼中楼对话树', '展开的楼中楼按「谁回复谁」缩进排列，用细线连起来，最多缩进三层', treeT),
-      row('弹幕空降', h('span', {}, '默认关闭；点击带下划线的弹幕时间跳转，可撤销。只在本机解析。'), airT),
-      drawer('视频 CDN 节点', () => CDNS.find(([x]) => x === get().cdn)?.[1] ?? 'B 站默认',
-        h('p', { class: 'sd-note' }, '卡顿或加载慢时换一个节点试试；测的是连接延迟，数字越小越好。新打开的视频生效'), cdnList, h('div', { class: 'hl-foot' }, cdnTest))),
-    h('section', { class: 'group' }, h('h3', {}, '通知'),
-      row('消息提醒', '关闭后顶栏不再显示消息未读数，动态角标不受影响', msgT)),
-    h('section', { class: 'group' }, h('h3', {}, '首页组件'),
-      row('搜索框', '关掉后用顶栏的小搜索框', searchT),
-      row('日期栏', '推荐上方的日期和「For You」', dateT),
-      row('换一批按钮', null, refreshT),
-      row('批次导航', '每次「换一批」只加载一页，底部左右箭头切换批次；开启后推荐页不再随滚动自动补页', batchNavT),
-      batchOpts,
-      row('点击分类标签刷新列表', null, tabRefreshT),
-      row('足迹热力图', '关掉只是不显示，足迹照样在本机记录', foot),
-      row('天气', '关掉后不再请求天气和城市定位', wxT),
-      drawer('天气城市与卡片信息', () => { const l = savedLoc(); return l?.manual ? l.name : '自动定位'; },
-        block('天气城市', '选中候选固定城市；点击「自动」恢复 IP 定位', cityBox),
-        block('卡片信息', '首页视频卡片下面显示哪些，点一下开关', cardBits)),
-      block('版块顺序', '上移 / 下移调整首页版块；修改后立即生效', orderBox)),
-    h('section', { class: 'group' }, h('h3', {}, '背景'),
-      block('模式', '随机：每次打开换一款，不连续重复', mode),
-      block('样式', null, swatches),
-      drawer('随机范围', () => { const n = get().bg.pool?.length ?? 0; return n ? `${n} / ${SHADER_IDS.length} 款` : '全部'; },
-        h('p', { class: 'sd-note' }, '随机模式只在点亮的样式里挑；太花的点掉就不会再随机到'), poolBox),
-      drawer('强度与自定义图片', () => '',
-        block('强度', null, intensity),
-        h('div', { class: 'row' }, h('div', { class: 'row-label' }, h('span', {}, '自定义图片'), h('small', {}, '压缩后只保存在本机')), upload, file))),
-    h('section', { class: 'group' }, h('h3', {}, '内容过滤'),
-      block('屏蔽关键词', '标题或视频标签包含即隐藏（首页、搜索、播放页推荐、动态等全站生效）', kw),
-      block('屏蔽 UP 主', '卡片右上角也能一键屏蔽', ups),
-      drawer('播放量与时长', () => '',
-        block('最低播放量', null, views),
-        block('最短时长', null, dur)),
-      row('隐藏广告', '隐藏播放页、搜索页、热门排行和番剧页的推广内容', adsT),
-      row('跳过视频内广告', h('span', {}, '默认关闭；普通 BV 视频按社区标记跳过，可撤销。开启后向 ', h('a', { href: 'https://bsbsb.top/', target: '_blank', rel: 'noopener noreferrer' }, '小电视空降助手'), ' 查询哈希前缀；不保证完播率。'), sponsorT),
-      row('弹幕跳转建议', '默认关闭；普通 BV 视频中至少 3 个不同发送者给出相同空降时间时提示，点击跳转，可撤销。仅从 B 站读取当前分 P 的弹幕。', jumpT)),
-    h('section', { class: 'group' }, h('h3', {}, '实验功能'),
-      row('App 推荐流', '首页「推荐」改用手机 App 的推荐；关掉就是网页版原来的推荐', appT),
-      drawer('App 授权', () => (authed ? '已授权' : '未授权'),
-        h('p', { class: 'sd-note' }, '用 B 站 App 扫码授权。凭证只保存在本次浏览器会话，重启后需重新扫码，可随时取消。'),
-        h('div', { class: 'af-row' }, appStat, h('div', { class: 'data-acts' }, appBtn, appOff)), appQrBox, appQrNote),
-      row('X 式重排', '按你的观看历史重新排：常看完的 UP 往前，秒退和「不感兴趣」的往后，混入关注的人 48 小时内的新稿，看过的不再出现。只在本机计算，可和 App 推荐流一起用', rankT)),
-    h('section', { class: 'group' }, h('h3', {}, '数据'),
-      h('div', { class: 'row' }, h('div', { class: 'row-label' }, h('span', {}, '备份与迁移'), h('small', {}, '设置和足迹导出成 JSON 文件；不含自定义背景图片')),
-        h('div', { class: 'data-acts' }, exportBtn, importBtn), json)),
-  );
+  const sub = (title: string) => h('h4', { class: 'stg-sub' }, title);
+  const palSpeedRow = row('搜索框展开速度', '点击搜索框展开命令面板的动画速度（%），50–200 之间，100 为默认；只在「新版」搜索栏下生效', palSpeedIn);
+  const playbackNote = h('p', { class: 'stg-warn', hidden: watch.getAttribute('aria-checked') === 'true' },
+    '当前已关闭「其他页面重设计」，本组设置不会生效。',
+    h('button', { type: 'button', class: 'ghost small', onclick: () => watch.click() }, '立即开启'));
+  const paintDeps = () => {
+    const style = searchStyle.querySelector<HTMLElement>('[aria-checked="true"]')?.dataset.v ?? 'classic';
+    palSpeedRow.toggleAttribute('data-off', style !== 'new');
+    palSpeedIn.disabled = style !== 'new';
+    playbackNote.hidden = watch.getAttribute('aria-checked') === 'true';
+  };
+  const resetAll = () => {
+    if (!confirm('恢复默认设置？主题、背景、过滤等都会回到初始值；足迹、搜索记录和自定义背景图片不受影响。')) return;
+    const next = { ...DEFAULTS, filters: { ...DEFAULTS.filters }, bg: { ...DEFAULTS.bg } };
+    replaceSettings(next).then(() => say('已恢复默认设置')).catch(() => say('恢复失败，请重试'));
+  };
+
+  sheet.section('overview', '总览', '常用的开关都在这里；左侧可以按类别找到全部设置。',
+    row('启用 MARGIN', '关闭后本页立即恢复 B 站原版；也可以在扩展弹窗里重新打开', enabledT),
+    row('其他页面重设计', '播放页、搜索页、空间、动态等，只换外观不改功能', watch),
+    block('明暗', '跟随系统时随浏览器的深浅色自动切换', theme),
+    row('消息提醒', '关闭后顶栏不再显示消息未读数，动态角标不受影响', msgT),
+    h('div', { class: 'row' },
+      h('div', { class: 'row-label' },
+        h('span', {}, '关于'),
+        h('small', {}, `映间 MARGIN ${version} · 非 B 站官方扩展`)),
+      h('div', { class: 'stg-links' },
+        h('a', { href: 'https://github.com/jiuyang5354/bilibili-margin', target: '_blank', rel: 'noopener noreferrer' }, 'GitHub'),
+        h('a', { href: 'https://github.com/jiuyang5354/bilibili-margin/releases', target: '_blank', rel: 'noopener noreferrer' }, '更新日志'))),
+    h('div', { class: 'row' },
+      h('div', { class: 'row-label' },
+        h('span', {}, '恢复默认设置'),
+        h('small', {}, '只重置上面的设置项，不删除足迹、搜索记录和自定义背景图片')),
+      h('button', { type: 'button', class: 'ghost small danger', onclick: resetAll }, '恢复默认')));
+
+  sheet.section('appearance', '外观', '配色、质感、字体和背景。',
+    row('强调色', '按钮、选中态和关键数字的主题色', accent),
+    row('界面质感', '柔和磨砂、液态折射或简洁平面', glass),
+    row('封面悬停预览', '鼠标停留半秒后静音播放', preview),
+    row('控件动效', '按钮、面板、三连和卡片过渡；背景与天气独立设置', effects),
+    row('减少动画', '暂停背景、天气和悬停动画，并减少界面过渡；系统减少动态效果始终生效', reduceM),
+    row('首页过场动画', '每次打开浏览器后第一次进首页播放，点一下可跳过', intro),
+    sub('字体'),
+    block('标题字体', '页面标题和大号文字用衬线（宋体）还是无衬线（黑体）', fontS),
+    block('正文字体', '填本机已经装好的字体名；标题选「无衬线」时标题也用它。留空 = 映间默认', fontBox),
+    row('数字用等宽字体', '播放量、时间、UID 这些小字；关掉后和正文字体一致', monoT),
+    block('内容缩放', '字太小时放大首页、空间、消息、历史、动态的内容区；播放页和搜索页用浏览器缩放（Ctrl +）', zoomS),
+    sub('布局'),
+    block('圆角', '卡片、按钮、面板的圆角大小；头像这类圆形不受影响', radS),
+    row('收藏夹直接展开', '点收藏夹直接列出全部视频，不再先弹出最近 4 个', favD),
+    row('收藏夹列数', null, favCols),
+    row('账号卡片可拖拽', '关掉后头像下的卡片固定挂着，不能甩动，点一下仍可翻面', idD),
+    row('动态页关注列表', '显示左侧关注列表，顶部头像条保留', followListT),
+    sub('背景'),
+    block('模式', '随机：每次打开换一款，不连续重复', mode),
+    block('样式', null, swatches),
+    drawer('随机范围', () => { const n = get().bg.pool?.length ?? 0; return n ? `${n} / ${SHADER_IDS.length} 款` : '全部'; },
+      h('p', { class: 'sd-note' }, '随机模式只在点亮的样式里挑；太花的点掉就不会再随机到'), poolBox),
+    drawer('强度与自定义图片', () => '',
+      block('强度', null, intensity),
+      h('div', { class: 'row' },
+        h('div', { class: 'row-label' }, h('span', {}, '自定义图片'), h('small', {}, '压缩后只保存在本机')),
+        upload, file)));
+
+  sheet.section('home', '首页', '首页显示什么、怎么排。',
+    row('搜索框', '关掉后用顶栏的小搜索框', searchT),
+    row('日期栏', '推荐上方的日期和「For You」', dateT),
+    row('换一批按钮', null, refreshT),
+    row('足迹热力图', '关掉只是不显示，足迹照样在本机记录', foot),
+    row('天气', '关掉后不再请求天气和城市定位', wxT),
+    drawer('天气城市与卡片信息', () => { const l = savedLoc(); return l?.manual ? l.name : '自动定位'; },
+      block('天气城市', '选中候选固定城市；点击「自动」恢复 IP 定位', cityBox),
+      block('卡片信息', '首页视频卡片下面显示哪些，点一下开关', cardBits)),
+    block('每行视频', '自动按窗口宽度排 6–8 个；也可以固定 4 / 5 / 6 个，卡片更大', cols),
+    block('版块顺序', '上移 / 下移调整首页版块；修改后立即生效', orderBox),
+    row('批次导航', '每次「换一批」只加载一页，底部左右箭头切换批次；开启后推荐页不再随滚动自动补页', batchNavT),
+    batchOpts,
+    row('点击分类标签刷新列表', null, tabRefreshT));
+
+  sheet.section('bar', '搜索与顶栏', '顶栏搜索框、快捷键和入口。',
+    block('搜索栏样式', '旧版保留原顶栏搜索框，新版原位展开搜索面板并轮播热搜', searchStyle),
+    palSpeedRow,
+    row('Ctrl+K 打开命令面板', 'B 站自己没有 Ctrl+K；和浏览器或其他扩展冲突时关掉，按 / 照样能打开', cmdKT),
+    row('悬停指示', '指示条跟随鼠标移到的顶栏图标；关闭后跟随点击', hoverT),
+    drawer('顶栏入口', () => { const n = get().headHide.length; return n ? `已隐藏 ${n} 个` : '全部显示'; },
+      h('p', { class: 'sd-note' }, '关掉的入口不在顶栏显示；用箭头调整快捷入口顺序。「设置」始终保留'),
+      headList, h('div', { class: 'hl-foot' }, headReset)));
+
+  sheet.section('playback', '播放页', '播放器、评论和弹幕。',
+    playbackNote,
+    row('播放器圆角', '关闭后保留完整矩形画面，其他卡片圆角不变', cornersT),
+    row('评论字号', '视频、动态评论与输入文字大小（px）', cfsS),
+    row('宽屏模式', '有播放器时自动进入宽屏；番剧、列表和稍后再看等页面同样生效；和自动网页全屏同时开启时优先网页全屏', wideT),
+    row('自动网页全屏', '有播放器的页面打开后自动铺满浏览器窗口，按 Esc 退出', autoW),
+    row('网页全屏时可滚动', '网页全屏下往下滚就能看评论，播放器跟着滚走', webS),
+    row('倍速快捷键', 'X 减速、C 加速（每次 0.1×），Z 在当前倍速和 1× 之间切换', spdK),
+    row('楼中楼对话树', '展开的楼中楼按「谁回复谁」缩进排列，用细线连起来，最多缩进三层', treeT),
+    row('弹幕空降', h('span', {}, '默认关闭；点击带下划线的弹幕时间跳转，可撤销。只在本机解析。'), airT),
+    row('弹幕跳转建议', '默认关闭；普通 BV 视频中至少 3 个不同发送者给出相同空降时间时提示，点击跳转，可撤销。仅从 B 站读取当前分 P 的弹幕。', jumpT),
+    drawer('视频 CDN 节点', () => CDNS.find(([x]) => x === get().cdn)?.[1] ?? 'B 站默认',
+      h('p', { class: 'sd-note' }, '卡顿或加载慢时换一个节点试试；测的是连接延迟，数字越小越好。新打开的视频生效'),
+      cdnList, h('div', { class: 'hl-foot' }, cdnTest)));
+
+  sheet.section('filter', '内容过滤', '屏蔽不想看的内容。',
+    block('屏蔽关键词', '标题或视频标签包含即隐藏（首页、搜索、播放页推荐、动态等全站生效）', kw),
+    block('屏蔽 UP 主', '卡片右上角也能一键屏蔽', ups),
+    drawer('播放量与时长', () => '',
+      block('最低播放量', null, views),
+      block('最短时长', null, dur)),
+    row('隐藏广告', '隐藏播放页、搜索页、热门排行和番剧页的推广内容', adsT),
+    row('跳过视频内广告', h('span', {}, '默认关闭；普通 BV 视频按社区标记跳过，可撤销。开启后向 ', h('a', { href: 'https://bsbsb.top/', target: '_blank', rel: 'noopener noreferrer' }, '小电视空降助手'), ' 查询哈希前缀；不保证完播率。'), sponsorT));
+
+  sheet.section('privacy', '隐私与数据', '外部服务、搜索记录和备份。',
+    row('允许外部辅助服务', '默认关闭；开启后允许天气定位、天气查询、社区广告片段和 GitHub 更新查询。服务会接收请求 IP。', externalT),
+    row('保存最近搜索', '默认关闭；开启后只存扩展内，最多 8 条、30 天过期，读取时清理。', historyT),
+    row('搜索记录', null, clearHistory),
+    h('p', { class: 'stg-note' }, 'App 授权仅保留在当前浏览器会话，重启后需重新扫码。'),
+    h('div', { class: 'row' },
+      h('div', { class: 'row-label' },
+        h('span', {}, '备份与迁移'),
+        h('small', {}, '设置和足迹导出成 JSON 文件；不含自定义背景图片')),
+      h('div', { class: 'data-acts' }, exportBtn, importBtn), json));
+
+  sheet.section('lab', '实验功能', '可能随版本调整的功能，默认关闭。',
+    row('App 推荐流', '首页「推荐」改用手机 App 的推荐；关掉就是网页版原来的推荐', appT),
+    drawer('App 授权', () => (authed ? '已授权' : '未授权'),
+      h('p', { class: 'sd-note' }, '用 B 站 App 扫码授权。凭证只保存在本次浏览器会话，重启后需重新扫码，可随时取消。'),
+      h('div', { class: 'af-row' }, appStat, h('div', { class: 'data-acts' }, appBtn, appOff)), appQrBox, appQrNote),
+    row('X 式重排', '按你的观看历史重新排：常看完的 UP 往前，秒退和「不感兴趣」的往后，混入关注的人 48 小时内的新稿，看过的不再出现。只在本机计算，可和 App 推荐流一起用', rankT));
 
   return {
     sheet,
     sync(s) {
+      enabledT.setAttribute('aria-checked', String(s.enabled));
       externalT.setAttribute('aria-checked', String(s.privacyExternal));
       historyT.setAttribute('aria-checked', String(s.searchHistory));
       poolCur = null;
@@ -594,6 +654,7 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
       favD.setAttribute('aria-checked', String(s.favDirect));
       favCols.set(String(s.favColumns));
       wideT.setAttribute('aria-checked', String(s.wide));
+      cornersT.setAttribute('aria-checked', String(s.playerCorners));
       autoW.setAttribute('aria-checked', String(s.autoWeb));
       webS.setAttribute('aria-checked', String(s.webScroll));
       spdK.setAttribute('aria-checked', String(s.speedKeys));
@@ -614,10 +675,12 @@ function buildSettingsPanel(sheet: Sheet, get: () => Settings, currentShader: ()
       paintHead();
       if (!fontIn.matches(':focus')) fontIn.value = s.bodyFont;
       idD.setAttribute('aria-checked', String(s.idDrag));
+      followListT.setAttribute('aria-checked', String(s.feedFollowList));
       kw.set(s.filters.keywords);
       ups.set(s.filters.ups);
       mode.set(s.bg.mode);
       paintSwatches();
+      paintDeps();
     },
   };
 }

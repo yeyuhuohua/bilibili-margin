@@ -39,6 +39,7 @@ try {
       await cdp.send('Runtime.enable');
       await page.goto(url, { waitUntil: 'domcontentloaded' });
       await page.locator(`${host} .top [aria-label="设置"]`).click();
+      await page.locator(`${host} .sheet[aria-label="设置"]`).getByRole('tab', { name: '外观', exact: true }).click();
       const effects = page.locator(`${host} [role="switch"][aria-label="控件动效"]`);
       await effects.waitFor({ timeout: 6000 });
       assert.equal(await effects.getAttribute('aria-checked'), 'true');

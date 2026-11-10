@@ -1,3 +1,4 @@
+import { draftValue } from './message-draft.mjs';
 // Delay optional profile data and fresh history to test perceived session loading.
 import { chromium } from 'playwright';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -38,7 +39,7 @@ try{
   await input.fill('保留草稿和焦点');await input.focus();
   await first.evaluate(e=>{window.marginInitialSession=e;});
   if(interactive){releaseProfiles();await first.locator('.wh-sn b').filter({hasText:'联系人'}).waitFor();}
-  results.profileHydration={draft:await input.inputValue(),focused:await input.evaluate(e=>e.getRootNode().activeElement===e),sameRow:await first.evaluate(e=>window.marginInitialSession===e)};
+  results.profileHydration={draft:await draftValue(input),focused:await input.evaluate(e=>e.getRootNode().activeElement===e),sameRow:await first.evaluate(e=>window.marginInitialSession===e)};
   assert.equal(results.profileHydration.draft,'保留草稿和焦点');assert(results.profileHydration.focused&&results.profileHydration.sameRow);
   await rows.nth(1).click();await page.locator('#margin-root .wh-log').getByText('已加载的聊天记录',{exact:true}).waitFor();
   holdHistory=true;await first.click();

@@ -181,9 +181,24 @@ export async function ackSession(talker: number, seq: number, csrf: string): Pro
 export interface Session { talker: number; unread: number; last: string; ts: number; maxSeq?: number; person?: Person }
 export interface MsgCard { title: string; desc: string; cover: string; url: string; rows: [string, string][]; action: string }
 export interface Msg { sender: number; type: number; text: string; image: string; ts: number; key: string; seq: number; card?: MsgCard; emotes?: MessageEmote[] }
-export interface MessageEmote { text: string; url: string }
+export interface MessageEmote { text: string; url: string; size?: number }
 export interface EmotePack { id: number; name: string; emotes: MessageEmote[] }
 export interface MessageImage { url: string; width: number; height: number; imageType: string; original: number; size: number }
+
+// 只缓存当前页面已返回的公开表情元数据，不持久化聊天内容。
+const knownEmotes = new Map<string, MessageEmote>();
+function parseEmote(e: any, panel = false): MessageEmote | null {
+  const text = String(e.text ?? '');
+  if (!text) return null;
+  if (panel && Number(e.type) === 4) return { text, url: '' };
+  const url = [panel ? e.webp_url : '', e.gif_url, e.url, e.uri].map(https).find(value => /^https:\/\//.test(value));
+  if (!url) return null;
+  const size = Number(e.size ?? e.meta?.size);
+  const emote = { text, url, ...(size === 1 || size === 2 ? { size } : {}) };
+  knownEmotes.set(text, emote);
+  if (knownEmotes.size > 1000) knownEmotes.delete(knownEmotes.keys().next().value!);
+  return emote;
+}
 
 /* #2：私信里的卡片 / 通知 / 分享等特殊类型以前只显示标题，现在拆成卡片（标题、正文、封面、明细行、跳转） */
 const VIDEO_URL = (c: any) => (c.bvid ? `https://www.bilibili.com/video/${c.bvid}` : c.id && c.source === 5 ? `https://www.bilibili.com/video/av${c.id}` : '');
@@ -285,15 +300,19 @@ export async function readAllMessages(csrf: string): Promise<(keyof Unread)[]> {
 
 export async function messages(talker: number): Promise<Msg[]> {
   const d = await get<any>('https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs', { talker_id: talker, session_type: 1, size: 30 });
-  const emotes = (d.e_infos ?? []).map((e: any): MessageEmote => ({ text: String(e.text ?? ''), url: https(e.gif_url || e.uri || '') })).filter((e: MessageEmote) => e.text && /^https:\/\//.test(e.url));
-  return (d.messages ?? []).map((m: any): Msg => ({ sender: m.sender_uid, type: m.msg_type, ...msgText(m.msg_type, m.content), ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes })).reverse();
+  (d.e_infos ?? []).forEach((e: any) => parseEmote(e));
+  return (d.messages ?? []).map((m: any): Msg => {
+    const body = msgText(m.msg_type, m.content);
+    const emotes = [...new Set(body.text.match(/\[[^\]\n]{1,100}\]/g) ?? [])].map(text => knownEmotes.get(text)).filter((e): e is MessageEmote => !!e);
+    return { sender: m.sender_uid, type: m.msg_type, ...body, ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes };
+  }).reverse();
 }
 
 /** 原版私信的表情面板也使用 reply 场景，按当前登录账号返回可用表情包。 */
 export async function messageEmotes(): Promise<EmotePack[]> {
   const d = await get<any>('https://api.bilibili.com/x/emote/user/panel/web', { business: 'reply' });
   return (d.packages ?? []).map((p: any): EmotePack => ({ id: p.id, name: String(p.text || '表情'),
-    emotes: (p.emote ?? []).filter((e: any) => e.flags?.unlocked !== false && e.flags?.unlocked !== 0).map((e: any): MessageEmote => ({ text: String(e.text ?? ''), url: https(e.url) })).filter((e: MessageEmote) => e.text && /^https:\/\//.test(e.url))
+    emotes: (p.emote ?? []).map((e: any) => parseEmote(e, true)).filter((e: MessageEmote | null): e is MessageEmote => !!e)
   })).filter((p: EmotePack) => p.emotes.length);
 }
 

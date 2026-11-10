@@ -21,6 +21,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Unit test (settings / filter / md5 / footprint)
         run: pnpm run test:unit
+      - name: Heatmap migration, pagination and error recovery
+        run: node --test tests/heatmap-reliability.cjs
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run build
       - name: Display version and update comparison
@@ -157,6 +159,14 @@ jobs:
           SMOKE_OUT=smoke-artifacts/watch-toolbar node tests/watch-toolbar.mjs
           SMOKE_OUT=smoke-artifacts/favorites-subscriptions node tests/favorites-subscriptions.mjs
           SMOKE_OUT=smoke-artifacts/triple-release node tests/triple-release.mjs
+      - name: November messages, player, live and weather regressions
+        run: node tests/november-feedback.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/november-feedback
+      - name: Categorized settings navigation and retained preferences
+        run: node tests/settings-page.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/settings-page
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -174,8 +184,24 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium firefox
       - run: pnpm run build
+      - name: Rich message draft editing in Chromium and Firefox
+        run: node tests/message-editor.mjs
+        env:
+          SMOKE_OUT: privacy-performance/message-editor
+      - name: Native recommendation username rendering
+        run: node tests/watch-upnames.mjs
+        env:
+          SMOKE_OUT: privacy-performance/upnames
+      - name: Settings export and dynamic follow-list preferences
+        run: node tests/new-feedback.mjs
+        env:
+          SMOKE_OUT: privacy-performance/new-feedback
+      - name: Loaded-extension heatmap migration and short visits
+        run: node tests/heatmap-extension.mjs
+        env:
+          SMOKE_OUT: privacy-performance/heatmap
       - name: Animation layout and cleanup
         run: pnpm run test:animation-performance
         env:

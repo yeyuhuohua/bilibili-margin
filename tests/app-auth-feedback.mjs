@@ -47,6 +47,7 @@ try {
     try {
       await page.goto('https://www.bilibili.com/', { waitUntil: 'domcontentloaded' });
       await page.locator('#margin-root .top [aria-label="设置"]').click();
+      await page.locator('#margin-root .sheet[aria-label="设置"]').getByRole('tab', { name: '实验功能', exact: true }).click();
       await page.locator('#margin-root .sd-head').filter({ hasText: 'App 授权' }).click();
       const button = page.locator('#margin-root .af-row').getByRole('button', { name: '扫码授权', exact: true });
       const note = page.locator('#margin-root .af-note');

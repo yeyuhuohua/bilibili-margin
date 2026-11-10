@@ -400,6 +400,7 @@ function applyFont(s: Settings): void {
   try { if (on && s.cdn) localStorage.setItem('margin:cdn', s.cdn); else localStorage.removeItem('margin:cdn'); } catch { /* 隐私模式 */ }
   set('--margin-zoom', on && s.zoom !== 100 ? String(s.zoom / 100) : null);
   set('--margin-rk', on && s.radius !== 100 ? String(s.radius / 100) : null);
+  set('--margin-player-rk', on && !s.playerCorners ? '0' : null);
   set('--margin-cfs', on && s.commentSize !== 14 ? `${s.commentSize}px` : null);
 }
 if (!offByUrl() && !sessionStorage.getItem('margin:off')) {

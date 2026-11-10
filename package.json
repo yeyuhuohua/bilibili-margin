@@ -1,6 +1,6 @@
 {
   "name": "margin",
-  "version": "0.60.15",
+  "version": "0.60.21",
   "private": true,
   "description": "映间 MARGIN — 一个重新设计的 B 站首页浏览器扩展",
   "type": "module",

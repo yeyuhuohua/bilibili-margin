@@ -25,6 +25,7 @@ export const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 /** 内容脚本 → service worker 的足迹消息 */
 export type FpMessage =
+  | { margin: 'fp'; op: 'read' }
   | { margin: 'fp'; op: 'open'; at: number }
   | { margin: 'fp'; op: 'beat'; from: number; to: number }
   | { margin: 'fp'; op: 'merge'; days: Record<string, { h: number; hf?: string }> }

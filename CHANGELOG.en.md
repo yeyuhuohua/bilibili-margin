@@ -6,6 +6,48 @@
 
 - Align the following-list scroll arrows with avatar centers on the dynamics page, with layout regression checks at multiple viewport widths.
 
+## v0.6.21 · 2026-11-09
+
+- Make native comment IP-location labels inherit the timestamp row's font and line height, fixing mismatched sizes in both themes and after font-size changes (#140).
+- Add centering regression checks for both glass-switch states on the homepage, watch page and profile page (#95).
+
+## v0.6.20 · 2026-11-09
+
+- Integrate heatmap reliability improvements: merge legacy activity through the worker queue, validate save acknowledgements and distinguish empty, signed-out, partial and failed synchronization.
+- Preserve active visits shorter than 15 seconds when navigating, hiding or reloading a page. Retain cross-tab deduplication and exclude time spent away before a bfcache restore.
+- Update the heatmap after storage changes, retain periodic refresh and add history synchronization/retry controls with failure backoff.
+- Validate pagination cursors, deduplicate entries, handle request timeouts/cancellation and fix the patch's Web Locks type error.
+- Add the 44 patch tests, page lifecycle tests and loaded-extension heatmap regressions to continuous checks.
+
+## v0.6.19 · 2026-11-09
+
+- Display selected emoji as images in private-message drafts while retaining editing, undo/redo, line breaks, the 500-character limit and the native send protocol (#137).
+- Fix settings backups failing to trigger a download. Include the display version in filenames and use the browser's save-location preferences without adding download permissions (#138).
+- Add a default-on switch for the dynamic feed's left follow list while keeping the top avatar strip visible (#139).
+- Use ordinary single-line ellipsis for recommendation usernames instead of combining legacy line clamping with no-wrap text. Add Chromium / Firefox paint checks for both themes and narrow columns.
+
+## v0.6.18 · 2026-11-09
+
+- Center settings in a compact dialog capped at 960×680, adapting to smaller windows with internal scrolling.
+- Reduce sidebar width and content padding while retaining categories, search and preferences. Stop background thumbnail work when closed and resume it on demand after reopening.
+
+## v0.6.17 · 2026-11-09
+
+- Integrate the categorized settings panel from PR #135 with eight categories, cross-category search and keyboard navigation.
+- Adapt 21st settings-sidebar and animated-tab interaction patterns using existing local icons and themes, with reduced-motion support and no added React or Motion dependency.
+- Keep narrow-screen category navigation accessible, retain the player-corner setting and route the weather-permission shortcut to its category.
+- Include the author's space-retry test race fix and preserve all message, live-page, follow-status and layout fixes from 0.6.16.
+
+## v0.6.16 · 2026-11-09
+
+- Fix private-message emoji rendering and missing picker entries, including native image URLs, large emoji and text emoticons.
+- Grow the message composer with its content up to eight visible lines and keep message-category navigation aligned.
+- Keep live-room controls clear of the fixed header while preserving fullscreen transitions.
+- Add a separate player-corner setting, enabled by default, without changing other cards.
+- Improve search and toolbar capsule outlines while keeping the full header transparent.
+- Explain disabled weather networking and provide a settings shortcut without enabling external access automatically.
+- Resolve real follow status for homepage video cards with batched, deduplicated requests and a short-lived memory cache; failures remain unknown.
+- The categorized settings panel in PR #135 remains an independent preview and is not included in this version.
 ## v0.6.15 · 2026-11-08
 
 - Restore the original compact header search with its icon, placeholder and shortcut hint, without a submit button.

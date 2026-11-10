@@ -12,6 +12,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('原版私信图片与表情协议', () => {
+  it('兼容只有 url 的私信表情及大表情尺寸', async () => {
+    result = { code: 0, data: { messages: [{ sender_uid: 2, msg_type: 1, content: JSON.stringify({ content: '[支持]' }), timestamp: 1, msg_key: 'url-only', msg_seqno: 1 }], e_infos: [{ text: '[支持]', url: '//i0.hdslb.com/support.png', size: 2 }] } };
+    expect((await messages(2))[0].emotes).toEqual([{ text: '[支持]', url: 'https://i0.hdslb.com/support.png', size: 2 }]);
+  });
+  it('表情面板保留文字类表情并优先使用动图地址', async () => {
+    result = { code: 0, data: { packages: [{ id: 2, text: '颜文字', emote: [
+      { text: '(｀・ω・´)', type: 4 },
+      { text: '[加油]', url: '//i0.hdslb.com/a.png', gif_url: '//i0.hdslb.com/a.gif', meta: { size: 2 } },
+    ] }] } };
+    const packs = await messageEmotes();
+    expect(packs[0].emotes).toEqual([{ text: '(｀・ω・´)', url: '' }, { text: '[加油]', url: 'https://i0.hdslb.com/a.gif', size: 2 }]);
+  });
   it('图片上传使用原版 im 通道、文件和 CSRF，返回真实图片尺寸', async () => {
     const file = new File(['image'], 'test.png', { type: 'image/png' });
     result = { code: 0, data: { image_url: '//message.biliimg.com/bfs/im_new/test.png', image_width: 600, image_height: 400, img_size: 12.5 } };
@@ -47,13 +59,13 @@ describe('原版私信图片与表情协议', () => {
     result = { code: -6 };
     expect(await sendText(1, 2, 'hello', 'csrf')).toBe(false);
   });
-  it('获取原版表情包，过滤不可用表情并保留真实图片', async () => {
+  it('保留原生面板返回的表情，拒绝无效图片并使用原图', async () => {
     result = { code: 0, data: { packages: [{ id: 1, text: '小电视', emote: [
       { text: '[tv_doge]', url: '//i0.hdslb.com/a.gif', flags: { unlocked: true } },
       { text: '[锁定]', url: 'https://i0.hdslb.com/locked.png', flags: { unlocked: false } },
       { text: '[无效]', url: 'javascript:alert(1)' },
     ] }] } };
-    expect(await messageEmotes()).toEqual([{ id: 1, name: '小电视', emotes: [{ text: '[tv_doge]', url: 'https://i0.hdslb.com/a.gif' }] }]);
+    expect(await messageEmotes()).toEqual([{ id: 1, name: '小电视', emotes: [{ text: '[tv_doge]', url: 'https://i0.hdslb.com/a.gif' }, { text: '[锁定]', url: 'https://i0.hdslb.com/locked.png' }] }]);
     expect(new URL(calls[0].url).searchParams.get('business')).toBe('reply');
     result = { code: 0 }; await sendText(1, 2, 'hi[tv_doge]', 'csrf', true);
     expect((calls[1].init?.body as URLSearchParams).get('msg[new_face_version]')).toBe('1');
@@ -62,5 +74,11 @@ describe('原版私信图片与表情协议', () => {
   it('收到的文字使用服务端表情元数据，GIF保持原图地址', async () => {
     result = { code: 0, data: { messages: [{ sender_uid: 2, msg_type: 1, content: JSON.stringify({ content: 'hi[tv_doge]' }), timestamp: 1, msg_key: '1', msg_seqno: 1 }], e_infos: [{ text: '[tv_doge]', uri: '//i0.hdslb.com/a.png', gif_url: '//i0.hdslb.com/a.gif' }] } };
     expect((await messages(2))[0]).toMatchObject({ text: 'hi[tv_doge]', emotes: [{ text: '[tv_doge]', url: 'https://i0.hdslb.com/a.gif' }] });
+  });
+  it('响应缺少表情信息时复用当前页面已知元数据，不替换未知表情', async () => {
+    result = { code: 0, data: { packages: [{ id: 3, text: '缓存', emote: [{ text: '[缓存表情]', url: 'https://i0.hdslb.com/cached.png' }] }] } };
+    await messageEmotes();
+    result = { code: 0, data: { messages: [{ sender_uid: 2, msg_type: 1, content: JSON.stringify({ content: '[缓存表情][尚未知]' }), timestamp: 1, msg_key: 'cached', msg_seqno: 1 }] } };
+    expect((await messages(2))[0].emotes).toEqual([{ text: '[缓存表情]', url: 'https://i0.hdslb.com/cached.png' }]);
   });
 });

@@ -7,6 +7,8 @@ html.margin-live, html.margin-live body, html.margin-live .live-room-app, html.m
   background-color: var(--m-canvas) !important; background-image: none !important;
 }
 html.margin-live body { font-family: var(--m-sans) !important; }
+html.margin-live:not(.margin-webscreen) body { padding-top: 72px !important; }
+html.margin-live.margin-webscreen body { padding-top: 0 !important; }
 html.margin-live #room-background-vm, html.margin-live .room-bg, html.margin-live .room-bg-webp { display: none !important; }
 html.margin-live .app-body { margin-top: 16px !important; }
 html.margin-live #player-ctnr { border-radius: var(--m-radius); overflow: hidden; box-shadow: var(--ring), var(--sh-md); background: var(--m-surface) !important; }

@@ -24,7 +24,7 @@ export function startTracking(): void {
     ? Date.now() - lastInput < 90_000 || playing(false)
     : playing(true); // 后台：有声音地在播才算（静音的预览不算）
 
-  let last = 0; // 上次心跳时是否活跃（时间戳），用来把连续的活跃时间接成一段
+  let last = active() ? Date.now() : 0;
   const beat = () => {
     const now = Date.now();
     if (!active()) { last = 0; return; }
@@ -33,7 +33,21 @@ export function startTracking(): void {
     send({ margin: 'fp', op: 'beat', from, to: now });
   };
   const open = () => { if (document.visibilityState === 'visible') send({ margin: 'fp', op: 'open', at: Date.now() }); };
+  // 页面离开前补上不足 15 秒的尾段；继续使用后台时间片去重，多个事件或标签页不会重复累计。
+  const flush = () => {
+    const now = Date.now();
+    if (last && now > last && now - last <= 70_000 && (now - lastInput < 90_000 || playing(false)))
+      send({ margin: 'fp', op: 'beat', from: last, to: now });
+    last = 0;
+  };
   open();
-  document.addEventListener('visibilitychange', open);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush();
+    else { last = active() ? Date.now() : 0; open(); }
+  });
+  addEventListener('pagehide', flush);
+  addEventListener('pageshow', (event: PageTransitionEvent) => {
+    if (event.persisted) { last = active() ? Date.now() : 0; open(); }
+  });
   every(BEAT, beat, { hidden: true }); // 后台播放也要计时，所以隐藏时不暂停
 }

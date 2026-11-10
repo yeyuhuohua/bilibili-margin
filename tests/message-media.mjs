@@ -1,3 +1,4 @@
+import { draftValue, selectDraftText } from './message-draft.mjs';
 // All traffic is mocked; no files or messages are sent to real Bilibili accounts.
 import { chromium } from 'playwright';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -46,16 +47,16 @@ try{
   await input.waitFor();
   await check('lazy Bilibili emoji picker, insertion at selection and keyboard dismissal',async()=>{
     assert.equal(emojiLoads,0);assert(await send.isDisabled());
-    await input.fill('abc');await input.evaluate(e=>{e.setSelectionRange(1,2);e.dispatchEvent(new Event('select'));});
+    await input.fill('abc');await selectDraftText(input,1,2);
     await page.locator(`${root} [aria-label="选择表情"]`).click();await panel.getByRole('button',{name:'[tv_doge]',exact:true}).click();
-    assert.equal(await input.inputValue(),'a[tv_doge]c');assert.equal(emojiLoads,1);
+    assert.equal(await draftValue(input),'a[tv_doge]c');assert.equal(await input.locator('img[alt="[tv_doge]"]').count(),1);assert.equal(emojiLoads,1);
     await page.locator(`${root} [aria-label="选择表情"]`).click();await panel.getByRole('searchbox').fill('不存在');assert(await panel.getByText('没有找到表情').isVisible());
     await page.keyboard.press('Escape');assert(await panel.isHidden());assert(await page.locator(`${root} [aria-label="选择表情"]`).evaluate(e=>e.getRootNode().activeElement===e));
     await page.locator(`${root} [aria-label="选择表情"]`).click();await panel.getByRole('tab',{name:'颜文字'}).click();assert(await panel.getByRole('button',{name:'[开心]',exact:true}).isVisible());await page.keyboard.press('Escape');assert.equal(emojiLoads,1);
   });
   await check('failed text keeps draft; successful native emoji renders original GIF',async()=>{
-    failText=true;await send.click();await page.waitForTimeout(200);assert.equal(await input.inputValue(),'a[tv_doge]c');assert.equal(sent.length,0);
-    failText=false;await send.click();await page.waitForFunction(()=>document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').value==='');
+    failText=true;await send.click();await page.waitForTimeout(200);assert.equal(await draftValue(input),'a[tv_doge]c');assert.equal(sent.length,0);
+    failText=false;await send.click();await page.waitForFunction(()=>document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').textContent==='');
     await page.locator(`${root} .wh-inline-emote`).waitFor();assert((await page.locator(`${root} .wh-inline-emote`).getAttribute('src')).endsWith('.gif'));assert.equal(sent[0].face,'1');
   });
   await check('attachment preview/remove never uploads before send',async()=>{
@@ -72,8 +73,8 @@ try{
   await check('partial image/text success keeps only unsent text for retry',async()=>{
     await pick.setInputFiles(file);await input.fill('图片说明');failText=true;const n=sent.length;
     await send.click();await page.waitForFunction(()=>document.getElementById('margin-root').shadowRoot.querySelector('.wh-attachment').hidden);await page.waitForTimeout(100);
-    assert.equal(sent.length,n+1);assert.equal(await input.inputValue(),'图片说明');assert(await attachment.isHidden());const uploaded=uploads;
-    failText=false;await send.click();await page.waitForFunction(()=>document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').value==='');assert.equal(sent.length,n+2);assert.equal(uploads,uploaded);
+    assert.equal(sent.length,n+1);assert.equal(await draftValue(input),'图片说明');assert(await attachment.isHidden());const uploaded=uploads;
+    failText=false;await send.click();await page.waitForFunction(()=>document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').textContent==='');assert.equal(sent.length,n+2);assert.equal(uploads,uploaded);
   });
   await check('multiple images keep order and retry only the failed remainder', async () => {
     const files = ['a.png', 'b.png', 'c.png'].map(name => ({ ...file, name }));
@@ -87,12 +88,12 @@ try{
     assert.equal(sent.length, before + 1);
     assert(sent.at(-1).content.url.endsWith('/a.png'));
     assert.equal(await attachment.locator('.wh-attachment-item').count(), 2);
-    assert.equal(await input.inputValue(), '三张图的说明');
+    assert.equal(await draftValue(input), '三张图的说明');
     const uploaded = uploads;
     failImageAt = 0;
     await send.click();
     await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelector('.wh-attachment').hidden);
-    await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').value === '');
+    await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelector('.wh-input').textContent === '');
     assert.equal(uploads, uploaded + 1);
     assert.deepEqual(sent.slice(before).map(x => x.type === 2 ? x.content.url.split('/').pop() : x.content.content), ['a.png', 'b.png', 'c.png', '三张图的说明']);
   });

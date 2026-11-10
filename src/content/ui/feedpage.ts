@@ -35,6 +35,8 @@ export class FeedApp {
   private sentinel!: HTMLElement;
   private strip!: HTMLElement;
   private tabs!: HTMLElement;
+  private followParent?: HTMLElement;
+  private followingStarted = false;
 
   constructor(settings: Settings) {
     this.shell = new PageShell(settings, 'feed');
@@ -43,7 +45,12 @@ export class FeedApp {
     this.render();
   }
 
-  update(s: Settings): void { this.shell.update(s); }
+  update(s: Settings): void {
+    this.shell.update(s);
+    const box = this.shell.app.querySelector<HTMLElement>('.fd-follows');
+    if (box) box.hidden = !s.feedFollowList;
+    else if (s.feedFollowList && this.followParent) void this.renderFollowList(this.followParent);
+  }
 
   private render(): void {
     const s = this.shell;
@@ -83,6 +90,7 @@ export class FeedApp {
         return;
       }
       this.renderMe(left);
+      this.followParent = left;
       portal().then((p) => { this.renderUps(p.ups); this.renderLive(left, p.live, p.liveCount); }).catch(() => { /* 头像条可缺省 */ });
       void this.renderFollowList(left);
       this.load();
@@ -91,8 +99,10 @@ export class FeedApp {
 
   /** #16：左侧「关注」列表——比头像条能装更多人，点一行就把动态流切成该 UP */
   private async renderFollowList(left: HTMLElement): Promise<void> {
+    if (this.followingStarted || !this.shell.settings.feedFollowList) return;
+    this.followingStarted = true;
     const a = await account().catch(() => null);
-    if (!a) return;
+    if (!a || !this.shell.settings.feedFollowList) { this.followingStarted = false; return; }
     const list = h('div', { class: 'fd-follow-list' });
     const more = h('button', { type: 'button', class: 'ghost fd-follow-more' }, '加载更多');
     const head = h('div', { class: 'fd-follow-head' },

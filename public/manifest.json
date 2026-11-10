@@ -3,8 +3,8 @@
   "name": "__MSG_extensionName__",
   "default_locale": "en",
   "short_name": "MARGIN",
-  "version": "0.60.15",
-  "version_name": "0.6.15",
+  "version": "0.60.21",
+  "version_name": "0.6.21",
   "minimum_chrome_version": "110",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'self' https://app.bilibili.com https://bsbsb.top https://api.github.com"

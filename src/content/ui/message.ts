@@ -11,11 +11,11 @@ import { createMessageComposer } from './message-composer';
 const msgCardData = new WeakMap<Element, MsgCard>();
 
 function messageText(text: string, emotes: MessageEmote[] = []): (Node | string)[] {
-  const byText = new Map(emotes.map(e => [e.text, e.url]));
+  const byText = new Map(emotes.map(e => [e.text, e]));
   return text.split(/(\[[^\]\n]{1,100}\])/g).map(part => {
-    const url = byText.get(part);
-    if (!url) return part;
-    const image = h('img', { class: 'wh-inline-emote', src: url, alt: part, title: part, loading: 'lazy', referrerpolicy: 'no-referrer' });
+    const emote = byText.get(part);
+    if (!emote?.url) return part;
+    const image = h('img', { class: `wh-inline-emote${emote.size === 2 ? ' big' : ''}`, src: emote.url, alt: part, title: part, loading: 'lazy', referrerpolicy: 'no-referrer' });
     image.addEventListener('error', () => image.replaceWith(document.createTextNode(part)), { once: true });
     return image;
   });

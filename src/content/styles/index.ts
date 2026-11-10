@@ -13,5 +13,6 @@ import overlays from './07-overlays.css?inline';
 import home_search from './08-home-search.css?inline';
 import appearance from './09-appearance.css?inline';
 import batch from './10-batch.css?inline';
+import settings from './11-settings.css?inline';
 
-export default [base, header, cards, glass_folder, footprint, watch, overlays, home_search, appearance, batch].join('');
+export default [base, header, cards, glass_folder, footprint, watch, overlays, home_search, appearance, batch, settings].join('');

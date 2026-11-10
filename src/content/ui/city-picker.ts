@@ -1,5 +1,6 @@
 import { geocodeList, type Place } from '../api/weather';
 import { h } from './dom';
+import { PrivacyBlocked } from '../../shared/privacy';
 
 /** 天气卡和设置共用候选搜索，选中带地区的地点后才保存。 */
 export function createCityPicker(onPick: (place: Place) => void) {
@@ -31,9 +32,9 @@ export function createCityPicker(onPick: (place: Place) => void) {
         });
         return option;
       }) : [h('li', { class: 'empty', role: 'status' }, '没有找到这个城市')]));
-    } catch {
+    } catch (error) {
       if (request !== sequence || !el.isConnected) return;
-      list.replaceChildren(h('li', { class: 'empty', role: 'status' }, '搜索失败，请重试'));
+      list.replaceChildren(h('li', { class: 'empty', role: 'status' }, error instanceof PrivacyBlocked ? '天气联网已关闭，请在设置中允许外部辅助服务' : '搜索失败，请重试'));
     }
   };
   input.addEventListener('input', () => {

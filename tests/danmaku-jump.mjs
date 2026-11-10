@@ -67,6 +67,7 @@ try {
   assert.equal(calls.length, 0); assert.equal(jumpModules, 0);
   passed('default off leaves the module and danmaku unloaded');
   await page.locator('#margin-watch-top .top [aria-label="设置"]').click();
+  await page.locator('#margin-watch-top .sheet[aria-label="设置"]').getByRole('tab', { name: '播放页', exact: true }).click();
   const toggle = page.getByRole('switch', { name: '弹幕跳转建议', exact: true });
   assert.equal(await toggle.getAttribute('aria-checked'), 'false');
   const firstResponse = page.waitForResponse(response => response.url().includes('/x/v1/dm/list.so'));

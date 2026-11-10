@@ -53,6 +53,7 @@ try {
   });
 
   await page.locator('#margin-root .top [aria-label="设置"]').click();
+  await page.locator('#margin-root .sheet[aria-label="设置"]').getByRole('tab', { name: '隐私与数据', exact: true }).click();
   await check('privacy controls render and match defaults', async () => {
     await page.waitForTimeout(700);
     assert.equal(await page.getByRole('switch', { name: '允许外部辅助服务', exact: true }).getAttribute('aria-checked'), 'false');

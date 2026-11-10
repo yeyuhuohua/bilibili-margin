@@ -25,6 +25,7 @@ html.margin-skin {
   --m-mono: var(--margin-mono, "Geist Mono", "Margin Sans SC", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", ui-monospace, SFMono-Regular, Menlo, monospace);
   --m-sans: var(--margin-sans, "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", system-ui, sans-serif);
   --m-radius: calc(16px * var(--margin-rk, 1));
+  --m-player-radius: calc(16px * var(--margin-player-rk, var(--margin-rk, 1)));
 
   --bg1: #ffffff; --bg2: #f5f4f1; --bg3: #efeeea; --bg1_float: #ffffff; --bg2_float: #f1f0ec;
   --bg1_rgb: 255, 255, 255;
@@ -83,16 +84,16 @@ html.margin-watch .video-info-detail .item, html.margin-watch .pubdate-ip-text {
 html.margin-watch .video-info-detail svg, html.margin-watch .video-info-detail .icon { color: var(--m-muted) !important; fill: currentColor; }
 
 /* 播放器：圆角卡片 + 柔和阴影（只在普通 / 宽屏模式） */
-html.margin-watch #playerWrap { border-radius: var(--m-radius); background: transparent !important; }
+html.margin-watch #playerWrap { border-radius: var(--m-player-radius); background: transparent !important; }
 /* 播放器后面的黑色占位层：圆角外露出来就是「黑边」 */
 html.margin-watch #bilibili-player-placeholder, html.margin-watch #bilibili-player-placeholder-top,
-html.margin-watch #bilibili-player-placeholder-bottom { background: transparent !important; border-radius: var(--m-radius); }
+html.margin-watch #bilibili-player-placeholder-bottom { background: transparent !important; border-radius: var(--m-player-radius); }
 html.margin-watch #app.app-v1, html.margin-watch #app { background: transparent !important; }
 /* 原生加载阶段尚未写入 data-screen，先沿用普通模式的圆角。 */
 html.margin-watch .bpx-player-container:not([data-screen]),
 html.margin-watch .bpx-player-container[data-screen="normal"],
 html.margin-watch .bpx-player-container[data-screen="wide"] {
-  border-radius: var(--m-radius) !important; background: transparent !important;
+  border-radius: var(--m-player-radius) !important; background: transparent !important;
   box-shadow: var(--sh-md) !important;
 }
 /* 视频层是合成层，单靠父级 overflow:hidden + 圆角在 Chromium 里裁不干净，四角会漏出黑底；
@@ -100,15 +101,15 @@ html.margin-watch .bpx-player-container[data-screen="wide"] {
 html.margin-watch .bpx-player-container:not([data-screen]) .bpx-player-video-area,
 html.margin-watch .bpx-player-container[data-screen="normal"] .bpx-player-video-area,
 html.margin-watch .bpx-player-container[data-screen="wide"] .bpx-player-video-area {
-  border-radius: var(--m-radius) var(--m-radius) 0 0; overflow: hidden; isolation: isolate;
+  border-radius: var(--m-player-radius) var(--m-player-radius) 0 0; overflow: hidden; isolation: isolate;
   -webkit-mask-image: linear-gradient(#000, #000); mask-image: linear-gradient(#000, #000);
 }
 html.margin-watch .bpx-player-container:not([data-screen]) .bpx-player-primary-area,
 html.margin-watch .bpx-player-container[data-screen="normal"] .bpx-player-primary-area,
-html.margin-watch .bpx-player-container[data-screen="wide"] .bpx-player-primary-area { border-radius: var(--m-radius); background: transparent !important; }
-html.margin-watch .bpx-player-sending-area { background: var(--m-surface) !important; border-radius: 0 0 var(--m-radius) var(--m-radius); }
+html.margin-watch .bpx-player-container[data-screen="wide"] .bpx-player-primary-area { border-radius: var(--m-player-radius); background: transparent !important; }
+html.margin-watch .bpx-player-sending-area { background: var(--m-surface) !important; border-radius: 0 0 var(--m-player-radius) var(--m-player-radius); }
 /* 发送栏自己有一层直角底色，会盖住外层的下圆角 */
-html.margin-watch .bpx-player-sending-area .bpx-player-sending-bar { background: transparent !important; border-radius: 0 0 var(--m-radius) var(--m-radius) !important; }
+html.margin-watch .bpx-player-sending-area .bpx-player-sending-bar { background: transparent !important; border-radius: 0 0 var(--m-player-radius) var(--m-player-radius) !important; }
 
 /* 互动条：点赞 / 投币 / 收藏 / 分享做成胶囊 */
 html.margin-watch .video-toolbar-container { border-bottom: 0 !important; padding: 20px 0 6px !important; box-sizing: border-box; flex-wrap: wrap; gap: 8px 12px; }
@@ -221,7 +222,13 @@ html.margin-watch .video-page-card-small .upname, html.margin-watch .video-page-
 html.margin-watch .video-page-card-small .name, html.margin-watch .video-page-card-small .upname a {
   color: var(--m-muted) !important; font-size: 12px !important; line-height: 18px !important; opacity: 1 !important;
 }
-html.margin-watch .video-page-card-small .upname .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.margin-watch .video-page-card-small .upname a { display: flex !important; min-width: 0; }
+/* 单行名称使用普通省略，避免原生旧式 line-clamp 与 nowrap 叠加裁切。 */
+html.margin-watch .video-page-card-small .upname a .name {
+  display: block !important; flex: 1 1 auto; width: auto !important; min-width: 0;
+  -webkit-line-clamp: unset; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html.margin-watch .video-page-card-small .upname a > svg { flex-shrink: 0; }
 html.margin-watch .video-page-card-small .upname svg, html.margin-watch .video-page-card-small .upname-icon,
 html.margin-watch .video-page-card-small .playinfo svg { color: var(--m-muted) !important; fill: currentColor !important; opacity: 1 !important; }
 html.margin-watch .video-page-card-small .playinfo { font-family: var(--m-mono); }

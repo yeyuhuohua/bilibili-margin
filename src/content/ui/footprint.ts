@@ -1,4 +1,6 @@
-import { activeOf, backfill, dayKey, firstOf, levelOf, levelThresholds, loadActivity, secondsOf, sourceOf, type Activity, type DayRecord } from '../footprint/store';
+import { activeOf, dayKey, firstOf, levelOf, levelThresholds, loadActivity, secondsOf, sourceOf, type Activity, type DayRecord, type BackfillResult } from '../footprint/store';
+import { parseSyncState, syncHistory, syncNote, SYNC_KEY } from '../footprint/sync';
+import { ACTIVITY_KEY } from '../../shared/activity';
 import { h, icon, ICONS } from './dom';
 import { every } from '../sched';
 
@@ -11,7 +13,6 @@ const fmt = (sec: number) => {
   return hr ? `${hr} 小时 ${m} 分` : `${m} 分钟`;
 };
 
-const BF_KEY = 'margin:activity-bf';
 const VIEW_KEY = 'margin:fp-view';
 const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEK_1 = ['日', '一', '二', '三', '四', '五', '六'];
@@ -66,27 +67,61 @@ function smoothWheelScroll(strip: HTMLElement) {
 export function createFootprintCard(): HTMLElement {
   const el = h('section', { class: 'fp-card', 'aria-label': 'B 站足迹' });
   const tip = h('div', { class: 'fp-tip', hidden: '' });
-  let note = '时长按页面可见且 90 秒内有操作、或正在播放时计算；满 1 分钟才算打开过';
-
-  const refresh = async () => { try { paint(await loadActivity()); } catch { /* 扩展已重载 */ } };
-  (async () => {
-    await refresh();
-    // 观看历史补全：每 6 小时最多一次
-    const last = ((await chrome.storage.local.get(BF_KEY))[BF_KEY] as number | undefined) ?? 0;
-    if (Date.now() - last < 6 * 3600e3) { note = '没有本机记录的日子用 B 站观看历史估算'; return refresh(); }
+  let note = '正在读取本机足迹…';
+  let readFailed = false, disposed = false, syncBusy = false, syncStarted = false;
+  let refreshVersion = 0, refreshFrame = 0;
+  let syncResult: BackfillResult | null = null;
+  const lifetime = new AbortController();
+  const retry = h('button', {
+    type: 'button', class: 'fp-sync-btn', 'aria-label': '同步 B 站观看历史',
+    style: 'flex:none;border:1px solid currentColor;border-radius:999px;padding:4px 10px;background:transparent;color:inherit;font:inherit;cursor:pointer',
+    onclick: () => { void runSync(true); },
+  }, '同步历史');
+  function status() {
+    note = readFailed ? '无法读取本机足迹；扩展更新后请刷新 B 站页面重试，已有数据未清除'
+      : syncStarted ? '正在补全 B 站观看历史…' : syncNote(syncResult, activity);
+    el.dataset.syncState = readFailed ? 'read-error' : syncStarted ? 'loading' : syncResult?.status ?? 'idle';
+    const target = el.querySelector('.fp-status');
+    if (target && target.textContent !== note) target.textContent = note;
+    retry.disabled = syncBusy;
+    retry.setAttribute('aria-busy', String(syncBusy));
+    retry.textContent = syncStarted ? '同步中…' : readFailed || (syncResult && !['ok', 'empty'].includes(syncResult.status)) ? '重试同步' : '同步历史';
+  }
+  const refresh = async () => {
+    const version = ++refreshVersion;
+    try {
+      const data = await loadActivity();
+      if (disposed || version !== refreshVersion) return;
+      readFailed = false;
+      paint(data);
+    } catch {
+      if (disposed || version !== refreshVersion) return;
+      readFailed = true;
+      status(); // Keep the last rendered data; a read failure is not an empty history.
+    }
+  };
+  const scheduleRefresh = () => {
+    if (disposed || refreshFrame || !el.isConnected || document.hidden) return;
+    refreshFrame = requestAnimationFrame(() => { refreshFrame = 0; void refresh(); });
+  };
+  async function runSync(force = false) {
+    if (disposed || syncBusy || !el.isConnected || document.hidden) return;
+    syncBusy = true;
+    status();
     const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - 364 - since.getDay());
-    const r = await backfill(since);
-    if (r === 'ok') await chrome.storage.local.set({ [BF_KEY]: Date.now() });
-    note = r === 'ok' ? '没有本机记录的日子用 B 站观看历史估算（每条最多算 20 分钟）'
-      : r === 'nologin' ? '登录 B 站后可以用观看历史补全过去的天数' : '观看历史暂时读取失败，只显示本地记录';
-    refresh();
-  })();
-  every(60_000, refresh); // 页面隐藏时不刷新
+    try {
+      const result = await syncHistory(since, { force, signal: lifetime.signal, onStart: () => { syncStarted = true; status(); } });
+      if (!disposed) syncResult = result;
+    } finally {
+      syncBusy = false; syncStarted = false;
+      if (!disposed) { await refresh(); status(); }
+    }
+  }
   let ro: ResizeObserver | null = null;
   // 21st「Glass Calendar」：年 / 月两种视图，月视图是一条可横向滑动的日期条，点哪天看哪天
   let view: 'year' | 'month' = (() => { try { return localStorage.getItem(VIEW_KEY) === 'month' ? 'month' : 'year'; } catch { return 'year'; } })();
   let monthAt = new Date(); monthAt.setDate(1); monthAt.setHours(0, 0, 0, 0);
-  let picked: string | null = null;
+  let picked: string | null = null, renderedPicked: string | null = null;
   let activity: Activity = {};
   let renderedKey = '', renderedCells: HTMLElement[] = [];
   let thr: [number, number, number] = [900, 2700, 5400];
@@ -94,7 +129,10 @@ export function createFootprintCard(): HTMLElement {
 
   function paint(data: Activity) {
     activity = data;
+    status();
     tip.hidden = true;
+    const selectionChanged = picked !== renderedPicked;
+    renderedPicked = picked;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const key = `${dayKey(today)}|${view}|${monthAt.getFullYear()}-${monthAt.getMonth()}`;
     const sameView = renderedKey === key;
@@ -149,9 +187,10 @@ export function createFootprintCard(): HTMLElement {
         const pressed = String(picked === b.dataset.k);
         if (b.getAttribute('aria-pressed') !== pressed) b.setAttribute('aria-pressed', pressed);
       });
-      if (view === 'month') {
+      if (view === 'month' && selectionChanged) {
         const selected = el.querySelector<HTMLElement>(picked ? '.fp-day-b[aria-pressed="true"]' : '.fp-day-b[data-today]');
         if (selected) requestAnimationFrame(() => {
+          if (!selected.isConnected) return;
           const col = selected.parentElement!, strip = col.parentElement!;
           strip.scrollLeft = col.offsetLeft - strip.clientWidth / 2 + col.offsetWidth / 2;
         });
@@ -183,10 +222,11 @@ export function createFootprintCard(): HTMLElement {
         stat(fmt(secondsOf(t)), `${pLabel}时长`),
         stat(fmt(total), '近一年累计'),
         stat(`${streak} 天`, `当前连续 · 最长 ${best} 天`))),
-      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot' }, h('span', {}, note), legend)),
+      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot', style: 'flex-wrap:wrap;gap:8px' }, h('span', { class: 'fp-status', role: 'status', 'aria-live': 'polite', style: 'flex:1 1 180px;min-width:0;white-space:normal;overflow-wrap:anywhere' }, note), retry, legend)),
       tip,
     );
     const fit = () => {
+      if (!graph.isConnected || !graph.parentElement) return;
       const w = (graph.parentElement as HTMLElement).clientWidth;
       tip.hidden = true;
       // v0.50：窄屏时间距 3→2、格子最小 6px，让一整年放得下，不再横向裁掉左边
@@ -207,7 +247,7 @@ export function createFootprintCard(): HTMLElement {
       tip.replaceChildren(h('b', {}, `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`), h('br'),
         ...(s || f ? [`首次打开 ${f ?? '—'} · 时长 ${fmt(s)}`, h('br'),
           h('small', { class: `fp-src fp-src-${sourceOf(r) ?? 'local'}` }, `${SRC[sourceOf(r) ?? 'local']}${activeOf(r) ? '' : ' · 不计入打开天数'}`)]
-          : [h('small', {}, '没有打开 B 站')]));
+          : [h('small', {}, '暂无可用记录；可能未同步或未累计满 1 分钟')]));
       tip.hidden = false;
       // 夹在卡片内：最右一列（今天）居中会被卡片的 overflow 裁掉，顶部放不下就翻到格子下方
       const b = c.getBoundingClientRect(), card = el.getBoundingClientRect(), pad = 8, gap = 8;
@@ -253,5 +293,32 @@ export function createFootprintCard(): HTMLElement {
           h('button', { type: 'button', 'aria-label': '下个月', disabled: nextOff, onclick: () => go(1) }, icon(ICONS.chevronRight)))),
       strip);
   }
+  // Storage changes repaint promptly; the minute timer is only a fallback/retry tick.
+  const changed = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+    if (disposed || area !== 'local') return;
+    if (changes[SYNC_KEY] && !syncBusy) {
+      syncResult = parseSyncState(changes[SYNC_KEY].newValue)?.result ?? null;
+      if (el.isConnected && !document.hidden) status();
+    }
+    if (changes[ACTIVITY_KEY] || changes['margin-activity-v1']) scheduleRefresh();
+  };
+  chrome.storage.onChanged.addListener(changed);
+  const wake = () => {
+    if (!el.isConnected || document.hidden || disposed) return;
+    scheduleRefresh();
+    void runSync();
+  };
+  const stop = every(60_000, wake);
+  document.addEventListener('visibilitychange', wake, { signal: lifetime.signal });
+  addEventListener('online', () => { if (!disposed) void runSync(true); }, { signal: lifetime.signal });
+  addEventListener('pagehide', (event: PageTransitionEvent) => {
+    if (event.persisted) return; // bfcache restores the same live card and its listeners.
+    disposed = true; ++refreshVersion;
+    lifetime.abort(); stop(); ro?.disconnect();
+    if (refreshFrame) cancelAnimationFrame(refreshFrame);
+    chrome.storage.onChanged.removeListener(changed);
+  }, { signal: lifetime.signal });
+  paint(activity);
+  queueMicrotask(() => { void refresh().then(() => runSync()); });
   return el;
 }

@@ -64,6 +64,7 @@ try {
   await page.waitForFunction(() => { const v = document.querySelector('video'); return v.readyState === 4 && v.seekable.length && v.seekable.end(0) >= 60; });
   assert.equal(providerCalls, 0);
   await page.locator('#margin-watch-top .top [aria-label="设置"]').click();
+  await page.locator('#margin-watch-top .sheet[aria-label="设置"]').getByRole('tab', { name: '内容过滤', exact: true }).click();
   const toggle = page.locator('#margin-watch-top [role="switch"][aria-label="跳过视频内广告"]');
   assert.equal(await toggle.getAttribute('aria-checked'), 'false');
   await page.evaluate(() => document.getElementById('margin-watch-top').shadowRoot.querySelector('[role="switch"][aria-label="跳过视频内广告"]').click());

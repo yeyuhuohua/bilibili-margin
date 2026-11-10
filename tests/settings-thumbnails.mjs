@@ -69,6 +69,8 @@ try {
       await page.locator('#margin-root .top [aria-label="设置"]').click();
       await page.waitForTimeout(500);
       assert.equal(await evaluate('thumbProbe.calls'), 0, 'offscreen thumbnails started on panel opening');
+      await page.locator('#margin-root .sheet[aria-label="设置"]').getByRole('tab', { name: '外观', exact: true }).click();
+      await page.waitForTimeout(100);
       const swatches = page.locator('#margin-root .swatches');
       const showSwatches = () => swatches.evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
       await showSwatches();
@@ -78,7 +80,8 @@ try {
       } else if (mode === 'close-before-start') await page.keyboard.press('Escape');
       await page.waitForTimeout(900);
       result.hiddenCalls = await evaluate('thumbProbe.calls');
-      assert.equal(await evaluate('thumbProbe.visible'), false);
+      if (mode === 'close-before-start') assert.equal(await page.locator('#margin-root .stg-layer').getAttribute('data-open'), 'false');
+      else assert.equal(await evaluate('thumbProbe.visible'), false);
       // Use the actual visibility notification, whose delivery can span multiple frames.
       result.callsAtHidden = await evaluate('thumbProbe.hiddenAt');
       assert.equal(result.hiddenCalls, result.callsAtHidden, 'thumbnail work continued after the hidden notification');

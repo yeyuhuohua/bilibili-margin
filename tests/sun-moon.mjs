@@ -55,6 +55,13 @@ try {
       for (const glass of ['liquid', 'soft', 'flat']) {
         await seed({ theme, glass });
         await settled(theme);
+        const alignment = await button.evaluate(button => {
+          const outer = button.getBoundingClientRect(), thumb = button.querySelector('.ts-sm').getBoundingClientRect();
+          return { top: thumb.top - outer.top, bottom: outer.bottom - thumb.bottom,
+            edge: button.dataset.state === 'light' ? outer.right - thumb.right : thumb.left - outer.left };
+        });
+        assert.ok(Math.abs(alignment.top - alignment.bottom) < .75, `${name} ${theme} vertically centered: ${JSON.stringify(alignment)}`);
+        assert.ok(Math.abs(alignment.top - alignment.edge) < .75, `${name} ${theme} equal end inset: ${JSON.stringify(alignment)}`);
         await page.waitForFunction(({ host, glass }) => {
           const app = document.querySelector(host)?.shadowRoot?.querySelector('.app');
           const track = app?.querySelector('.ts-c');

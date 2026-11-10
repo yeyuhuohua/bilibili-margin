@@ -77,6 +77,8 @@ export async function geocodeList(q: string, n = 6): Promise<Place[]> {
     return (data?.results ?? []) as any[];
   }));
   const successful = results.filter(result => result.status === 'fulfilled');
+  const blocked = results.find(result => result.status === 'rejected' && result.reason instanceof PrivacyBlocked);
+  if (blocked?.status === 'rejected') throw blocked.reason;
   if (!successful.length) throw new Error('城市搜索暂时不可用');
   const places = new Map<string, Place>();
   for (const g of successful.flatMap(result => result.value)) {

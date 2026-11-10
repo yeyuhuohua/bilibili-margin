@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearLoc, geocodeList, savedLoc, setLoc, weather } from '../../src/content/api/weather';
+import { PrivacyBlocked } from '../../src/shared/privacy';
 
 const LOC_KEY = 'margin:weather-loc';
 const CACHE_KEY = 'margin:weather-cache';
@@ -33,6 +34,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('天气城市候选', () => {
+  it('联网关闭时保留权限提示，不发城市查询请求', async () => {
+    vi.mocked(chrome.storage.local.get).mockResolvedValue({ 'margin:settings': { privacyExternal: false } });
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    await expect(geocodeList('纽约')).rejects.toBeInstanceOf(PrivacyBlocked);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('合并原词和市后缀查询，显示省市信息并按坐标去重', async () => {
     const fetcher = vi.fn(async (url: string) => {
       const query = new URL(url).searchParams.get('name');

@@ -1,3 +1,4 @@
+import { draftValue } from './message-draft.mjs';
 // 冒烟测试：加载构建好的扩展（dist/），在离线伪造的 B 站上依次打开各个接管页面，
 // 断言扩展没有抛未捕获错误、关键元素都在，并保存亮 / 暗两套 1440 截图。
 //   pnpm run build && node tests/smoke.mjs
@@ -274,9 +275,14 @@ for (const theme of THEMES) {
       if(await maps())miss.push('default soft mode generated refraction maps');
       await page.locator('#margin-root .top [aria-label="设置"]').click();
       const panel=page.locator('#margin-root .sheet[aria-label="设置"]');
+      await panel.getByRole('tab',{name:'搜索与顶栏',exact:true}).click();await sleep(150);
+      // 展开速度只在新版搜索栏下可用，旧版时禁用
+      await panel.getByRole('radio',{name:'新版',exact:true}).click();await sleep(150);
       const speed=panel.getByLabel('搜索框展开速度（%）');
       if(await speed.count()!==1)miss.push('palette speed setting missing');
       else { await speed.fill('999');await speed.press('Enter');if(await speed.inputValue()!=='200')miss.push(`palette speed not clamped: ${await speed.inputValue()}`);await speed.fill('100');await speed.press('Enter'); }
+      await panel.getByRole('radio',{name:'旧版',exact:true}).click();await sleep(150);
+      await panel.getByRole('tab',{name:'外观',exact:true}).click();await sleep(150);
       await panel.getByRole('radio',{name:'哔哩蓝',exact:true}).click();
       await page.waitForFunction(()=>getComputedStyle(document.getElementById('margin-root').shadowRoot.querySelector('.upload')).backgroundColor==='rgb(0, 125, 168)');
       if(await page.locator('#margin-root .main .hs-btn').evaluate(e=>getComputedStyle(e).backgroundColor)!=='rgb(0, 125, 168)')miss.push('search CTA did not follow accent');
@@ -306,9 +312,11 @@ for (const theme of THEMES) {
       await reset();await page.setViewportSize({width:1440,height:1000});await page.goto(HOME,{waitUntil:'domcontentloaded'});
       const root='#margin-root',miss=[];
       await page.locator(`${root} .top [aria-label="设置"]`).click();
-      await page.locator(`${root} .sd-head`).filter({hasText:'布局与细节'}).click();
+      const panel=page.locator(`${root} .sheet[aria-label="设置"]`);
+      await panel.getByRole('tab',{name:'外观',exact:true}).click();
       const cols=page.locator(`${root} .row`).filter({has:page.locator('.row-label>span',{hasText:'收藏夹列数'})});
       await cols.getByRole('radio',{name:'4 列',exact:true}).click();
+      await panel.getByRole('tab',{name:'搜索与顶栏',exact:true}).click();
       await page.locator(`${root} .sd-head`).filter({has:page.locator('.sd-t',{hasText:'顶栏入口'})}).click();
       const move=page.locator(`${root} [aria-label="收藏上移"]`);await move.click();await sleep(200);
       const arranged=await page.locator(`${root} .top [aria-label="收藏"]`).evaluate(e=>Number(e.style.order));
@@ -395,12 +403,12 @@ for (const theme of THEMES) {
       await page.waitForFunction(()=>document.getElementById('margin-root')?.shadowRoot?.querySelector('.toast')?.textContent.includes('消息已全部标为已读'));
       const miss=[];
       if(reads.size!==5)miss.push(`not all categories handled: ${[...reads]}`);
-      if(await input.inputValue()!=='未发送的私信草稿')miss.push('read all discarded chat draft');
+      if(await draftValue(input)!=='未发送的私信草稿')miss.push('read all discarded chat draft');
       if(await page.locator('#margin-root .wh-dot').count())miss.push('confirmed read sessions retain dots');
       remaining.like=3;failLike=true;await button.click();
       await page.waitForFunction(()=>document.getElementById('margin-root')?.shadowRoot?.querySelector('.toast')?.textContent.includes('未能全部完成'));
       if(await page.locator('#margin-root [data-view="like"] .ms-n').textContent()!=='3')miss.push('failed category unread was cleared');
-      if(await input.inputValue()!=='未发送的私信草稿')miss.push('failure discarded chat draft');
+      if(await draftValue(input)!=='未发送的私信草稿')miss.push('failure discarded chat draft');
       await page.screenshot({path:join(OUT,'messages-readall-partial.png')});return miss;
     });
 
@@ -429,6 +437,7 @@ for (const theme of THEMES) {
       await reset(); await seed({ bg: { mode: 'fixed', shader: 'silk', intensity: .6 } });
       await page.goto(HOME, { waitUntil: 'domcontentloaded' });
       await page.locator('#margin-root .top [aria-label="设置"]').click();
+      await page.locator('#margin-root .sheet[aria-label="设置"]').getByRole('tab',{name:'外观',exact:true}).click();
       await page.locator('#margin-root .sd-head').filter({ hasText: '强度与自定义图片' }).click();
       const range = page.locator('#margin-root [aria-label="背景强度"]'); await range.waitFor();
       await sleep(600);
