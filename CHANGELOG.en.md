@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Align the following-list scroll arrows with avatar centers on the dynamics page, with layout regression checks at multiple viewport widths.
+
 ## v0.6.15 · 2026-11-08
 
 - Restore the original compact header search with its icon, placeholder and shortcut hint, without a submit button.

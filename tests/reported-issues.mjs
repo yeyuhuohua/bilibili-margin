@@ -580,6 +580,18 @@ try {
       const root = document.getElementById('margin-root').shadowRoot;
       return !root.querySelector('[aria-label="向右滚动关注列表"]').disabled;
     });
+    const assertArrowAlignment = async () => {
+      const offsets = await page.evaluate(() => {
+        const root = document.getElementById('margin-root').shadowRoot;
+        const faces = [root.querySelector('.fd-ups > .fd-up .fd-up-all'), root.querySelector('.fd-ups-row .fd-up-face')];
+        return faces.flatMap(face => [...root.querySelectorAll('.fd-ups-scroll')].map(button => {
+          const f = face.getBoundingClientRect(), b = button.getBoundingClientRect();
+          return b.y + b.height / 2 - f.y - f.height / 2;
+        }));
+      });
+      assert(offsets.every(offset => Math.abs(offset) < 1), `arrow/avatar vertical centers: ${offsets.join(', ')}`);
+    };
+    await assertArrowAlignment();
     assert(await prev.isDisabled()); assert(await next.isEnabled());
     await next.click(); await page.waitForTimeout(600);
     assert(await row.evaluate(e => e.scrollLeft > 100));
@@ -598,6 +610,7 @@ try {
     await page.getByRole('searchbox', { name: '在关注里搜 UP 主' }).fill('');
     await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelectorAll('.fd-ups-row .fd-up').length === 32);
     await page.setViewportSize({ width: 900, height: 1000 }); await page.waitForTimeout(100);
+    await assertArrowAlignment();
     assert(await prev.isDisabled()); assert(await next.isEnabled());
     await row.locator('.fd-up').first().click();
     assert.equal(await row.locator('.fd-up').first().getAttribute('aria-pressed'), 'true');
