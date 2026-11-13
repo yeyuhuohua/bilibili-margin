@@ -1,4 +1,4 @@
-import { collectedFolders, createFolder, deleteFolder, folderUrl, folderVideos, folders, seasonVideos, type Folder } from '../api/fav';
+import { collectedFolders, createFolder, deleteFolder, folderPlayUrl, folderUrl, folderVideos, folders, removeFolderVideo, seasonVideos, type Folder } from '../api/fav';
 import { videoCard, skeleton, cardData } from './card';
 import { h, icon, ICONS } from './dom';
 import { glassFolder, type GFFile, type GlassFolderApi } from './glass-folder';
@@ -10,10 +10,11 @@ import { targetOfVideo } from '../filter-targets';
 import { openBili } from '../navigation';
 import { loadSettings,onSettingsChange } from '../../shared/settings';
 import { segmented } from './controls';
+import { uiReducedMotion } from '../motion';
 
 /** 收藏夹抽屉：玻璃文件夹 → 视频网格（无限加载） */
 export function createFavorites(onRender: (grid: HTMLElement) => void, direct: () => boolean = () => true, filter?: FilterRuntime): Sheet {
-  let loaded = false;
+  let loaded = false, loading = false;
   const shelf = h('div', { class: 'shelf' });
   const grid = h('div', { class: 'grid fav-grid' });
   const status = h('div', { class: 'status' });
@@ -34,9 +35,15 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     group = next; init();
   });
 
-  const sheet = createSheet({ title: '收藏夹', eyebrow: 'Favorites', width: 820, onOpen: () => { if (!loaded) init(); } });
+  const sheet = createSheet({ title: '收藏夹', eyebrow: 'Favorites', width: 820,
+    onOpen: () => { if (!loaded && !loading) init(); else previews.forEach(({ gf }) => previewObserver.observe(gf.el)); },
+    onClose: () => { previewObserver.disconnect(); previewQueue.clear(); },
+  });
   sheet.body.classList.add('fav-body');
   sheet.body.append(tabs, shelf, folderStatus, moreFolders, crumb, grid, status, sentinel);
+  // 21st ibelick Scroll Button: container-local scrolling, adapted to return upward.
+  const toTop = h('button', { type: 'button', class: 'fav-to-top', onclick: () => sheet.body.scrollTo({ top: 0, behavior: uiReducedMotion() ? 'auto' : 'smooth' }) }, icon(ICONS.top), '返回顶部');
+  sheet.el.querySelector('.sheet')!.append(h('footer', { class: 'fav-footer' }, toTop));
   const setColumns = (columns:number) => shelf.style.setProperty('--fav-cols',String(columns));
   loadSettings().then((s) => setColumns(s.favColumns)).catch(() => {});
   onSettingsChange((next,prev) => { if (next.favColumns !== prev.favColumns) setColumns(next.favColumns); });
@@ -46,18 +53,21 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     const g = ++listGen;
     gen++; current = null; more = false; busy = false; foldersBusy = false; folderPage = 1;
     folderList = [];
+    previewObserver.disconnect();
+    previewQueue.clear();
     for (const { gf } of previews.values()) gf.dispose();
     previews.clear();
     crumb.replaceChildren(); grid.replaceChildren(); status.replaceChildren(); folderStatus.replaceChildren(); moreFolders.hidden = true; moreFolders.disabled = false;
-    loaded = true;
+    loaded = false; loading = true;
     shelf.replaceChildren(...Array.from({ length: 4 }, () => h('div', { class: 'gf-sk sk' })));
     try {
-      const result = group === 'collected' ? await collectedFolders() : await folders().then((list) => list && ({ list, more: false }));
+      const result = group === 'collected' ? await collectedFolders(1, true) : await folders(true).then((list) => list && ({ list, more: false }));
       if (g !== listGen) return;
       if (!result) {
         shelf.replaceChildren(h('div', { class: 'empty' }, h('p', {}, '登录后才能看到你的收藏夹'), h('a', { class: 'user', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '去登录')));
         return;
       }
+      loaded = true;
       folderList = result.list;
       shelf.replaceChildren(...folderList.map((f, i) => folderCard(f, i)));
       if (group === 'created') shelf.append(newTile());
@@ -68,6 +78,8 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
       if (g !== listGen) return;
       loaded = false;
       shelf.replaceChildren(h('div', { class: 'empty' }, h('p', {}, `加载失败：${(e as Error).message}`), h('button', { type: 'button', class: 'btn', onclick: init }, '重试')));
+    } finally {
+      if (g === listGen) loading = false;
     }
   }
 
@@ -105,7 +117,43 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
   const page1 = (f: Folder) => { const key = keyOf(f); let p = firstPage.get(key); if (!p) { p = videos(f, 1); p.catch(() => firstPage.delete(key)); firstPage.set(key, p); } return p; };
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   // 文件夹预览的原始数据：屏蔽词变化时只重算扇形文件，不重新请求
-  const previews = new Map<string, { gf: GlassFolderApi; raw: Video[] }>();
+  type Preview = { gf: GlassFolderApi; folder: Folder; raw: Video[]; state: 'idle' | 'loading' | 'ready' | 'painted' };
+  const previews = new Map<string, Preview>();
+  const previewQueue = new Map<string, { entry: Preview; visible: boolean }>();
+  let activePreviews = 0;
+  function warmPreviews(): void {
+    if (!sheet.isOpen()) return;
+    while (activePreviews < 4 && previewQueue.size) {
+      let next = previewQueue.entries().next().value!;
+      for (const item of previewQueue) if (item[1].visible) { next = item; break; }
+      const [key, { entry }] = next;
+      previewQueue.delete(key);
+      if (previews.get(key) !== entry || entry.state !== 'idle') continue;
+      previewObserver.unobserve(entry.gf.el);
+      entry.state = 'loading'; activePreviews++;
+      void page1(entry.folder).then(r => {
+        if (previews.get(key) !== entry) return;
+        entry.raw = r.list; entry.state = 'ready';
+        if (sheet.isOpen()) paintPreview(key);
+      }).catch(() => { entry.state = 'idle'; }).finally(() => { activePreviews--; warmPreviews(); });
+    }
+  }
+  // Warm roughly three rows ahead, with visible folders first and at most four jobs.
+  const previewObserver = new IntersectionObserver(entries => {
+    if (!sheet.isOpen()) return;
+    const viewport = sheet.body.getBoundingClientRect();
+    for (const { target, isIntersecting, boundingClientRect: box } of entries) {
+      const key = (target as HTMLElement).dataset.key!;
+      if (!isIntersecting) { previewQueue.delete(key); continue; }
+      const entry = previews.get(key);
+      if (!entry || entry.gf.el !== target) continue;
+      if (entry.state === 'ready' || entry.state === 'painted') {
+        previewObserver.unobserve(target);
+        if (entry.state === 'ready') paintPreview(key);
+      } else if (entry.state === 'idle') previewQueue.set(key, { entry, visible: box.bottom >= viewport.top && box.top <= viewport.bottom });
+    }
+    warmPreviews();
+  }, { root: sheet.body, rootMargin: '720px 0px' });
   const paintPreview = (id: string) => {
     const entry = previews.get(id);
     if (!entry) return;
@@ -117,6 +165,7 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
         href: `https://www.bilibili.com/video/${v.bvid}`,
       }));
       entry.gf.setFiles(files);
+      if (entry.state === 'ready') entry.state = 'painted';
     };
     // 关键词也要能命中视频标签：先预热标签（没有关键词时立即返回）
     if (filter) void filter.prepare(entry.raw.map((v) => v.bvid)).then(paint);
@@ -134,7 +183,7 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
       art: ARTS[f.id % ARTS.length],
       seed: f.id % 997,
       width: 236,
-      appearDelay: i * 140,
+      appearDelay: i < 3 ? i * 40 : 0,
       onOpenChange: (o) => { if (o) open(f); },
       direct,
       onDirect: () => { open(f); requestAnimationFrame(() => crumb.scrollIntoView({ behavior: 'smooth', block: 'start' })); },
@@ -146,13 +195,8 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     });
     const key = keyOf(f);
     gf.el.dataset.id = String(f.id); gf.el.dataset.key = key;
-    previews.set(key, { gf, raw: [] });
-    page1(f).then((r) => {
-      const entry = previews.get(key);
-      if (!entry || entry.gf !== gf) return;
-      entry.raw = r.list;
-      paintPreview(key);
-    }).catch(() => {});
+    previews.set(key, { gf, folder: f, raw: [], state: 'idle' });
+    previewObserver.observe(gf.el);
     return gf.el;
   }
 
@@ -215,6 +259,9 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     const key = keyOf(f);
     folderList = folderList.filter((x) => keyOf(x) !== key);
     firstPage.delete(key);
+    previewQueue.delete(key);
+    const removed = previews.get(key);
+    if (removed) previewObserver.unobserve(removed.gf.el);
     previews.get(key)?.gf.dispose();
     previews.delete(key);
     shelf.querySelector<HTMLElement>(`.gf-root[data-key="${key}"]`)?.remove();
@@ -230,6 +277,7 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
     busy = false;
     shelf.querySelectorAll<HTMLElement>('.gf-root').forEach((el) => el.toggleAttribute('data-current', el.dataset.key === keyOf(f)));
     crumb.replaceChildren(h('span', {}, f.title), h('small', {}, `${f.count} 个视频`));
+    if (f.count && f.kind !== 'season') crumb.append(h('a', { class: 'btn small fav-play-all', href: folderPlayUrl(f), target: '_blank', rel: 'noopener' }, '播放全部'));
     grid.replaceChildren();
     status.replaceChildren();
     sheet.body.scrollTo({ top: 0 });
@@ -252,6 +300,28 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
       const start = grid.children.length;
       r.list.forEach((v, i) => {
         const card = videoCard(v, start + i, { compact: true });
+        const folder = current!;
+        if (!folder.kind) {
+          const remove = h('button', { type: 'button', class: 'fav-video-remove', 'aria-label': `取消收藏：${v.title}` }, icon(ICONS.close), '取消收藏') as HTMLButtonElement;
+          const error = h('span', { class: 'fav-video-error', role: 'alert' });
+          remove.addEventListener('click', async e => {
+            e.preventDefault(); e.stopPropagation();
+            if (!confirm(`将「${v.title}」从「${folder.title}」中移除？其他收藏夹不受影响。`)) return;
+            remove.disabled = true; error.textContent = '';
+            try {
+              await removeFolderVideo(folder.id, v.aid!);
+              firstPage.delete(keyOf(folder)); folder.count = Math.max(0, folder.count - 1);
+              const preview = previews.get(keyOf(folder));
+              if (preview) {
+                preview.raw = preview.raw.filter(item => item.bvid !== v.bvid); paintPreview(keyOf(folder));
+                const meta = preview.gf.el.querySelector('.gf-meta'); if (meta) meta.textContent = `${folder.count} 个视频`;
+              }
+              if (g === gen) { card.remove(); const count = crumb.querySelector('small'); if (count) count.textContent = `${folder.count} 个视频`; }
+            } catch (e) { if (card.isConnected) error.textContent = `取消失败：${(e as Error).message}`; }
+            finally { remove.disabled = false; }
+          });
+          card.append(h('div', { class: 'fav-video-actions' }, remove, error));
+        }
         card.toggleAttribute('data-margin-filtered', filter ? !filter.allows(targetOfVideo(v)) : false);
         grid.append(card);
       });

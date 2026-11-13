@@ -41,7 +41,8 @@ export interface NavInfo {
 }
 
 let navCache: Promise<NavInfo> | null = null;
-export function nav(): Promise<NavInfo> {
+export function nav(refresh = false): Promise<NavInfo> {
+  if (refresh) navCache = null;
   // /nav answers code -101 when logged out but still carries wbi_img, so read it raw.
   navCache ??= fetch(`${API}/x/web-interface/nav`, { credentials: 'include' })
     .then((r) => readResponse<NavInfo>(r))

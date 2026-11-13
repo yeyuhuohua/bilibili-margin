@@ -238,6 +238,8 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
   100% { scale: 1; }
 }
 .gf-frost {
+  /* Freeze the blurred snapshot while the real thumbnails unfold above it. */
+  --gf-lift: 42px; --gf-spread: 0px; --gf-fan: 0deg; --gf-stack: 15px;
   position: absolute;
   left: 0;
   top: -74px;
@@ -253,7 +255,8 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 /* 副本模糊到边缘会变透明，垫一层底色，免得真实的视频从玻璃底部透出来 */
 .gf-front { background: linear-gradient(180deg, #e9e9ec, #dcdce0); }
 .app[data-theme="dark"] .gf-root .gf-front { background: linear-gradient(180deg, #232327, #121214); }
-.gf-frost .gf-sheet { transition: transform .75s var(--gf-spring) calc(var(--gf-depth) * 40ms); }
+.gf-frost .gf-sheet { transition: none; animation: none; box-shadow: none; }
+.gf-frost .gf-art { transition: none; }
 .gf-tint {
   position: absolute;
   inset: 0;
@@ -274,6 +277,8 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 }
 .app[data-theme="dark"] .gf-root .gf-spec { mix-blend-mode: screen; opacity: .16; }
 .gf-front-rim { width: 340px; height: 198px; }
+.gf-root:is(:hover,:focus-within) .gf-front-rim { filter: var(--gf-water); }
+.app:is([data-glass="flat"],.margin-ui-still) .gf-front-rim { filter: none !important; }
 .gf-front-rim path { stroke-width: 2.4; transition: stroke-width .3s var(--gf-ease); }
 .app[data-theme="dark"] .gf-root .gf-front-rim { opacity: .55; }
 
@@ -438,6 +443,10 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 
 /* —— 映间适配 —— */
 .shelf .gf-root { scroll-snap-align: start; }
+.shelf .gf-back, .shelf .gf-back-rim { transition-duration: .18s, .18s; }
+.shelf .gf-front { transition-duration: .8s, .18s, .18s; }
+.shelf .gf-root[data-entered] .gf-front { transition-delay: 0s; }
+.shelf .gf-key { transition-duration: .35s, .35s, .18s, .2s; transition-delay: 0s; }
 .gf-sk { flex: none; width: 236px; height: 189px; margin-top: 62px; border-radius: 16px; background: var(--chip); animation: pulse 1.4s ease-in-out infinite; }
 .gf-title::before { content: ""; display: inline-block; width: 0; height: 7px; margin-right: 0; border-radius: 50%; background: var(--accent); vertical-align: middle; transition: width .3s var(--gf-ease), margin .3s var(--gf-ease); }
 .gf-root[data-current] .gf-title::before { width: 7px; margin-right: 8px; }

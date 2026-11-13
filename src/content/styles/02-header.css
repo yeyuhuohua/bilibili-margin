@@ -40,6 +40,11 @@
   transition: color 150ms var(--ease-out), background-color 150ms var(--ease-out); }
 .et-btn > svg { flex: none; }
 .et-btn > span { display: block; max-width: 0; overflow: hidden; opacity: 0; transition: max-width .5s var(--et-ease), opacity .5s var(--et-ease); }
+.et-labels .et-btn > span { max-width: 7em; opacity: 1; margin-left: 6px; }
+.et-labels { min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.top:has(.et-labels) .acts { min-width: 0; max-width: 100%; }
+.top:has(.et-labels) .search { min-width: 120px; }
+.top:has(.et-labels) { grid-template-columns: auto minmax(120px, 320px) minmax(0, 1fr); }
 .et-btn:hover { background: var(--chip); color: var(--ink); }
 /* 选中/悬停都不改变宽度：指示条（.et-thumb）滑过去，文字只在 title 里出现（#11：不再挤压重排） */
 .et-btn[data-selected] { color: var(--accent-text); }

@@ -211,6 +211,7 @@ function tipText(c: any): string {
   return t.replace(/#\{([^}]*)\}\{[^}]*\}/g, '$1');
 }
 export function msgText(type: number, raw: string): { text: string; image: string; card?: MsgCard } {
+  if (type === 5) return { text: '撤回了一条消息', image: '' };
   let c: any = {};
   try { c = JSON.parse(raw); } catch { return { text: raw, image: '' }; }
   if (type === 1) return { text: c.content ?? '', image: '' };
@@ -302,9 +303,10 @@ export async function messages(talker: number): Promise<Msg[]> {
   const d = await get<any>('https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs', { talker_id: talker, session_type: 1, size: 30 });
   (d.e_infos ?? []).forEach((e: any) => parseEmote(e));
   return (d.messages ?? []).map((m: any): Msg => {
-    const body = msgText(m.msg_type, m.content);
+    const type = m.msg_status === 1 ? 5 : m.msg_type;
+    const body = msgText(type, m.content);
     const emotes = [...new Set(body.text.match(/\[[^\]\n]{1,100}\]/g) ?? [])].map(text => knownEmotes.get(text)).filter((e): e is MessageEmote => !!e);
-    return { sender: m.sender_uid, type: m.msg_type, ...body, ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes };
+    return { sender: m.sender_uid, type, ...body, ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes };
   }).reverse();
 }
 
@@ -346,11 +348,19 @@ export function sendImage(me: number, to: number, image: MessageImage, csrf: str
   if (!isMessageImageUrl(image.url) || !(image.width > 0 && image.height > 0)) throw new Error('图片信息无效，请重新选择');
   return sendMessage(me, to, 2, image, csrf);
 }
-async function sendMessage(me: number, to: number, type: 1 | 2, content: object, csrf: string, newFace = false): Promise<boolean> {
+export function canRecallMessage(message: Msg, me: number, now = Date.now() / 1000): boolean {
+  return message.sender === me && [1, 2, 6].includes(message.type) && /^\d+$/.test(message.key) && message.ts > 0 && now >= message.ts && now - message.ts <= 120;
+}
+/** Same send_msg type 5 and raw msg_key as the native message client; server remains authoritative. */
+export async function recallMessage(me: number, to: number, message: Msg, csrf: string): Promise<void> {
+  if (!canRecallMessage(message, me)) throw new Error('只能撤回自己在两分钟内发送的消息');
+  if (!await sendMessage(me, to, 5, message.key, csrf)) throw new Error('撤回失败，请稍后重试或检查是否已超过时限');
+}
+async function sendMessage(me: number, to: number, type: 1 | 2 | 5, content: object | string, csrf: string, newFace = false): Promise<boolean> {
   const dev = crypto.randomUUID().toUpperCase();
   const body = new URLSearchParams({
     'msg[sender_uid]': String(me), 'msg[receiver_type]': '1', 'msg[receiver_id]': String(to), 'msg[msg_type]': String(type), 'msg[msg_status]': '0',
-    'msg[content]': JSON.stringify(content), 'msg[new_face_version]': newFace ? '1' : '0', 'msg[dev_id]': dev, 'msg[timestamp]': String(Math.floor(Date.now() / 1000)),
+    'msg[content]': typeof content === 'string' ? content : JSON.stringify(content), 'msg[new_face_version]': newFace ? '1' : '0', 'msg[dev_id]': dev, 'msg[timestamp]': String(Math.floor(Date.now() / 1000)),
     from_firework: '0', build: '0', mobi_app: 'web', csrf_token: csrf, csrf,
   });
   const r = await fetch('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', { method: 'POST', credentials: 'include', body });

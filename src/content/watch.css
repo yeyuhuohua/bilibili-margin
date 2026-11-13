@@ -197,7 +197,7 @@ html.margin-watch .video-page-card-small .card-box:hover { background: var(--m-s
 html.margin-watch .video-page-card-small .pic-box {
   border-radius: 10px !important; overflow: hidden; background: var(--m-line) !important;
   /* 悬停预览的 <video> 是独立合成层，会漏出 overflow+radius 的裁切；clip-path 一并裁掉 */
-  clip-path: inset(0 round 10px); isolation: isolate;
+  clip-path: inset(0 round calc(10px * var(--margin-rk, 1))); isolation: isolate;
 }
 html.margin-watch .video-page-card-small .pic-box .pic,
 html.margin-watch .video-page-card-small .pic-box .b-img,
@@ -225,7 +225,7 @@ html.margin-watch .video-page-card-small .name, html.margin-watch .video-page-ca
 html.margin-watch .video-page-card-small .upname a { display: flex !important; min-width: 0; }
 /* 单行名称使用普通省略，避免原生旧式 line-clamp 与 nowrap 叠加裁切。 */
 html.margin-watch .video-page-card-small .upname a .name {
-  display: block !important; flex: 1 1 auto; width: auto !important; min-width: 0;
+  display: block !important; flex: 1 1 auto; width: auto !important; min-width: 0; min-height: 18px;
   -webkit-line-clamp: unset; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 html.margin-watch .video-page-card-small .upname a > svg { flex-shrink: 0; }
@@ -509,7 +509,8 @@ html.margin-webscroll .player-wrap,
 html.margin-webscroll #bilibili-player-wrap,
 html.margin-webscroll .bilibili-player-wrap { height: var(--m-ws-h) !important; }
 html.margin-webscroll .mode-webscreen { position: absolute !important; top: var(--m-ws-y) !important; left: var(--m-ws-x) !important;
-  width: var(--m-ws-w) !important; height: 100vh !important; right: auto !important; bottom: auto !important; }
+  width: var(--m-ws-w) !important; height: 100dvh !important; box-sizing: border-box; right: auto !important; bottom: auto !important; }
+html.margin-watch .bpx-player-container[data-screen="web"] .bpx-player-shadow-progress-area { bottom: 0 !important; }
 html.margin-webscroll.margin-watch :is(.left-container, .playlist-container--left) > .m-wcard:not([hidden]) { display: block !important; }
 
 /* v0.48 网页全屏可滚动时的滚轮音量提示 */

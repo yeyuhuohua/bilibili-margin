@@ -6,6 +6,113 @@
 
 - Align the following-list scroll arrows with avatar centers on the dynamics page, with layout regression checks at multiple viewport widths.
 
+## v0.6.52 · 2026-11-12
+
+- Support HTTPS image URLs for custom backgrounds. Preview before applying, persist the URL and synchronize open MARGIN pages.
+- Preserve the current background when loading fails and discard previews after input changes. Retain local image uploads.
+- Guard stale background reads, escape CSS image URLs and update the privacy notice.
+
+## v0.6.51 · 2026-11-12
+
+- Read saved weather immediately before network refresh. Keep the last city if location lookup fails and retain historical weather if forecast requests fail.
+- Label cached data with its original timestamp and dated forecasts. Retain city-change, invalid-data and external-service consent checks.
+- Wrap long cache labels to keep the city selector visible. Fresh weather remains available if cache writes fail.
+- Cover service outages, page reloads, browser restarts and same-city location refreshes.
+
+## v0.6.50 · 2026-11-12
+
+- Add optional navigation labels, off by default, shared by home and watch pages with horizontal scrolling for narrow headers (#157).
+- Add classic/sidebar dynamic layouts, defaulting to classic. Reuse the existing UP strip in the left sidebar, move live cards to the right and return to the top on selection (#146).
+- Add back-to-top controls to shared takeover pages and use a simple filled selection in the sidebar.
+- Add loaded-extension settings, navigation and layout regression coverage.
+
+## v0.6.49 · 2026-11-12
+
+- Add an opt-in Remember authorization switch for the App recommendation feed. Off by default, remembered credentials survive browser restarts for up to 30 days, bounded by Bilibili's expiry (#174).
+- Turning it off removes the saved copy while retaining the current session. Revocation, expiry checks and invalid-token responses clear credentials. Serialize auth changes and prevent stale requests from revoking a newer login.
+- Store remembered credentials in extension-origin IndexedDB outside settings exports. Report failed QR credential saves and allow retrying.
+- Add browser-restart, expiry, revocation, concurrency and settings-switch regression coverage, and update the privacy notice.
+
+## v0.6.45 · 2026-11-12
+
+- Add replies to root and nested inline dynamic comments using the existing composer and full comment IDs. Support cancellation while preserving failed drafts and recipients, retaining duplicate-submission protection.
+- Fix Firefox weather requests failing on non-iterable native query/header iterators (#158). Use `forEach` while retaining endpoint restrictions, sensitive-parameter/header checks and external-service consent.
+- Avoid page-owned Web Locks in Firefox content scripts so history sync does not misreport a storage failure (#172). Identify Firefox using the extension URL; retain in-flight deduplication, serialized background writes and Chromium cross-tab exclusion without clearing activity data.
+- Include main's existing live-content wallpaper fix (#170) and hot-search placeholder fix (the first part of #171), with light/dark and empty-search regression coverage.
+- Add a native Firefox MV3 content-script boundary test using synthetic history/weather responses, without real account actions. The blank native-page report in #171 and dual-monitor progress bar in #152 remain under investigation and are not claimed fixed.
+- No new dependency or permission.
+
+## v0.6.41 · 2026-11-11
+
+- Restore card danmaku counts returned as numeric strings. Accept numeric and formatted counts, preserve explicit zero and the user's visibility setting, and omit invalid values.
+- Keep dynamic-comment submission locked independently of reply pagination and show immediate sending feedback. Preserve rejected drafts and edits made while sending (#165).
+- Guard repeated clicks and submit keys in the same native comment editor while its fetch/XHR publication request is pending. Retain the native request, response and error behavior without automatic POST retries or artificial delays.
+- Merge PR #166 to prevent overlapping search placeholders and PR #167 to match morph corners to actual settings and synchronize shortcut hints.
+- Handle Escape during the opening frame before the palette input receives focus, retaining reversal and timer cleanup.
+- Reuse the existing search palette in dynamic and other takeover-page headers, honoring both classic and expanding styles (#146).
+- Let live-room content backgrounds become transparent only when a custom background is active; retain the original canvas when off and keep player/rank surfaces opaque (#95).
+- Continue deferring toolbar reordering and dynamic layout restructuring. No new dependency or permission.
+
+## v0.6.40 · 2026-11-11
+
+- Restore access to the signed-in owner's private favorite folders without granting access to other users' private content (#161).
+- Add the existing IP, forecast and place-search endpoints to CSP connect-src for Firefox. Retain privacy controls without adding permissions or providers (#158).
+- Preserve pinned-comment metadata and show the dynamic author's UP badge by UID, including nested replies. Deduplicate pinned rows (#157).
+- Add a native follow-series entry to profile pages (#159). Keep eight initial live previews and load more only on request, with deduplication and retries (#160).
+- Integrate the approved PR #162 preview: author, view and danmaku metadata use icons with text or numbers, retaining accessible labels and followed badges. Explicit zero danmaku counts remain visible.
+
+## v0.6.39 · 2026-11-11
+
+- Confine dynamic comment/repost displacement to an 8px rim and reduce its scale from 200 to 6. Keep the center undistorted to remove large gray waves and stretched edges on tall cards.
+- Preserve transparent backgrounds, existing colors and the borderless finish. Retain viewport activation and soft/flat/reduced-transparency fallbacks without adding maps, animation loops, dependencies or permissions.
+
+## v0.6.38 · 2026-11-11
+
+- Remove the white inset rim and top highlight from inline dynamic comments and repost content. Retain transparent glass, background displacement, soft shadows and existing colors and interactions.
+
+## v0.6.37 · 2026-11-11
+
+- Apply transparent glass to inline dynamic comments and repost content using the supplied 21st GlassEffect's static noise displacement, 3px backdrop blur and inset highlights. Preserve foreground colors, buttons, layout and comment interactions.
+- Share one SVG filter per page and enable displacement only near the viewport. Add no React runtime, animation library, dependency or permission; generate no canvas maps at runtime. Retain soft, flat and reduced-transparency fallbacks.
+- Preserve the native header icons, weather search/location repairs and compact pagination arrows from 0.6.35–0.6.36.
+
+## v0.6.36 · 2026-11-10
+
+- Add a lazy Chinese city/district index with exact matching and province/city context. Retain online lookup for other places and remove the Xinxiang-specific workaround.
+- Share weather locations through extension local storage and migrate explicit legacy selections. Cache successful approximate IP locations for six hours; never substitute Shanghai on failure or overwrite manual choices with late responses.
+- Coalesce same-page location/forecast requests. Keep city selection and retry available on errors, and label stale refreshes. Add no geolocation permissions, map SDK or forecast provider.
+- Apply compact morphing arrows to both native search pagination directions at 32px height and 60px expanded width, retaining native events, disabled states and reduced motion.
+
+## v0.6.35 · 2026-11-10
+
+- Restore the approved native Bilibili shapes for header messages, updates, membership, favorites, history and creator center. Retain IconMCP for the other shortcuts, 20px sizing, the glass capsule, badges and existing interactions.
+- Scope the replacement to header shortcuts. Bundle SVGs locally without new dependencies, permissions or runtime requests.
+
+## [v0.6.34](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.34) · 2026-11-10
+
+- Merge @hhh2210's PR #141 restoring the native All / Charging videos filter for creator uploads. Show it only when available, reuse the native endpoint and existing segmented control, and retain sorting and filtered search without dependencies or permissions.
+- Preserve all 0.6.33 messaging, favorites, selection, weather and corner fixes; add eight charging-filter regressions.
+
+## [v0.6.33](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.33) · 2026-11-10
+
+- Confirm before removing individual videos from owned favorites. Preserve failed items for retry and open Play all with Bilibili's native list without fetching the whole folder (#147, #144).
+- Recall own messages within two minutes through native type 5 with the original long message key. Preserve content on server rejection and isolate asynchronous conversation updates (#151).
+- Read composed Shadow DOM ranges when available to handle host-retargeted getRangeAt. Verify text/emoji deletion, selection replacement, undo and composition in Chromium and Firefox (#150).
+- Match cover clipping to configured corner radii while retaining circular avatars and autoplay switches. Keep author rows at a minimum line height and test narrow columns and late text; the intermittent live blank still needs field reproduction (#149).
+- Keep web-fullscreen mini progress at the player edge and use dynamic viewport height in scrollable mode without changing the scroll preference (#152).
+- Correct the upstream Xinxiang Chinese-name mapping and locality ordering, and show the China region label for Taiwan. No city database, provider or permission added (#153).
+- Fix accent propagation to glass search pills and update native-structure tests. Recheck centered settings across routes and elastic theme-switch motion (#148, #154).
+- Defer dynamic layout restructuring and level filtering as requested. Store listing issues remain maintainer-managed.
+
+## [v0.6.32](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.32) · 2026-11-10
+
+- Favorites and subscriptions: remove growing entrance delays, prefetch nearby covers with bounded concurrency and reuse cached results. Reduce per-frame work on blurred copies and fix missing paint and full-page flashing. Add Return to top.
+- Dynamics: expand, collapse and paginate comments inline while retaining loaded replies and drafts; support nested replies, retries and closing during slow requests. Compose text and up to nine pictures within MARGIN without navigating to the native page.
+- Search: add an opt-in exact-target-first mode that stably promotes full-title or BV matches on the current page without additional queries or history collection. Improve contrast, compact glass controls and alignment while preserving native input and filter events.
+- Appearance: use native continuous corners with circular and pill shapes preserved, improve local liquid-refraction controls, and retain soft, flat and reduced-motion options. Remove large opaque blocks from Watch Later.
+- Native comments: fix the white detail iframe, apply the requested paper-plane publish animation while ignoring Lit render markers, and preserve native handlers, disabled states and keyboard operation. Add morphing pagination arrows.
+- Reliability: contain modal focus, retry favorites after login, and report actual footprint-import persistence. Raise manual history backfill to 200 pages with cancellation, deduplication and backoff. Show version and change notes after upgrades.
+- No additional frameworks, dependencies or permissions. Public builds preserve material preferences and exclude the local trial's one-time liquid-mode initializer.
 ## v0.6.21 · 2026-11-09
 
 - Make native comment IP-location labels inherit the timestamp row's font and line height, fixing mismatched sizes in both themes and after font-size changes (#140).

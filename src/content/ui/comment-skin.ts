@@ -1,5 +1,6 @@
 import { every } from '../sched';
 import { loadSettings, onSettingsChange } from '../../shared/settings';
+import { decorateSendButton } from './send-button';
 // B 站原生评论（bili-comments，lit 组件，多层 open shadow root）外层 CSS 进不去：
 // 找到关键组件后往它们的 shadowRoot 里追加一张样式表，变量从 html 继承（--m-*）。
 const TAG_SKIN = `
@@ -14,6 +15,10 @@ const TAG_SKIN = `
 `;
 
 const SKINS: Record<string, string> = {
+  'bili-comments-popup': `
+    :host([data-margin-comment-detail]):host-context(html.margin-skin) #wrap,
+    :host([data-margin-comment-detail]):host-context(html.margin-skin) #content { background: var(--m-surface) !important; color: var(--m-ink) !important; }
+  `,
   'bili-comment-action-buttons-renderer': `
     #pubdate { width: auto !important; display: inline-flex; flex-wrap: wrap; gap: 8px; }
     [data-margin-location-label] { color: var(--m-faint, #888); white-space: nowrap; font: inherit; }
@@ -49,11 +54,50 @@ const done = new WeakSet<ShadowRoot>();
 const watched = new WeakSet<ShadowRoot>();
 let extra: Record<string, string> = {};
 const sheets = new Map<string, CSSStyleSheet>();
+const detailFrames = new Set<HTMLIFrameElement>();
+const detailBound = new WeakSet<HTMLIFrameElement>();
+
+/** Native comment details are a same-origin iframe, outside the comment shadow tree. */
+function syncDetailFrames(): void {
+  const theme = getComputedStyle(document.documentElement);
+  for (const frame of detailFrames) {
+    if (!frame.isConnected) { detailFrames.delete(frame); continue; }
+    try {
+      const doc = frame.contentDocument;
+      if (!doc?.head || new URL(doc.URL).pathname !== '/blackboard/comment-detail.html') continue;
+      let style = doc.getElementById('margin-comment-detail-theme');
+      if (!style) {
+        style = doc.createElement('style'); style.id = 'margin-comment-detail-theme';
+        style.textContent = 'html,body{background:var(--bg1)!important;color:var(--text1)!important;color-scheme:var(--margin-detail-scheme)}body{min-height:100vh}';
+        doc.head.append(style);
+      }
+      doc.documentElement.style.setProperty('--margin-detail-scheme', document.documentElement.dataset.marginTheme === 'dark' ? 'dark' : 'light');
+      for (const name of ['--bg1', '--bg2', '--bg3', '--bg1_float', '--bg2_float', '--text1', '--text2', '--text3', '--line_light', '--line_regular', '--graph_bg_regular', '--graph_bg_thick']) {
+        const value = theme.getPropertyValue(name).trim();
+        if (value) doc.documentElement.style.setProperty(name, value, 'important');
+      }
+    } catch { /* A cross-origin navigation must remain outside this skin. */ }
+  }
+}
+
+function bindDetailPopup(el: Element): void {
+  if (el.localName !== 'bili-comments-popup') return;
+  for (const frame of el.querySelectorAll<HTMLIFrameElement>('iframe')) {
+    let url: URL; try { url = new URL(frame.src, location.href); } catch { continue; }
+    if (url.origin !== location.origin || url.pathname !== '/blackboard/comment-detail.html') continue;
+    if (!el.hasAttribute('data-margin-comment-detail')) el.setAttribute('data-margin-comment-detail', '');
+    if (detailBound.has(frame)) continue;
+    detailBound.add(frame); detailFrames.add(frame); frame.addEventListener('load', syncDetailFrames);
+    syncDetailFrames();
+  }
+}
 
 function skinElement(el: Element, depth: number): void {
+  bindDetailPopup(el);
   const sr = el.shadowRoot;
   if (!sr) return;
   const tag = el.tagName.toLowerCase();
+  if (tag === 'bili-comment-box') sr.querySelectorAll<HTMLButtonElement>('#pub button').forEach(decorateSendButton);
   if (tag === 'bili-comment-action-buttons-renderer') {
     el.dispatchEvent(new Event('margin:read-comment-location', { bubbles: true, composed: true }));
     const text = el.getAttribute('data-margin-location') || '';
@@ -81,6 +125,7 @@ function skinElement(el: Element, depth: number): void {
     watched.add(sr);
     // 只扫描新插入的子树；定时补扫仍负责发现已有节点迟延挂载的 shadow root。
     new MutationObserver((records) => {
+      if (tag === 'bili-comment-box') sr.querySelectorAll<HTMLButtonElement>('#pub button').forEach(decorateSendButton);
       for (const record of records) {
         for (const node of record.addedNodes) {
           if (node instanceof Element && node.isConnected) skin(node, depth + 1);
@@ -107,8 +152,7 @@ export function skinComments(more: Record<string, string> = {}): void {
   const containers = new WeakSet<Element>();
   let updateFrame = 0;
   const run = () => {
-    const bc = document.querySelector('bili-comments');
-    if (bc) skin(bc);
+    document.querySelectorAll('bili-comments, bili-comments-popup').forEach(bc => skin(bc));
     treeOld();
     const container = document.querySelector('#commentapp, .comment-container');
     if (container && !containers.has(container)) {
@@ -118,6 +162,17 @@ export function skinComments(more: Record<string, string> = {}): void {
       }).observe(container, { childList: true, subtree: true });
     }
   };
+  const portals = new MutationObserver(records => {
+    for (const frame of detailFrames) if (!frame.isConnected) detailFrames.delete(frame);
+    for (const r of records) for (const node of r.addedNodes) if (node instanceof Element) {
+      const popups = node.matches('bili-comments-popup') ? [node] : [...node.querySelectorAll('bili-comments-popup')];
+      for (const popup of popups) { skin(popup); requestAnimationFrame(() => { if (popup.isConnected) skin(popup); }); }
+    }
+  });
+  const observePortals = () => { if (document.body) portals.observe(document.body, { childList: true }); };
+  if (document.body) observePortals();
+  else document.addEventListener('DOMContentLoaded', observePortals, { once: true });
+  new MutationObserver(syncDetailFrames).observe(document.documentElement, { attributes: true, attributeFilter: ['data-margin-theme'] });
   // 前 90 秒每秒补一次（评论区是懒加载的 Web Components）；页面隐藏时暂停
   let n = 0;
   const stop = every(1000, () => { run(); if (++n > 90) stop(); });

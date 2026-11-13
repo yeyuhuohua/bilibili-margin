@@ -1,7 +1,7 @@
 import { every } from '../sched';
 import { introActive } from './intro/gate';
 import { appendMarkup, h } from './dom';
-import { weather, setLoc, savedLoc, type Wx } from '../api/weather';
+import { weather, localWeather, setLoc, savedLoc, type Wx } from '../api/weather';
 import { createCityPicker } from './city-picker';
 import { WEATHER_SKIES, WEATHER_SKY_LAYERS, moonAge, weatherScene, glyphSvg, SKY_PITCH, FRAME } from './dotsky';
 import { onMotionChange, reducedMotion } from '../motion';
@@ -21,7 +21,7 @@ const deg = (n: number) => `${Math.round(n)}°`;
 export function createWeather(onPrivacy?: () => void): HTMLElement {
   const el = h('section', { class: 'wx', 'aria-label': '天气' });
   el.append(h('div', { class: 'wx-sky sk' }), h('div', { class: 'wx-side' }));
-  let wx: Wx | null = null;
+  let wx: Wx | null = null, refreshFailed = false;
   let tick = 0, visible = false;
   let stop: (() => void) | null = null;
 
@@ -86,9 +86,9 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
   let closeCity: (() => void) | null = null;
   const editCity = (place: HTMLElement) => {
     closeCity?.();
-    const picker = createCityPicker(loc => { closeCity?.(); setLoc(loc); });
+    const picker = createCityPicker(async loc => { await setLoc(loc); closeCity?.(); });
     picker.el.classList.add('wx-city-picker');
-    picker.input.value = wx?.loc.name ?? '';
+    picker.input.value = savedLoc()?.name ?? wx?.loc.name ?? '';
     closeCity = () => { closeCity = null; picker.cancel(); picker.el.remove(); };
     picker.el.addEventListener('keydown', event => {
       if (event.key === 'Escape') { closeCity?.(); place.focus(); }
@@ -109,18 +109,23 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
       h('div', { class: 'wx-now' },
         h('span', { class: 'wx-temp' }, deg(w.temp)),
         h('span', { class: 'wx-cond' }, w.condition)));
-    const place = h('button', { class: 'wx-city', type: 'button', title: [w.loc.region, '点击更换城市'].filter(Boolean).join(' · ') }, w.loc.name);
+    const place = h('button', { class: 'wx-city', type: 'button', title: [w.loc.region, w.loc.manual ? '手动选择' : 'IP 粗定位', '点击更换城市'].filter(Boolean).join(' · ') }, w.loc.name);
     place.onclick = () => editCity(place);
     clockEl.textContent = clock();
-    const hours = h('ol', { class: 'wx-hours', 'aria-label': '未来几个时段' },
+    const hours = h('ol', { class: 'wx-hours', 'aria-label': w.stale ? '缓存中的时段预报' : '未来几个时段' },
       ...w.hours.map((x) => {
-        const li = h('li', { 'aria-label': `${x.label} ${deg(x.temp)}` }, h('span', { class: 'wx-hl' }, x.label));
+        const label = w.stale && x.label === '现在' ? '采集时' : x.label;
+        const li = h('li', { 'aria-label': `${label} ${deg(x.temp)}` }, h('span', { class: 'wx-hl' }, label));
         appendMarkup(li, glyphSvg(x.kind, x.hour));
         li.append(h('b', {}, deg(x.temp)));
         return li;
       }));
     // 3 天：低温→高温点条，共用一个刻度（原 Weather.Week）
-    const days = w.days.slice(0, 3);
+    const days = w.days.slice(0, 3).map((day, index) => {
+      if (!w.stale) return day;
+      const date = new Date(w.at + w.offset * 1000 + index * 86400000);
+      return { ...day, name: `${date.getUTCMonth() + 1}/${date.getUTCDate()}` };
+    });
     const lo = Math.floor(Math.min(...days.map((d) => d.low), w.temp));
     const hi = Math.ceil(Math.max(...days.map((d) => d.high), w.temp));
     const span = Math.max(1, Math.min(20, hi - lo));
@@ -134,7 +139,7 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
       }
       return `<svg class="wx-bar" viewBox="0 0 ${(span + 1) * 8} 6" preserveAspectRatio="none" shape-rendering="crispEdges" aria-hidden="true"><path class="b-off" d="${off}"/><path class="b-lit" d="${lit}"/><path class="b-now" d="${cur}"/></svg>`;
     };
-    const week = h('ul', { class: 'wx-week', 'aria-label': '未来三天' },
+    const week = h('ul', { class: 'wx-week', 'aria-label': w.stale ? '缓存中的日期预报' : '未来三天' },
       ...days.map((d, i) => {
         const li = h('li', { 'aria-label': `${d.name} ${deg(d.low)} 到 ${deg(d.high)}`, 'data-kind': d.kind }, h('span', { class: 'wx-dn' }, d.name));
         appendMarkup(li, glyphSvg(d.kind));
@@ -146,32 +151,47 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
     const side = h('div', { class: 'wx-side' },
       h('header', { class: 'wx-head' },
         h('div', { class: 'wx-place' }, place, h('small', {}, `体感 ${deg(w.feels)} · 降水 ${w.rainPct}% · ${Math.round(w.wind)} km/h`)),
-        h('div', { class: 'wx-live' }, h('i', { class: 'wx-led' }), h('span', {}, 'Live'), clockEl)),
+        h('div', { class: 'wx-live' }, h('i', { class: 'wx-led' }),
+          h('span', { title: `数据采集时间：${new Date(w.at).toLocaleString()}` }, w.cached ? `${w.stale ? '待更新 · ' : ''}本地缓存 · ${new Date(w.at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : refreshFailed ? `待更新 · ${new Date(w.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Live'), clockEl)),
       hours, week);
     el.replaceChildren(sky, side);
     paint();
     run();
   };
 
-  let loadSequence = 0, retryTimer = 0;
-  const load = (quiet = false, retry = 0) => {
+  let loadSequence = 0;
+  const load = (quiet = false) => {
     const request = ++loadSequence;
-    clearTimeout(retryTimer);
+    let finished = false;
+    void localWeather().then(cached => {
+      if (!finished && request === loadSequence && cached && (!wx || wx.at < cached.at || wx.loc.lat !== cached.loc.lat || wx.loc.lon !== cached.loc.lon)) { wx = cached; render(); }
+    }).catch(() => {});
     if (!quiet) fetchedAt = Date.now();
-    weather().then((x) => { if (request === loadSequence) { wx = x; render(); } }).catch((err) => {
+    weather().then((x) => { finished = true; if (request === loadSequence) { wx = x; refreshFailed = false; render(); } }).catch((err) => {
+      finished = true;
       if (request !== loadSequence) return;
+      if (err?.name === 'AbortError' && err?.message === '天气位置已更改') return;
+      const choose = h('button', { type: 'button', class: 'ghost small', onclick: () => editCity(choose) }, '选择城市');
       if (err instanceof PrivacyBlocked) {
         wx = null; run(); closeCity?.();
         el.replaceChildren(h('div', { class: 'wx-empty' }, h('p', {}, '天气联网已关闭'),
-          h('p', {}, '天气和城市搜索需要在设置中允许外部辅助服务'),
+          h('p', {}, '天气查询需要允许外部辅助服务，国内城市可离线选择'),
+          choose,
           onPrivacy ? h('button', { type: 'button', class: 'ghost small', onclick: onPrivacy }, '天气联网设置') : null));
         return;
       }
       console.warn('[margin] weather', err);
-      if (quiet && wx) return; // 后台刷新失败：保留旧数据
-      if (retry < 2) { retryTimer = window.setTimeout(() => load(quiet, retry + 1), 4000 * (retry + 1)); return; }
+      if (quiet && wx && wx.loc.lat === savedLoc()?.lat && wx.loc.lon === savedLoc()?.lon) {
+        refreshFailed = true; render(); return;
+      }
+      wx = null; run();
       closeCity?.();
-      el.replaceChildren(h('p', { class: 'wx-empty', title: String(err) }, `天气暂时取不到${savedLoc()?.name ? `（${savedLoc()!.name}）` : ''}`));
+      const retry = h('button', { type: 'button', class: 'ghost small', onclick: () => { retry.disabled = true; retry.textContent = '重试中…'; load(); } }, '重试');
+      const message = err?.name === 'AbortError' ? '天气请求超时，请重试'
+        : err instanceof TypeError ? '天气请求失败，请检查网络或选择城市' : err instanceof Error ? err.message : '天气暂时取不到';
+      el.replaceChildren(h('div', { class: 'wx-empty', role: 'status' },
+        h('p', {}, message),
+        h('div', { class: 'wx-recovery' }, choose, retry)));
     });
   };
   onSettingsChange((next, previous) => { if (next.privacyExternal !== previous.privacyExternal) load(); });

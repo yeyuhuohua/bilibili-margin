@@ -28,7 +28,7 @@ try {
         box.style.cssText = 'position:relative;margin:140px 40px 30px;padding:24px;background:var(--m-surface);z-index:1';
         box.innerHTML = route === 'watch'
           ? '<div class="upinfo-btn-panel"><button class="default-btn charge-btn">充电</button><button class="default-btn follow-btn not-follow"><span class="follow-btn-inner">＋ 关注 8808</span></button></div>'
-          : '<div class="search-tabs"><span class="vui_tabs--nav-item vui_tabs--nav-item-active"><span class="vui_tabs--nav-text">综合</span></span><div class="vui_tabs--nav-bar" style="width:32px"></div></div><div class="search-conditions"><button class="vui_button vui_button--active">综合排序</button><button class="vui_button">最多播放</button></div><button class="vui_pagenation--btn vui_button--active">1</button>';
+          : '<div class="search-tabs"><div class="vui_tabs--nav"><span class="vui_tabs--nav-item vui_tabs--nav-item-active"><a class="vui_tabs--nav-link"><span class="vui_tabs--nav-text">综合</span></a></span><div class="vui_tabs--nav-bar" style="width:32px"></div></div></div><div class="search-conditions"><div class="search-condition-row"><button class="vui_button vui_button--active">综合排序</button><button class="vui_button">最多播放</button></div></div><button class="vui_pagenation--btn vui_button--active">1</button>';
         document.body.prepend(box);
       }, route);
       // Change the setting while the same DOM stays mounted, including returning to classic.
@@ -43,7 +43,7 @@ try {
         const filled = accent === 'classic' ? (theme === 'light' ? 'rgb(23, 24, 26)' : 'rgb(237, 237, 238)')
           : accent === 'blue' ? 'rgb(0, 125, 168)' : 'rgb(185, 47, 100)';
         const foreground = accent === 'classic' ? (theme === 'light' ? 'rgb(245, 244, 241)' : 'rgb(17, 17, 18)') : 'rgb(255, 255, 255)';
-        const selectors = route === 'watch' ? ['.follow-btn', '.follow-btn-inner'] : ['.vui_button--active'];
+        const selectors = route === 'watch' ? ['.follow-btn', '.follow-btn-inner'] : ['.vui_pagenation--btn.vui_button--active'];
         const failures = [];
         for (const selector of selectors) for (const element of await page.locator(`#accent-fixture ${selector}`).all()) {
           const style = await element.evaluate(el => ({ bg: getComputedStyle(el).backgroundColor, fg: getComputedStyle(el).color }));
@@ -51,9 +51,16 @@ try {
         }
         if (route === 'search') {
           await page.locator('#accent-fixture .vui_tabs--nav-item-active').hover();
-          const active = await page.locator('#accent-fixture .vui_tabs--nav-item-active').evaluate(el => getComputedStyle(el).color);
-          const bar = await page.locator('#accent-fixture .vui_tabs--nav-bar').evaluate(el => getComputedStyle(el).backgroundColor);
-          if (active !== filled || bar !== filled) failures.push({ active, bar, expected: filled });
+          // Glass controls use a sliding ::before pill rather than the native underline/button fill.
+          const expectedPill = accent === 'classic' ? (theme === 'light' ? 'rgba(255, 255, 255, 0.85)' : 'rgb(242, 245, 248)') : filled;
+          const expectedText = accent === 'classic' ? (theme === 'light' ? 'rgb(23, 29, 40)' : 'rgb(32, 38, 48)') : foreground;
+          for (const selector of ['.vui_tabs--nav', '.search-condition-row']) {
+            const group = page.locator(`#accent-fixture ${selector}`);
+            await group.waitFor();
+            const actual = await group.evaluate(el => ({ pill: getComputedStyle(el, '::before').backgroundColor,
+              width: parseFloat(getComputedStyle(el, '::before').width), text: getComputedStyle(el.querySelector('.vui_tabs--nav-text, .vui_button--active')).color }));
+            if (actual.pill !== expectedPill || actual.text !== expectedText || !(actual.width > 10)) failures.push({ selector, ...actual, expectedPill, expectedText });
+          }
           await page.mouse.move(0, 0);
         }
         const name = `${theme} ${route} ${accent}`;

@@ -3,6 +3,7 @@ import { loadSettings, onSettingsChange, type Settings } from '../../shared/sett
 import { account, dynamicUpdates, resetDynamicBaseline, unreadTotal } from '../api/account';
 import { onMsgRead } from '../api/msg';
 import { h, icon, ICONS, setMarkup } from './dom';
+import { HEADER_ICONS } from './header-icons';
 import { createExpandableTabs, type TabItem, type TabSpec } from './expandable-tabs';
 import { createUserMenu } from './user-menu';
 import { createSunMoon, type SunMoon } from './sun-moon';
@@ -115,7 +116,7 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
-  const tabsNav = createExpandableTabs(o.tabs);
+  const tabsNav = createExpandableTabs(o.tabs.map(tab => tab === 'separator' ? tab : { ...tab, icon: HEADER_ICONS[tab.title] ?? tab.icon }));
   // 直播 / 消息 / 动态 / 历史 / 收藏 / 稍后：停留 1.5 秒弹出悬停列表
   let msgPop: PopHandle | null = null;
   const popHandles: PopHandle[] = [];
@@ -129,6 +130,7 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
   }
   // 默认保留旧版顺序；自定义排序包含个人入口时，各项按同一序列排列。
   const applyPrefs = (st: Settings) => {
+    tabsNav.el.classList.toggle('et-labels', st.headLabels);
     upload.hidden = st.headHide.includes('投稿');
     const siteIdx = new Map(SITE_LINKS.map((l, i) => [l.title, i]));
     const titles = tabsNav.buttons.map((b) => b.querySelector('span')?.textContent ?? '');
@@ -144,7 +146,7 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     tabsNav.el.querySelector<HTMLElement>('.et-thumb')?.style.setProperty('order', '-1');
   };
   loadSettings().then(applyPrefs).catch(() => {});
-  onSettingsChange((n, p) => { if (n.headHide.join() !== p.headHide.join() || n.headOrder.join() !== p.headOrder.join()) applyPrefs(n); });
+  onSettingsChange((n, p) => { if (n.headLabels !== p.headLabels || n.headHide.join() !== p.headHide.join() || n.headOrder.join() !== p.headOrder.join()) applyPrefs(n); });
   // 屏蔽词/隐藏广告变化后，悬停列表的 60 秒缓存要失效
   o.filter?.onChange(() => popHandles.forEach((p) => p.invalidate()));
   const sunMoon = createSunMoon(o.onTheme);

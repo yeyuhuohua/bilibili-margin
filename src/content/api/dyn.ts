@@ -134,6 +134,17 @@ export async function followFeed(type: FeedType, offset: string, hostMid = 0): P
 
 export interface Up { mid: number; name: string; face: string; fresh: boolean }
 export interface LiveUp { mid: number; name: string; face: string; title: string; url: string }
+/** The native followed-live list is read only after the user asks for more. */
+export async function followingLive(): Promise<LiveUp[]> {
+  const response = await fetch('https://api.live.bilibili.com/xlive/web-ucenter/v1/xfetter/GetWebList?hit_ab=true', { credentials: 'include', signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error('直播列表暂时不可用');
+  const body = await response.json();
+  if (body.code !== 0) throw new Error(body.message || body.msg || '直播列表暂时不可用');
+  return (body.data?.rooms ?? body.data?.list ?? []).flatMap((u: any) => {
+    const room = Number(u.room_id ?? u.roomid);
+    return Number.isSafeInteger(room) && room > 0 ? [{ mid: Number(u.uid ?? u.mid) || 0, name: String(u.uname || ''), face: https(u.face), title: String(u.title || ''), url: `https://live.bilibili.com/${room}` }] : [];
+  });
+}
 /** 顶部「最常访问」头像条 + 正在直播 */
 export async function portal(): Promise<{ ups: Up[]; live: LiveUp[]; liveCount: number }> {
   const d = await getJSON<any>('/x/polymer/web-dynamic/v1/portal');
@@ -181,7 +192,7 @@ export async function dynCommentTarget(d: Dyn): Promise<{ type: number; oid: str
 
 export interface Reply {
   rpid: string; name: string; face: string; mid: number; text: string; emotes?: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
-  location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string };
+  location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string }; top?: boolean;
   medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
 }
 function medalColor(value: unknown): string {
@@ -224,13 +235,20 @@ export function toReply(r: any): Reply {
   if (plateImage) out.nameplate = { name: plate.name ?? '', image: plateImage };
   return out;
 }
-/** 热门评论第一页（旧版 /x/v2/reply 不要 wbi 签名） */
-export async function dynReplies(type: number, oid: string, ps = 8): Promise<{ list: Reply[]; count: number }> {
-  const d = await getJSON<any>('/x/v2/reply', { type, oid, sort: 1, ps, pn: 1 });
+/** 热门评论按页读取；置顶只在第一页合并，避免挤掉该页最后一条普通评论。 */
+export async function dynReplies(type: number, oid: string, ps = 8, pn = 1): Promise<{ list: Reply[]; count: number; more: boolean }> {
+  const d = await getJSON<any>('/x/v2/reply', { type, oid, sort: 1, ps, pn });
   const seen = new Set<string>();
-  const list = [...(d.top_replies ?? []), ...(d.upper?.top ? [d.upper.top] : []), ...(d.replies ?? [])]
-    .map(toReply).filter((r) => !seen.has(r.rpid) && seen.add(r.rpid)).slice(0, ps);
-  return { list, count: d.page?.acount ?? d.page?.count ?? list.length };
+  const rows = d.replies ?? [];
+  const pinned: any[] = pn === 1 ? [...(d.top_replies ?? []), ...(d.upper?.top ? [d.upper.top] : [])] : [];
+  const pinnedIds = new Set(pinned.map(r => String(r.rpid_str ?? r.rpid)));
+  const list = [...pinned, ...rows].map(raw => {
+    const reply = toReply(raw);
+    if (pinnedIds.has(reply.rpid)) reply.top = true;
+    return reply;
+  }).filter((r) => !seen.has(r.rpid) && seen.add(r.rpid));
+  const more = rows.length > 0 && (typeof d.page?.count === 'number' ? pn * (d.page.size || ps) < d.page.count : rows.length >= ps);
+  return { list, count: d.page?.acount ?? d.page?.count ?? list.length, more };
 }
 export async function dynSubReplies(type: number, oid: string, root: string, pn: number): Promise<{ list: Reply[]; more: boolean }> {
   const ps = 10;
@@ -238,6 +256,7 @@ export async function dynSubReplies(type: number, oid: string, root: string, pn:
   const list: Reply[] = (d.replies ?? []).map(toReply);
   return { list, more: list.length > 0 && pn * (d.page?.size || ps) < (d.page?.count ?? 0) };
 }
-export async function dynReply(type: number, oid: string, message: string): Promise<void> {
-  await postForm('/x/v2/reply/add', { type, oid, message, plat: 1 });
+export async function dynReply(type: number, oid: string, message: string, target?: { root: string; parent: string }): Promise<Reply | null> {
+  const data = await postForm<any>('/x/v2/reply/add', { type, oid, message, plat: 1, ...target });
+  return data?.reply?.rpid_str || data?.reply?.rpid ? toReply(data.reply) : null;
 }

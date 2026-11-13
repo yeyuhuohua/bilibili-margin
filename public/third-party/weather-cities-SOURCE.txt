@@ -1,0 +1,5 @@
+Chinese city names and representative coordinate facts extracted from QWeather LocationList.
+Source: https://github.com/qwd/LocationList/blob/master/China-City-List-latest.csv
+Dataset identifier: China-City-List v202506200 (retrieved 2026-11-10).
+Retained fields: city name, province, parent city, latitude, longitude, English name, administrative-city indicator.
+Used as an offline place-search index. Forecasts continue to come from Open-Meteo; no QWeather SDK or API credentials are included.

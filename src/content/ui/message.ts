@@ -1,6 +1,6 @@
 import type { Settings } from '../../shared/settings';
 import { nav } from '../api/http';
-import { ackSession, ats, fillPeople, likes, markMsgRead, onMsgRead, messages, readAllMessages, readAllSessions, replies, sessions, system, systemRead, unread, type MessageEmote, type Msg, type MsgCard, type Notice, type Page, type Session, type Unread } from '../api/msg';
+import { canRecallMessage, recallMessage, ackSession, ats, fillPeople, likes, markMsgRead, onMsgRead, messages, readAllMessages, readAllSessions, replies, sessions, system, systemRead, unread, type MessageEmote, type Msg, type MsgCard, type Notice, type Page, type Session, type Unread } from '../api/msg';
 import { dayBucket, fmtAgo, h, icon, ICONS } from './dom';
 import { openLightbox } from './lightbox';
 import { toast } from './controls';
@@ -443,7 +443,7 @@ export class MessageApp {
       if (this.chatCache.size > 20) this.chatCache.delete(this.chatCache.keys().next().value!);
       const face = s.person?.face ? `${s.person.face}@80w_80h_1c.webp` : '';
       log.replaceChildren(...list.map((m, i) => {
-        if (m.type === 18) return h('div', { class: 'wh-tip' }, m.text);
+        if (m.type === 18 || m.type === 5) return h('div', { class: 'wh-tip' }, m.type === 5 && m.sender === this.me ? '你撤回了一条消息' : m.text);
         const me = m.sender === this.me;
         const c = m.card;
         const card = c ? h(c.url ? 'a' : 'div', { class: 'wh-card', ...(c.url ? { href: c.url, target: '_blank', rel: 'noopener' } : {}) },
@@ -459,6 +459,17 @@ export class MessageApp {
         }
         // 对方的连续消息只在第一条前放头像（#2）
         const showFace = !me && (i === 0 || list[i - 1].sender !== m.sender || list[i - 1].type === 18);
+        const recall = canRecallMessage(m, this.me) ? h('button', { type: 'button', class: 'wh-recall', 'aria-label': '撤回消息' }, '撤回') as HTMLButtonElement : null;
+        recall?.addEventListener('click', async () => {
+          if (!composer.el.isConnected) return;
+          recall.disabled = true;
+          try {
+            await recallMessage(this.me, s.talker, m, csrf());
+            m.type = 5; m.text = '你撤回了一条消息'; m.image = ''; delete m.card;
+            if (composer.el.isConnected) { const top = log.scrollTop; paint(list); log.scrollTop = top; }
+          } catch (error) { if (composer.el.isConnected) toast(this.shell.app, (error as Error).message); }
+          finally { recall.disabled = false; }
+        });
         return h('div', { class: `wh-m${me ? ' me' : ''}${!me ? ' them' : ''}` },
           !me ? h('a', { class: `wh-mface${showFace ? '' : ' ghost'}`, href: `https://space.bilibili.com/${s.talker}`, target: '_blank', rel: 'noopener', 'aria-label': `${name} 的个人空间`, tabindex: showFace ? '0' : '-1' },
             showFace && face ? h('img', { src: face, alt: '', referrerpolicy: 'no-referrer' }) : null) : null,
@@ -471,7 +482,7 @@ export class MessageApp {
             } }, h('img', { src: /\.gif([?#]|$)/i.test(m.image) || !/^https:\/\/[^/]+\.(?:hdslb|biliimg)\.com\/[^?]+$/.test(m.image) ? m.image : `${m.image}@360w.webp`, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' })) : null,
             m.text ? h('p', {}, ...messageText(m.text, m.emotes)) : null,
             card,
-            h('time', {}, fmtAgo(m.ts))));
+            h('time', {}, fmtAgo(m.ts)), recall));
       }));
       log.scrollTop = log.scrollHeight;
     };

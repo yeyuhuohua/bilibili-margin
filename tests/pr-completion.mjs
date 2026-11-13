@@ -39,10 +39,88 @@ try {
    await seed({searchStyle:'new'});
    assert.equal(await page.locator(`${host} .app`).evaluate(el=>el.classList.contains('hs-open')),false);
    const word=page.locator(`${host} .search-ph-w:not(.out)`); await word.waitFor(); const first=await word.textContent();
+   assert.equal(await input.locator('input').evaluate(el=>getComputedStyle(el,'::placeholder').color),'rgba(0, 0, 0, 0)');
    await page.waitForFunction(({host,first})=>document.querySelector(host).shadowRoot.querySelector('.search-ph-w:not(.out)')?.textContent!==first,{host,first});
    assert.equal(await page.locator(`${host} svg[data-margin-glass-filters]`).evaluate(el=>el.parentNode===el.getRootNode()),true);
    results.push(`${name} classic search, new panel and live switching`);
  }
+ for (const radius of [0, 100, 150]) {
+   await seed({radius, searchStyle:'new', theme:'dark'});
+   await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+   const form=page.locator('#margin-watch-top .top .search'); await form.waitFor();
+   await page.waitForFunction(radius=>Math.abs(parseFloat(getComputedStyle(document.querySelector('#margin-watch-top').shadowRoot.querySelector('.top .search')).borderTopLeftRadius)-999*radius/100)<1,radius);
+   const origin=await form.evaluate(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return{radius:Math.min(parseFloat(s.borderTopLeftRadius)||0,Math.min(r.width,r.height)/2),shape:s.getPropertyValue('corner-shape').trim()};});
+   const panel=await page.locator('#margin-watch-top .cp-panel').evaluate(el=>{const s=getComputedStyle(el);return{radius:parseFloat(s.borderTopLeftRadius)||0,shape:s.getPropertyValue('corner-shape').trim()};});
+   const sample=()=>page.evaluate(()=>{
+     const shell=document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp-shell');
+     const anims=shell.getAnimations(); const snap=()=>{const s=getComputedStyle(shell);return{radius:parseFloat(s.borderTopLeftRadius)||0,shape:s.getPropertyValue('corner-shape').trim()};};
+     anims.forEach(a=>a.pause()); anims.forEach(a=>{a.currentTime=0;}); const start=snap();
+     anims.forEach(a=>{a.currentTime=a.effect.getTiming().duration;}); const end=snap();
+     anims.forEach(a=>a.cancel()); return{start,end,count:anims.length};
+   });
+   await page.locator('#margin-watch-top .top .search input').click();
+   await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').classList.contains('cp-clipping'));
+   const keys=await page.evaluate(()=>{const root=document.querySelector('#margin-watch-top').shadowRoot;const m=root.querySelector('.cp-morph-kbd'),p=root.querySelector('.cp-input kbd');return{text:m.textContent,shown:getComputedStyle(m).display,panel:getComputedStyle(p).display};});
+   assert.equal(keys.text,'Esc');
+   assert.equal(keys.shown,'block');
+   assert.equal(keys.panel,'none');
+   const opening=await sample();
+   assert.ok(opening.count>0,'morph transitions exist');
+   assert.ok(Math.abs(opening.start.radius-origin.radius)<.6,`open start ${opening.start.radius} vs ${origin.radius}`);
+   assert.equal(opening.start.shape,origin.shape);
+   assert.ok(Math.abs(opening.end.radius-panel.radius)<.1,`open end ${opening.end.radius} vs ${panel.radius}`);
+   assert.equal(opening.end.shape,panel.shape);
+   await page.waitForFunction(()=>!document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').classList.contains('cp-clipping'));
+   await page.keyboard.press('Escape');
+   await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').classList.contains('cp-clipping'));
+   const closeKeys=await page.evaluate(()=>{const root=document.querySelector('#margin-watch-top').shadowRoot;const m=root.querySelector('.cp-morph-kbd'),p=root.querySelector('.cp-input kbd');return{text:m.textContent,shown:getComputedStyle(m).display,panel:getComputedStyle(p).display};});
+   assert.equal(closeKeys.text,'/');
+   assert.equal(closeKeys.shown,'block');
+   assert.equal(closeKeys.panel,'none');
+   const closing=await sample();
+   assert.ok(Math.abs(closing.start.radius-panel.radius)<.6);
+   assert.equal(closing.start.shape,panel.shape);
+   assert.ok(Math.abs(closing.end.radius-origin.radius)<.1);
+   assert.equal(closing.end.shape,origin.shape);
+   await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').hidden);
+ }
+ results.push('palette morph matches search and panel radii at 0/100/150');
+ await seed({radius:100,searchStyle:'new',paletteSpeed:50,theme:'dark'});
+ await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+ await page.locator('#margin-watch-top .top .search input').click();
+ await page.waitForFunction(()=>{const root=document.querySelector('#margin-watch-top').shadowRoot;return root.querySelector('.cp').dataset.open==='true'&&!root.querySelector('.cp').classList.contains('cp-clipping');});
+ await page.evaluate(()=>{
+   const root=document.querySelector('#margin-watch-top').shadowRoot, cp=root.querySelector('.cp');
+   window.closeTiming={};
+   document.addEventListener('keydown',event=>{if(event.key==='Escape')window.closeTiming.start=performance.now();},{capture:true,once:true});
+   const observer=new MutationObserver(()=>{if(cp.hidden){window.closeTiming.end=performance.now();observer.disconnect();}});
+   observer.observe(cp,{attributes:true,attributeFilter:['hidden']});
+ });
+ await page.keyboard.press('Escape');
+ const duration=await page.locator('#margin-watch-top .cp-shell').evaluate(el=>Math.max(...getComputedStyle(el).transitionDuration.split(',').map(value=>parseFloat(value)*1000)));
+ assert.ok(duration>0,'closing must have a configured transition');
+ await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').hidden);
+ const elapsed=await page.evaluate(()=>window.closeTiming.end-window.closeTiming.start);
+ console.log({closingElapsed:elapsed,transitionDuration:duration});
+ assert.ok(elapsed+25>=duration,`close hid after ${elapsed}ms before ${duration}ms transition finished`);
+ results.push('palette closing keeps the shell visible through its full configured transition');
+ const escapedBeforeFocus=await page.evaluate(()=>{
+   const root=document.querySelector('#margin-watch-top').shadowRoot;
+   root.querySelector('.top .search').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+   document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+   return root.querySelector('.cp').dataset.open==='false';
+ });
+ assert.equal(escapedBeforeFocus,true,'Escape must close during the opening frame, before input focus');
+ await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').hidden);
+ await page.locator('#margin-watch-top .top .search input').click();
+ await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').classList.contains('cp-clipping'));
+ await page.keyboard.press('Escape'); await page.waitForTimeout(40); await page.keyboard.press('Control+k');
+ await page.waitForTimeout(1100);
+ assert.equal(await page.locator('#margin-watch-top .cp').evaluate(el=>!el.hidden&&el.dataset.open==='true'),true);
+ await page.keyboard.press('Escape');
+ await page.waitForFunction(()=>document.querySelector('#margin-watch-top').shadowRoot.querySelector('.cp').hidden);
+ assert.notEqual(await page.locator('#margin-watch-top .top .search').evaluate(el=>getComputedStyle(el).visibility),'hidden');
+ results.push('rapid close and reopen cancels stale hide timers and restores the original search');
  await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/'); await page.locator('#margin-watch-top').waitFor();
  await page.evaluate(()=>{
    const comments=document.createElement('bili-comments'); const root=comments.attachShadow({mode:'open'});

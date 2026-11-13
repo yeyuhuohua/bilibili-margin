@@ -72,7 +72,7 @@ try {
   await page.reload();
   await page.locator('#margin-root .sp-collection-head h2').getByText('收藏夹 201', { exact: true }).waitFor();
   await page.locator('#margin-root .main > :is(.grid,.vlist) .card').nth(1).waitFor();
-  await page.getByRole('button', { name: '公开收藏夹', exact: true }).click();
+  await page.locator('.sp-collection-head').getByRole('button', { name: '收藏夹', exact: true }).click();
   await page.getByRole('button', { name: '打开收藏夹 202', exact: true }).waitFor();
   assert.equal(new URL(page.url()).searchParams.has('fid'), false);
   results.push('public folders, content pagination, direct link and return');

@@ -28,11 +28,15 @@ export class BackgroundLayer {
   private lens: GlassLens | null = null;
   private lensEl: HTMLElement | null = null;
   private pending = 0;
+  private imageRead = 0;
 
   constructor() {
     this.el.append(this.canvas, this.img, h('div', { class: 'bg-scrim' }));
     // #31：设置没变时 chrome.storage.onChanged 不会触发，换图后得靠这个事件立刻重读到新图
     addEventListener('margin:bg-image', () => this.reloadImage());
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[BG_IMAGE_KEY]) this.reloadImage();
+    });
     addEventListener('margin:bg-intensity', (e) => {
       const value = (e as CustomEvent<number>).detail;
       if (!this.cfg || !Number.isFinite(value) || value < 0 || value > 1) return;
@@ -65,6 +69,7 @@ export class BackgroundLayer {
   }
 
   async apply(cfg: Background, theme: 'light' | 'dark', palette: Palette = 'classic'): Promise<void> {
+    const imageRead = ++this.imageRead;
     this.palette = palette;
     const first = !this.cfg;
     const prevMode = this.cfg?.mode;
@@ -79,8 +84,9 @@ export class BackgroundLayer {
     if (cfg.mode === 'image') {
       this.stop(); this.syncLens();
       const r = await chrome.storage.local.get(BG_IMAGE_KEY);
+      if (imageRead !== this.imageRead || this.cfg.mode !== 'image') return;
       const url = r[BG_IMAGE_KEY] as string | undefined;
-      this.img.style.backgroundImage = url ? `url("${url}")` : '';
+      this.img.style.backgroundImage = url ? `url(${JSON.stringify(url)})` : '';
       if (!url) this.el.dataset.mode = 'off';
       return;
     }
@@ -105,10 +111,12 @@ export class BackgroundLayer {
   /** #31：换了背景图但设置没变（mode 本来就是 image）时，重新读一次存储 */
   reloadImage(): void {
     if (this.cfg?.mode !== 'image') return;
+    const imageRead = ++this.imageRead;
     void chrome.storage.local.get(BG_IMAGE_KEY).then((r) => {
+      if (imageRead !== this.imageRead || this.cfg?.mode !== 'image') return;
       const url = r[BG_IMAGE_KEY] as string | undefined;
-      this.img.style.backgroundImage = url ? `url("${url}")` : '';
-      if (!url) this.el.dataset.mode = 'off';
+      this.img.style.backgroundImage = url ? `url(${JSON.stringify(url)})` : '';
+      this.el.dataset.mode = url ? 'image' : 'off';
     });
   }
 

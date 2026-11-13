@@ -23,8 +23,13 @@ export function createMessageEditor(placeholder: string, say: (text: string) => 
   const remember = () => {
     const current = selection();
     if (current?.rangeCount) {
-      const range = current.getRangeAt(0);
-      if (el.contains(range.startContainer) && el.contains(range.endContainer)) saved = range.cloneRange();
+      const root = el.getRootNode();
+      const composed = current as Selection & { getComposedRanges?: (options: { shadowRoots: ShadowRoot[] }) => StaticRange[] };
+      // Newer Firefox may retarget getRangeAt() to the shadow host; request the editable range explicitly.
+      const range = root instanceof ShadowRoot ? composed.getComposedRanges?.({ shadowRoots: [root] })[0] ?? current.getRangeAt(0) : current.getRangeAt(0);
+      if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
+        saved = document.createRange(); saved.setStart(range.startContainer, range.startOffset); saved.setEnd(range.endContainer, range.endOffset);
+      }
     }
   };
   const value = () => messageDraftText(el);

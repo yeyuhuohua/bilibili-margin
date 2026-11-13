@@ -1,199 +1,195 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearLoc, geocodeList, savedLoc, setLoc, weather } from '../../src/content/api/weather';
-import { PrivacyBlocked } from '../../src/shared/privacy';
+import { handleWeatherLocation } from '../../src/background/weather-location';
+import { AUTO_LOCATION_TTL, WEATHER_LOCATION_KEY, type WeatherLocationMessage } from '../../src/shared/weather-location';
 
-const LOC_KEY = 'margin:weather-loc';
-const CACHE_KEY = 'margin:weather-cache';
-const shandong = { name: '珠海', lat: 35.87124, lon: 119.99638 };
-const guangdong = { name: '珠海市', lat: 22.27694, lon: 113.56778 };
-const northPlace = { name: shandong.name, latitude: shandong.lat, longitude: shandong.lon, admin1: '山东省', admin2: '青岛市', country: '中国' };
-const southPlace = { name: guangdong.name, latitude: guangdong.lat, longitude: guangdong.lon, admin1: '广东省', admin2: '珠海市', country: '中国' };
+const LOC_KEY = 'margin:weather-loc', CACHE_KEY = 'margin:weather-cache';
+const zhuhai = { name: '珠海市', lat: 22.2716, lon: 113.5769, region: '广东省 · 中国' };
+const beijing = { name: '北京市', lat: 39.9, lon: 116.4 };
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-const forecast = (temp: number) => ({
-  utc_offset_seconds: 28800,
-  current: { time: '2026-11-05T20:00', temperature_2m: temp, apparent_temperature: temp, weather_code: 3, wind_speed_10m: 9 },
-  hourly: { time: ['2026-11-05T20:00'], temperature_2m: [temp], weather_code: [3], precipitation_probability: [20] },
-  daily: { time: ['2026-11-05'], weather_code: [3], temperature_2m_min: [temp - 2], temperature_2m_max: [temp + 2] },
+const forecast = (temp = 25) => ({ utc_offset_seconds: 28800,
+  current: { time: '2026-11-10T20:00', temperature_2m: temp, apparent_temperature: temp, weather_code: 3, wind_speed_10m: 9 },
+  hourly: { time: ['2026-11-10T20:00'], temperature_2m: [temp], weather_code: [3], precipitation_probability: [20] },
+  daily: { time: ['2026-11-10'], weather_code: [3], temperature_2m_min: [temp - 2], temperature_2m_max: [temp + 2] } });
+const deferred = () => { let resolve!: (r: Response) => void; const promise = new Promise<Response>(done => { resolve = done; }); return { promise, resolve }; };
+let api: typeof import('../../src/content/api/weather');
+let store: Record<string, any>, listeners: ((changes: Record<string, any>, area: string) => void)[];
+beforeEach(async () => {
+  vi.resetModules(); store = { 'margin:settings': { privacyExternal: true } }; listeners = [];
+  let queue = Promise.resolve<unknown>(undefined);
+  vi.stubGlobal('chrome', { runtime: { sendMessage: vi.fn((m: WeatherLocationMessage) => {
+    const result = queue.then(() => handleWeatherLocation(m)); queue = result.catch(() => {}); return result;
+  }) }, storage: { local: {
+    get: vi.fn(async (key: string) => ({ [key]: store[key] })),
+    set: vi.fn(async (items: Record<string, unknown>) => {
+      const changes: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(items)) { changes[key] = { oldValue: store[key], newValue: value }; store[key] = value; }
+      for (const callback of listeners) callback(changes, 'local');
+    }),
+  }, onChanged: { addListener: vi.fn((callback) => listeners.push(callback)) } } });
+  const local = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (key: string) => local.get(key) ?? null,
+    setItem: (key: string, value: string) => local.set(key, value), removeItem: (key: string) => local.delete(key) });
+  vi.stubGlobal('dispatchEvent', vi.fn()); api = await import('../../src/content/api/weather');
 });
-function deferredResponse() {
-  let resolve!: (value: Response) => void;
-  const promise = new Promise<Response>(done => { resolve = done; });
-  return { promise, resolve };
-}
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-beforeEach(() => {
-  vi.stubGlobal('chrome', { storage: { local: { get: vi.fn(async () => ({ 'margin:settings': { privacyExternal: true } })) }, onChanged: { addListener: vi.fn() } } });
-  const data = new Map<string, string>();
-  vi.stubGlobal('localStorage', {
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => data.set(key, value),
-    removeItem: (key: string) => data.delete(key),
-  });
-  vi.stubGlobal('dispatchEvent', vi.fn());
-});
-afterEach(() => vi.unstubAllGlobals());
-
-describe('天气城市候选', () => {
-  it('联网关闭时保留权限提示，不发城市查询请求', async () => {
-    vi.mocked(chrome.storage.local.get).mockResolvedValue({ 'margin:settings': { privacyExternal: false } });
+describe('中文城市候选', () => {
+  it('珠海与新乡直接命中行政城市，无街道排序和单城市补丁', async () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
-    await expect(geocodeList('纽约')).rejects.toBeInstanceOf(PrivacyBlocked);
+    expect((await api.geocodeList('珠海'))[0]).toEqual(zhuhai);
+    expect((await api.geocodeList('河南新乡市'))[0]).toMatchObject({ name: '新乡市', region: '河南省 · 中国' });
+    expect(fetcher).not.toHaveBeenCalled(); expect(api.savedLoc()).toBeNull();
+  });
+  it('同名地区可按省市限定，明确区县查询不混入地级市', async () => {
+    const all = await api.geocodeList('朝阳');
+    expect(all[0]).toMatchObject({ name: '朝阳市', region: '辽宁省 · 中国' });
+    expect(all.some(p => p.region.includes('北京市'))).toBe(true);
+    expect((await api.geocodeList('北京市朝阳区'))[0]).toMatchObject({ name: '朝阳', region: '北京市 · 中国' });
+    expect((await api.geocodeList('朝阳区')).some(p => p.name === '朝阳市')).toBe(false);
+  });
+  it('中英文、直辖市、台湾城市和候选数量', async () => {
+    expect((await api.geocodeList('Zhuhai'))[0].name).toBe('珠海市');
+    expect((await api.geocodeList('上海市'))[0].name).toBe('上海市');
+    expect((await api.geocodeList('台北'))[0].region).toBe('台湾省 · 中国');
+    expect(await api.geocodeList('')).toEqual([]); expect(await api.geocodeList('朝阳', 1)).toHaveLength(1);
+  });
+  it('联网关闭时本地搜索不请求，海外搜索仍遵守隐私开关', async () => {
+    store['margin:settings'].privacyExternal = false; const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    expect((await api.geocodeList('珠海'))[0].name).toBe('珠海市');
+    await expect(api.geocodeList('UnlistedTown')).rejects.toMatchObject({ name: 'PrivacyBlocked' }); expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('在线候选优先行政中心、去重、显示地区且不自动保存', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response({ results: [
+      { name: 'UnlistedTown', latitude: 1, longitude: 2, feature_code: 'PPLX', admin1: '村镇' },
+      { name: 'UnlistedTown', latitude: 3, longitude: 4, feature_code: 'PPLA', admin1: '行政城市' },
+      { name: 'UnlistedTown', latitude: 3, longitude: 4, feature_code: 'PPLA' },
+    ] })));
+    const places = await api.geocodeList('UnlistedTown'); expect(places).toHaveLength(2);
+    expect(places[0].region).toBe('行政城市'); expect(api.savedLoc()).toBeNull();
+  });
+  it('HTTP错误区别于成功的空结果', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response({}, 503)));
+    await expect(api.geocodeList('UnlistedTown')).rejects.toThrow('城市搜索暂时不可用');
+    vi.stubGlobal('fetch', vi.fn(async () => response({ results: [] }))); expect(await api.geocodeList('UnlistedTown')).toEqual([]);
+  });
+});
+
+describe('共享位置与迁移', () => {
+  it('保留旧手动城市并迁移到扩展存储', async () => {
+    localStorage.setItem(LOC_KEY, JSON.stringify({ ...zhuhai, manual: true })); await api.loadLoc();
+    expect(api.savedLoc()).toEqual({ ...zhuhai, manual: true }); expect(store[WEATHER_LOCATION_KEY].loc).toEqual(api.savedLoc()); expect(localStorage.getItem(LOC_KEY)).toBeNull();
+  });
+  it('旧自动位置没有可靠有效期，不能作为定位成功迁移', async () => {
+    localStorage.setItem(LOC_KEY, JSON.stringify({ name: '上海', lat: 31.23, lon: 121.47 })); await api.loadLoc(); expect(api.savedLoc()).toBeNull();
+  });
+  it('共享选择不被其他子域旧记录覆盖', async () => {
+    store[WEATHER_LOCATION_KEY] = { revision: 3, loc: { ...beijing, manual: true } };
+    localStorage.setItem(LOC_KEY, JSON.stringify({ ...zhuhai, manual: true })); await api.loadLoc(); expect(api.savedLoc()?.name).toBe('北京市');
+  });
+  it('跨页存储事件更新城市并清除旧天气缓存', async () => {
+    await api.setLoc(zhuhai); localStorage.setItem(CACHE_KEY, '{}');
+    await handleWeatherLocation({ margin: 'weather-location', op: 'manual', loc: beijing });
+    expect(api.savedLoc()?.name).toBe('北京市'); expect(localStorage.getItem(CACHE_KEY)).toBeNull(); expect(dispatchEvent).toHaveBeenCalled();
+  });
+  it('恢复自动后不再被旧手动数据复活', async () => {
+    await api.setLoc(zhuhai); await api.clearLoc();
+    const r = await handleWeatherLocation({ margin: 'weather-location', op: 'read', legacy: { ...beijing, manual: true } });
+    expect(r.state.loc).toBeNull(); expect(api.savedLoc()).toBeNull();
+  });
+  it('拒绝越界坐标，保留当前选择', async () => {
+    await api.setLoc(zhuhai); const r = await handleWeatherLocation({ margin: 'weather-location', op: 'manual', loc: { ...beijing, lat: 200 } });
+    expect(r.ok).toBe(false); expect(r.state.loc?.name).toBe('珠海市');
+  });
+});
+
+describe('定位与预报请求', () => {
+  it('读取本地天气不请求网络，重新加载模块后仍能读取', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast())));
+    await api.weather(); const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    vi.resetModules(); api = await import('../../src/content/api/weather');
+    expect(await api.localWeather()).toMatchObject({ temp: 25, cached: true, stale: false });
     expect(fetcher).not.toHaveBeenCalled();
   });
-  it('合并原词和市后缀查询，显示省市信息并按坐标去重', async () => {
-    const fetcher = vi.fn(async (url: string) => {
-      const query = new URL(url).searchParams.get('name');
-      return response({ results: query === '珠海' ? [northPlace] : [southPlace, northPlace] });
-    });
-    vi.stubGlobal('fetch', fetcher);
-    expect(await geocodeList(' 珠海 ')).toEqual([
-      { ...shandong, region: '山东省 · 青岛市 · 中国' },
-      { ...guangdong, region: '广东省 · 中国' },
-    ]);
-    expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('name'))).toEqual(['珠海', '珠海市']);
-    expect(savedLoc()).toBeNull();
+  it('有效缓存优先于过期自动定位，即使断网也立即返回', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast()))); await api.weather();
+    api.savedLoc()!.manual = false; api.savedLoc()!.at = Date.now() - AUTO_LOCATION_TTL - 1;
+    const fetcher = vi.fn(async () => { throw new TypeError('offline'); }); vi.stubGlobal('fetch', fetcher);
+    expect(await api.weather()).toMatchObject({ temp: 25, cached: true, stale: false }); expect(fetcher).not.toHaveBeenCalled();
   });
-  it.each(['珠海市', '黄岛区', '云和县', '阿拉善盟', '阿坝藏族羌族自治州', 'London'])('已有后缀或非中文输入只查询原词 %s', async query => {
-    const fetcher = vi.fn().mockResolvedValue(response({ results: [] }));
-    vi.stubGlobal('fetch', fetcher);
-    expect(await geocodeList(query)).toEqual([]);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+  it('定位与预报均失败时保留历史缓存，更新时间不刷新', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast()))); const cached = await api.weather();
+    cached.at = Date.now() - 3 * 86400_000; localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    api.savedLoc()!.manual = false; api.savedLoc()!.at = Date.now() - AUTO_LOCATION_TTL - 1;
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    expect(await api.weather()).toMatchObject({ temp: 25, at: cached.at, cached: true, stale: true });
+    expect(await api.localWeather()).toMatchObject({ at: cached.at, stale: true });
   });
-  it('广州等名称中的州字仍允许补查市后缀', async () => {
-    const fetcher = vi.fn(async (_url: string) => response({ results: [] })); vi.stubGlobal('fetch', fetcher);
-    await geocodeList('广州');
-    expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('name'))).toEqual(['广州', '广州市']);
+  it('自动定位刷新到相同城市而预报失败时，恢复被位置版本清理的缓存', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast()))); const cached = await api.weather();
+    cached.at = Date.now() - 31 * 60_000; localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    api.savedLoc()!.manual = false; api.savedLoc()!.at = Date.now() - AUTO_LOCATION_TTL - 1;
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.includes('ipwho.is') ? response({ success: true, city: 'Zhuhai', latitude: zhuhai.lat, longitude: zhuhai.lon }) : response({}, 503)));
+    expect(await api.weather()).toMatchObject({ temp: 25, at: cached.at, stale: true });
+    expect(JSON.parse(localStorage.getItem(CACHE_KEY)!)).toMatchObject({ at: cached.at });
   });
-  it('空输入不发请求', async () => {
-    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
-    expect(await geocodeList('  ')).toEqual([]);
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-  it('一条查询失败时仍返回另一条成功结果', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (new URL(url).searchParams.get('name') === '珠海') throw new Error('offline');
-      return response({ results: [southPlace] });
-    }));
-    expect(await geocodeList('珠海')).toEqual([{ ...guangdong, region: '广东省 · 中国' }]);
-  });
-  it('全部HTTP失败会抛错，区别于成功的空结果', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => response({ reason: 'Unavailable' }, 503)));
-    await expect(geocodeList('珠海')).rejects.toThrow();
-    vi.stubGlobal('fetch', vi.fn(async () => response({ results: [] })));
-    expect(await geocodeList('珠海')).toEqual([]);
-  });
-  it('原词空结果且补查失败时返回成功的空结果', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (new URL(url).searchParams.get('name') === '珠海市') throw new Error('offline');
-      return response({});
-    }));
-    expect(await geocodeList('珠海')).toEqual([]);
-  });
-});
-
-describe('天气位置与缓存', () => {
-  it('兼容没有region的旧手动位置，保持原坐标直到用户重选', async () => {
-    localStorage.setItem(LOC_KEY, JSON.stringify({ ...shandong, manual: true }));
-    const fetcher = vi.fn(async (_url: string) => response(forecast(12))); vi.stubGlobal('fetch', fetcher);
-    const result = await weather();
-    expect(result.loc).toEqual({ ...shandong, manual: true });
-    expect(savedLoc()).toEqual({ ...shandong, manual: true });
-    expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('latitude')).toBe(String(shandong.lat));
-  });
-  it('相同坐标复用缓存，并采用当前位置名称和地区信息', async () => {
-    setLoc(shandong);
+  it('损坏的缓存不展示，改用新预报', async () => {
+    await api.setLoc(zhuhai); localStorage.setItem(CACHE_KEY, JSON.stringify({ loc: zhuhai, temp: 25, at: Date.now(), hours: [null] }));
     vi.stubGlobal('fetch', vi.fn(async () => response(forecast(12))));
-    const cached = await weather();
-    setLoc({ ...shandong, name: '珠海街道', region: '山东省 · 青岛市 · 中国' });
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
-    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
-    const result = await weather();
-    expect(result.loc.name).toBe('珠海街道');
-    expect(result.loc.region).toBe('山东省 · 青岛市 · 中国');
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(await api.localWeather()).toBeNull(); expect((await api.weather()).temp).toBe(12);
   });
-  it('缓存未过期但坐标不符时重新请求天气', async () => {
-    setLoc(shandong);
-    vi.stubGlobal('fetch', vi.fn(async () => response(forecast(12))));
-    const cached = await weather();
-    setLoc(guangdong);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
-    const fetcher = vi.fn(async () => response(forecast(25))); vi.stubGlobal('fetch', fetcher);
-    const result = await weather();
-    expect(result.loc.lat).toBe(guangdong.lat);
-    expect(result.temp).toBe(25);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+  it.each([{}, { success: false }, { success: true, city: 'bad', latitude: 91, longitude: 0 }])('IP无效响应不保存假位置 %j', async body => {
+    const fetcher = vi.fn(async () => response(body)); vi.stubGlobal('fetch', fetcher);
+    await expect(api.weather()).rejects.toThrow(); expect(api.savedLoc()).toBeNull(); expect(store[WEATHER_LOCATION_KEY]).toBeUndefined(); expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it('换城后较慢的旧天气响应不能覆盖新缓存', async () => {
-    const old = deferredResponse();
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => new URL(url).searchParams.get('latitude') === String(shandong.lat) ? old.promise : response(forecast(25))));
-    setLoc(shandong);
-    const pending = weather();
-    setLoc(guangdong);
-    await weather();
-    const discarded = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    old.resolve(response(forecast(12))); await discarded;
-    const cache = JSON.parse(localStorage.getItem(CACHE_KEY)!);
-    expect(cache.loc.lat).toBe(guangdong.lat);
-    expect(cache.temp).toBe(25);
+  it('IP HTTP失败不继续请求上海天气', async () => {
+    const fetcher = vi.fn(async () => response({}, 503)); vi.stubGlobal('fetch', fetcher);
+    await expect(api.weather()).rejects.toThrow('粗定位'); expect(api.savedLoc()).toBeNull(); expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it.each([false, true])('清除定位后旧天气不得回写，包含重选相同坐标 %s', async reselect => {
-    const old = deferredResponse(); vi.stubGlobal('fetch', vi.fn(() => old.promise));
-    setLoc(shandong);
-    const pending = weather();
-    clearLoc(); if (reselect) setLoc(shandong);
-    const discarded = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    old.resolve(response(forecast(12))); await discarded;
-    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  it('自动位置有效期内不重新定位，相同预报复用缓存', async () => {
+    store[WEATHER_LOCATION_KEY] = { revision: 1, loc: { ...zhuhai, manual: false, at: Date.now() } };
+    const fetcher = vi.fn(async (_url: string) => response(forecast())); vi.stubGlobal('fetch', fetcher);
+    await api.weather(); await api.weather(); expect(fetcher).toHaveBeenCalledTimes(1); expect(fetcher.mock.calls[0][0]).toContain('/v1/forecast');
   });
-  it('较慢的IP定位不能覆盖随后选中的手动城市', async () => {
-    const ip = deferredResponse();
-    const fetcher = vi.fn(async (url: string) => url.includes('ipwho.is') ? ip.promise : response(forecast(25)));
-    vi.stubGlobal('fetch', fetcher);
-    const pending = weather();
-    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-    setLoc(guangdong); await weather();
-    const discarded = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    ip.resolve(response({ success: true, city: '上海', latitude: 31.23, longitude: 121.47 })); await discarded;
-    expect(savedLoc()).toEqual({ ...guangdong, manual: true });
-    expect(JSON.parse(localStorage.getItem(CACHE_KEY)!).loc.lat).toBe(guangdong.lat);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+  it('过期自动位置刷新，手动位置永不被自动替换', async () => {
+    store[WEATHER_LOCATION_KEY] = { revision: 1, loc: { ...zhuhai, manual: false, at: Date.now() - AUTO_LOCATION_TTL - 1 } };
+    const fetcher = vi.fn(async (url: string) => url.includes('ipwho.is') ? response({ success: true, city: 'Beijing', latitude: 39.9, longitude: 116.4 }) : response(forecast())); vi.stubGlobal('fetch', fetcher);
+    await api.weather(); expect(api.savedLoc()?.name).toBe('北京市'); await api.setLoc(zhuhai); await api.weather();
+    expect(fetcher.mock.calls.filter(([url]) => url.includes('ipwho.is'))).toHaveLength(1);
   });
-  it('选择城市再恢复自动定位后，最初的IP请求也已过期', async () => {
-    const ip = deferredResponse();
-    const fetcher = vi.fn(async (url: string) => url.includes('ipwho.is') ? ip.promise : response(forecast(25)));
-    vi.stubGlobal('fetch', fetcher);
-    const pending = weather();
-    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-    setLoc(guangdong); clearLoc();
-    const discarded = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    ip.resolve(response({ success: true, city: '上海', latitude: 31.23, longitude: 121.47 })); await discarded;
-    expect(savedLoc()).toBeNull();
-    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(1);
+  it('同页并发首次读取合并定位和预报', async () => {
+    const ip = deferred(); const fetcher = vi.fn(async (url: string) => url.includes('ipwho.is') ? ip.promise : response(forecast())); vi.stubGlobal('fetch', fetcher);
+    const first = api.weather(), second = api.weather(); await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    ip.resolve(response({ success: true, city: 'Zhuhai', latitude: zhuhai.lat, longitude: zhuhai.lon }));
+    const result = await Promise.all([first, second]); expect(result[0].loc.name).toBe('珠海市'); expect(fetcher).toHaveBeenCalledTimes(2);
   });
-  it('其他页面更新保存位置后，旧响应不能回写缓存', async () => {
-    const old = deferredResponse(); vi.stubGlobal('fetch', vi.fn(() => old.promise));
-    setLoc(shandong);
-    const pending = weather();
-    localStorage.setItem(LOC_KEY, JSON.stringify({ ...guangdong, manual: true }));
-    const discarded = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    old.resolve(response(forecast(12))); await discarded;
-    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  it('迟到的IP结果不能覆盖后选的手动城市', async () => {
+    const ip = deferred(); const fetcher = vi.fn(async (url: string) => url.includes('ipwho.is') ? ip.promise : response(forecast())); vi.stubGlobal('fetch', fetcher);
+    const pending = api.weather(), rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1)); await api.setLoc(zhuhai); await api.weather();
+    ip.resolve(response({ success: true, city: 'Beijing', latitude: 39.9, longitude: 116.4 })); await rejected; expect(api.savedLoc()).toMatchObject({ ...zhuhai, manual: true });
   });
-  it('同时首次加载时复用已完成的自动定位，较慢IP结果不能改写它', async () => {
-    const first = deferredResponse(), second = deferredResponse();
-    let ipCount = 0;
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('ipwho.is')) return ipCount++ === 0 ? first.promise : second.promise;
-      return response(forecast(25));
-    }));
-    const firstLoad = weather(), secondLoad = weather();
-    first.resolve(response({ success: true, city: '上海', latitude: 31.23, longitude: 121.47 }));
-    await firstLoad;
-    second.resolve(response({ success: true, city: '北京', latitude: 39.9, longitude: 116.4 }));
-    const result = await secondLoad;
-    expect(result.loc.name).toBe('上海');
-    expect(savedLoc()?.name).toBe('上海');
+  it('换城后的旧预报不得覆盖新缓存', async () => {
+    const old = deferred(); vi.stubGlobal('fetch', vi.fn(async (url: string) => new URL(url).searchParams.get('latitude') === String(zhuhai.lat) ? old.promise : response(forecast(12))));
+    await api.setLoc(zhuhai); const pending = api.weather(), rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1)); await api.setLoc(beijing); await api.weather(); old.resolve(response(forecast())); await rejected;
+    expect(JSON.parse(localStorage.getItem(CACHE_KEY)!).loc.name).toBe('北京市');
+  });
+  it.each([false, true])('恢复自动会使旧预报失效，包括重新选择相同坐标 %s', async reselect => {
+    const old = deferred(); vi.stubGlobal('fetch', vi.fn(() => old.promise));
+    await api.setLoc(zhuhai); const pending = api.weather(), rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1)); await api.clearLoc(); if (reselect) await api.setLoc(zhuhai);
+    old.resolve(response(forecast())); await rejected; expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  });
+  it.each([false, true])('坐标不同或时间在未来的预报不得复用 %s', async future => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast()))); const cached = await api.weather();
+    if (future) cached.at = Date.now() + 86400_000; else cached.loc = beijing;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); const fetcher = vi.fn(async () => response(forecast(12))); vi.stubGlobal('fetch', fetcher);
+    expect((await api.weather()).temp).toBe(12); expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('不完整预报不缓存，关闭联网后不再请求', async () => {
+    await api.setLoc(zhuhai); const fetcher = vi.fn(async () => response({ current: { temperature_2m: 10 } })); vi.stubGlobal('fetch', fetcher);
+    await expect(api.weather()).rejects.toThrow('数据不完整'); expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+    store['margin:settings'] = { privacyExternal: false }; for (const cb of listeners) cb({ 'margin:settings': { newValue: store['margin:settings'] } }, 'local');
+    await expect(api.weather()).rejects.toMatchObject({ name: 'PrivacyBlocked' }); expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,11 +3,11 @@
   "name": "__MSG_extensionName__",
   "default_locale": "en",
   "short_name": "MARGIN",
-  "version": "0.60.21",
-  "version_name": "0.6.21",
+  "version": "0.60.52",
+  "version_name": "0.6.52",
   "minimum_chrome_version": "110",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'self' https://app.bilibili.com https://bsbsb.top https://api.github.com"
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'self' https://app.bilibili.com https://bsbsb.top https://api.github.com https://ipwho.is https://api.open-meteo.com https://geocoding-api.open-meteo.com"
   },
   "description": "__MSG_extensionDescription__",
   "icons": {
@@ -34,8 +34,14 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.bilibili.com/*", "https://t.bilibili.com/*", "https://space.bilibili.com/*"],
-      "js": ["comment-location.js"],
+      "matches": [
+        "https://www.bilibili.com/*",
+        "https://t.bilibili.com/*",
+        "https://space.bilibili.com/*"
+      ],
+      "js": [
+        "comment-location.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },

@@ -37,9 +37,14 @@ export async function optionalFetch(service: Service, address: string, init: Req
   const [host, path] = SERVICES[service];
   const validPath = service === 'sponsor' ? /^\/api\/skipSegments\/[a-f0-9]{4}$/.test(url.pathname) : url.pathname === path;
   if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !validPath || url.hash) throw new Error('外部请求地址不受支持');
-  if ((init.method && init.method !== 'GET') || init.body || [...url.searchParams.keys()].some(key => /token|cookie|auth|csrf|access_key|uid/i.test(key))) throw new Error('外部请求包含不允许的参数');
+  // Firefox content-script Xrays may expose keys() without a usable Symbol.iterator.
+  let badQuery = false;
+  url.searchParams.forEach((_value, key) => { if (/token|cookie|auth|csrf|access_key|uid/i.test(key)) badQuery = true; });
+  if ((init.method && init.method !== 'GET') || init.body || badQuery) throw new Error('外部请求包含不允许的参数');
   const headers = new Headers(init.headers);
-  if ([...headers.keys()].some(key => !['accept', 'x-ext-version'].includes(key))) throw new Error('外部请求头不受支持');
+  let badHeader = false;
+  headers.forEach((_value, key) => { if (!['accept', 'x-ext-version'].includes(key)) badHeader = true; });
+  if (badHeader) throw new Error('外部请求头不受支持');
   const settings = await loadSettings();
   if (!settings.enabled || !settings.privacyExternal) throw new PrivacyBlocked();
   if (!watching) {

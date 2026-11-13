@@ -1,4 +1,4 @@
-import { followFeed, portal, type Dyn } from '../api/dyn';
+import { followFeed, followingLive, portal, type Dyn } from '../api/dyn';
 import { historyList } from '../api/history';
 import { folders } from '../api/fav';
 import { watchLater } from '../api/search';
@@ -32,6 +32,8 @@ export interface PopSpec {
   grid?: boolean;
   /** 滚到底继续加载（v0.47.2，GitHub #9：动态弹窗固定 8 条，往下拉不会继续读）；返回空数组表示没有更多 */
   more?: (videosOnly?: boolean) => Promise<PopRow[]>;
+  /** When supplied, load-more is a button instead of automatic scrolling. */
+  canLoadMore?: () => boolean;
   /** 当前功能是否允许打开（例如关闭消息提醒后不再弹消息面板） */
   enabled?: () => boolean;
   /** 该入口的行如何参与屏蔽词过滤；不设置表示不过滤 */
@@ -109,12 +111,14 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   };
   // 分页：滚到离底部 120px 内追加下一页；列表不够高时一直补到出现滚动条
   // 用 IntersectionObserver 看列表末尾的哨兵，滚动时不读布局
-  const tail = h('i', { class: 'dp-tail', 'aria-hidden': 'true' });
+  const tail = spec.canLoadMore ? h('button', { class: 'dp-more', type: 'button' }, '加载更多') : h('i', { class: 'dp-tail', 'aria-hidden': 'true' });
   let tailSeen = false;
   const fill = () => {
     if (done || busy || !spec.more || !open) return;
     if (!tail.isConnected) list.append(tail);
     if (!tailSeen) return;
+    const restoreFocus = tail.matches(':focus');
+    if (spec.canLoadMore) { tailSeen = false; (tail as HTMLButtonElement).disabled = true; tail.textContent = '加载中…'; }
     busy = true;
     const current = generation;
     const sk = h('div', { class: 'dp-skel' });
@@ -122,16 +126,19 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     spec.more(videosOnly).then(async (rows) => {
       if (current !== generation) return;
       sk.remove();
-      if (!rows.length) { done = true; tail.before(h('p', { class: 'dp-end' }, '没有更多了')); return; }
+      if (!rows.length) { done = true; tail.before(h('p', { class: 'dp-end' }, '没有更多了')); if (restoreFocus && spec.canLoadMore) btn.focus({ preventScroll: true }); tail.remove(); return; }
       await prepareRows(rows);
       if (current !== generation) return;
       const shown = visible(rows);
-      tail.before(...shown.map(row));
+      const nodes = shown.map(row); tail.before(...nodes);
+      if (spec.canLoadMore && !spec.canLoadMore()) { done = true; if (restoreFocus) (nodes[0] ?? btn).focus({ preventScroll: true }); tail.remove(); }
+      else if (spec.canLoadMore) tail.textContent = '加载更多';
       if (!shown.length) requestAnimationFrame(fill);
-    }).catch(() => { if (current === generation) { sk.remove(); done = true; } })
-      .finally(() => { if (current === generation) { busy = false; requestAnimationFrame(fill); } });
+    }).catch(() => { if (current === generation) { sk.remove(); done = !spec.canLoadMore; if (spec.canLoadMore) tail.textContent = '加载失败，重试'; } })
+      .finally(() => { if (current === generation) { busy = false; if (spec.canLoadMore) (tail as HTMLButtonElement).disabled = false; requestAnimationFrame(fill); } });
   };
-  if (spec.more) new IntersectionObserver((es) => { tailSeen = es[es.length - 1].isIntersecting; if (tailSeen) fill(); }, { root: list, rootMargin: '0px 0px 160px 0px' }).observe(tail);
+  if (spec.canLoadMore) tail.addEventListener('click', () => { tailSeen = true; fill(); });
+  else if (spec.more) new IntersectionObserver((es) => { tailSeen = es[es.length - 1].isIntersecting; if (tailSeen) fill(); }, { root: list, rootMargin: '0px 0px 160px 0px' }).observe(tail);
 
   const load = () => {
     if (Date.now() - loadedAt < 60_000 && list.querySelector('.dp-row')) return;
@@ -146,7 +153,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
       if (current !== generation) return;
       const shown = visible(rows);
       list.replaceChildren(...(shown.length ? shown.map(row) : [h('p', { class: 'dp-empty' }, spec.empty)]));
-      done = !spec.more || !rows.length;
+      done = !spec.more || !rows.length || spec.canLoadMore?.() === false;
       requestAnimationFrame(fill);
     }).catch(() => {
       if (current !== generation) return;
@@ -276,10 +283,19 @@ export const POPS: Record<string, (o: { onDyn?: () => void; msgRemind?: () => bo
     title: '分区', all: { href: 'https://www.bilibili.com/v/popular/all', label: '热门' }, empty: '', grid: true,
     load: async () => ZONES.map(([t, path]) => ({ href: `https://www.bilibili.com/${path}`, title: t })),
   }),
-  直播: () => ({
-    title: '正在直播', all: { href: 'https://link.bilibili.com/p/center/index#/user-center/follow/1', label: '我的关注' }, empty: '关注的主播都还没开播',
-    load: async () => (await portal()).live.slice(0, 8).map((u) => ({ href: u.url, face: u.face, live: true, who: u.name, sub: '直播中', title: u.title || '正在直播' })),
-  }),
+  直播: () => {
+    let rows: PopRow[] = [], offset = 0, complete = false;
+    const convert = (u: Awaited<ReturnType<typeof followingLive>>[number]): PopRow => ({ href: u.url, face: u.face, live: true, who: u.name, sub: '直播中', title: u.title || '正在直播' });
+    return {
+      title: '正在直播', all: { href: 'https://link.bilibili.com/p/center/index#/user-center/follow/1', label: '我的关注' }, empty: '关注的主播都还没开播',
+      load: async () => { const p = await portal(); rows = p.live.map(convert); offset = Math.min(8, rows.length); complete = p.liveCount <= rows.length; return rows.slice(0, offset); },
+      canLoadMore: () => offset < rows.length || !complete,
+      more: async () => {
+        if (!complete) { const extra = await followingLive(); const seen = new Set(rows.map(r => r.href)); for (const u of extra) if (!seen.has(u.url)) { seen.add(u.url); rows.push(convert(u)); } complete = true; }
+        const next = rows.slice(offset, offset + 8); offset += next.length; return next;
+      },
+    };
+  },
   消息: (o) => ({
     title: '消息', all: { href: 'https://message.bilibili.com/?margin-fresh=1', label: '消息中心' }, empty: '', compact: true,
     enabled: o.msgRemind,

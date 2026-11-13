@@ -4,9 +4,10 @@ import type { Video } from './feed';
 
 const ask = <T>(m: AppMessage): Promise<T> => chrome.runtime.sendMessage(m) as Promise<T>;
 
-export interface AppState { authed: boolean; mid: number; exp: number }
+export interface AppState { authed: boolean; mid: number; exp: number; remember: boolean }
 export const appState = () => ask<AppState & { ok: boolean }>({ margin: 'app', op: 'state' });
 export const appRevoke = () => ask<{ ok: boolean }>({ margin: 'app', op: 'revoke' });
+export const appRemember = (enabled: boolean) => ask<{ ok: boolean; error?: string }>({ margin: 'app', op: 'remember', enabled });
 /* 扫码授权的两个 passport 接口在页面里发（B 站给 www.bilibili.com 开了跨域；从后台发会被风控 412），拿到的凭证交给后台保存 */
 async function passport(url: string, params: Record<string, string | number>): Promise<{ code: number; message?: string; data?: any }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Firefox 内容脚本的 fetch 按扩展身份发，content.fetch 才是页面身份（带 www.bilibili.com 的 Origin）
@@ -23,7 +24,8 @@ export async function appPoll(code: string): Promise<{ ok: boolean; state?: 'wai
   const d = await passport(APP.poll, { auth_code: code.replace(/[^0-9a-f]/gi, '') });
   // 86039 还没扫，86090 已扫码等确认，86038 二维码过期
   if (d.code !== 0) return { ok: true, state: d.code === 86038 ? 'expired' : d.code === 86090 ? 'scanned' : d.code === 86039 ? 'wait' : 'error', error: d.message };
-  await ask({ margin: 'app', op: 'save', key: String(d.data.access_token), mid: Number(d.data.mid) || 0, expiresIn: Number(d.data.expires_in) || 0 });
+  const saved = await ask<{ ok: boolean; error?: string }>({ margin: 'app', op: 'save', key: String(d.data.access_token), mid: Number(d.data.mid) || 0, expiresIn: Number(d.data.expires_in) || 0 });
+  if (!saved?.ok) return { ok: false, state: 'error', error: saved?.error || '授权保存失败，请重新扫码' };
   return { ok: true, state: 'done', mid: Number(d.data.mid) || 0 };
 }
 

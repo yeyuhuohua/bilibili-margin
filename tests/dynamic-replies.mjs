@@ -76,20 +76,25 @@ try {
     await page.screenshot({ path: join(out, `${entry}-${theme}.png`) });
     passed(`${entry} ${theme} failed page retries without losing or duplicating replies`);
 
-    await comments.click(); await comments.click(); await toggle.waitFor();
+    const cachedCalls = calls.length;
+    await comments.click(); await comments.click(); await collapse.waitFor();
+    assert.equal(await card.locator('.dy-sublist > .dy-r').count(), 12);
+    assert.equal(calls.length, cachedCalls);
+    // A fresh card starts a new request; collapsing only hides and preserves it.
+    await page.reload(); await comments.click(); await toggle.waitFor();
     delay = 500;
     await toggle.click(); await collapse.click();
     await page.waitForTimeout(650);
     assert.equal(await card.locator('.dy-sublist').isVisible(), false);
     await toggle.click();
     assert.equal(await card.locator('.dy-sublist > .dy-r').count(), 10);
-    await comments.click(); await comments.click(); await toggle.waitFor();
+    await page.reload(); await comments.click(); await toggle.waitFor();
     await toggle.click(); await comments.click(); await comments.click();
     await page.waitForTimeout(650);
-    assert.equal(await card.locator('.dy-sublist > .dy-r').count(), 0);
-    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await card.locator('.dy-sublist > .dy-r').count(), 10);
+    assert.equal(await collapse.getAttribute('aria-expanded'), 'true');
     delay = 0;
-    passed(`${entry} ${theme} collapsed and replaced panels ignore late responses`);
+    passed(`${entry} ${theme} cached panels preserve replies and delayed responses respect collapsed state`);
   }
   assert.deepEqual(errors, []);
 } finally { writeFileSync(join(out, 'results.json'), JSON.stringify({ results, errors, calls }, null, 2)); await context.close(); }

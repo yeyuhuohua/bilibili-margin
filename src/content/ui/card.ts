@@ -63,7 +63,7 @@ function metaRow(v: Video, opts: CardOpts): HTMLElement {
   const off = (k: string) => !!opts.hide?.has(k);
   const parts: HTMLElement[] = [];
   if (!off('author')) {
-    const author = h('a', { class: 'author', title: v.author, href: `https://space.bilibili.com/${v.mid}`, target: '_blank', rel: 'noopener' }, h('span', { class: 'author-name' }, v.author));
+    const author = h('a', { class: 'author', title: v.author, href: `https://space.bilibili.com/${v.mid}`, target: '_blank', rel: 'noopener' }, icon(ICONS.user), h('span', { class: 'author-name' }, v.author));
     const mark = (on: boolean) => {
       const badge = author.querySelector('.card-followed');
       if (on && !badge) author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
@@ -73,8 +73,19 @@ function metaRow(v: Video, opts: CardOpts): HTMLElement {
     if (!opts.compact) void followStatus(v.mid).then(on => { if (author.isConnected && on !== undefined) mark(on); });
     parts.push(author);
   }
-  if (!off('views')) parts.push(h('span', {}, `${fmtCount(v.views)} 播放`));
-  if (v.danmaku && !off('danmaku')) parts.push(h('span', {}, `${fmtCount(v.danmaku)} 弹幕`));
+  if (!off('views')) {
+    const views = fmtCount(v.views);
+    parts.push(h('span', { class: 'stat', title: `${views} 播放`, 'aria-label': `${views} 播放` }, icon(ICONS.play), views));
+  }
+  // 部分接口给数字字符串；明确的 0 保留，无效或缺失值不伪造为 0。
+  const rawDanmaku: unknown = v.danmaku;
+  const count = typeof rawDanmaku === 'number' ? rawDanmaku
+    : typeof rawDanmaku === 'string' && /^\d+(?:\.\d+)?$/.test(rawDanmaku.trim()) ? Number(rawDanmaku) : NaN;
+  const formatted = typeof rawDanmaku === 'string' && /^\d+(?:\.\d+)?[万亿]$/.test(rawDanmaku.trim()) ? rawDanmaku.trim() : null;
+  const dm = Number.isFinite(count) && count >= 0 ? fmtCount(count) : formatted;
+  if (dm !== null && !off('danmaku')) {
+    parts.push(h('span', { class: 'stat', title: `${dm} 弹幕`, 'aria-label': `${dm} 弹幕` }, icon(ICONS.comment), dm));
+  }
   const meta = h('div', { class: 'meta' });
   parts.forEach((el, i) => { if (i) meta.append(h('span', { class: 'dot' }, '·')); meta.append(el); });
   if (!parts.length) meta.style.display = 'none';

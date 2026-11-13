@@ -96,6 +96,11 @@ try {
     await transparency.detach();
     console.log(`PASS ${name} shared glass materials in both themes and reduced transparency`);
     await button.click();
+    await page.waitForFunction(host => {
+      const control = document.querySelector(host)?.shadowRoot?.querySelector('.ts');
+      const progress = Number(control?.dataset.progress);
+      return control?.classList.contains('moving') && progress > .01 && progress < .99;
+    }, host, { timeout: 1000 });
     await settled('light');
     const box = await button.boundingBox();
     await page.mouse.move(box.x + box.width * .75, box.y + box.height / 2);

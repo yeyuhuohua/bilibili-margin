@@ -1,4 +1,6 @@
 import type { Settings } from '../../shared/settings';
+import { mountUpdateNotice } from './update-notice';
+import { attachNavigationGlass } from './navigation-glass';
 import { loadSettings } from '../../shared/settings';
 import { BackgroundLayer } from '../bg/background';
 import { h, ICONS, guardTyping } from './dom';
@@ -48,11 +50,8 @@ export class PageShell {
     const fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), () => this.settings.favDirect, this.filter);
     const later = createLaterDrawer(() => this.app, this.filter);
     const hist = createHistoryDrawer();
-    panels.fav = fav;
-    panels.later = later;
-    panels.hist = hist;
     const palette = createCommandPalette([
-      { id: 'shell-top', title: '回到顶部', cat: '操作', icon: ICONS.top, run: () => this.app.scrollTo({ top: 0, behavior: 'smooth' }) },
+      { id: 'shell-top', title: '回到顶部', cat: '操作', icon: ICONS.top, run: () => this.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' }) },
       { id: 'shell-fav', title: '打开收藏夹', cat: '操作', icon: ICONS.fav, keys: ['收藏'], run: () => fav.open() },
       { id: 'shell-theme', title: '切换亮色 / 暗色', cat: '操作', icon: ICONS.moon, keys: ['主题', '夜间'], run: () => this.toggleTheme() },
       { id: 'shell-settings', title: '打开设置', cat: '操作', icon: ICONS.gear, run: () => this.panel.sheet.open() },
@@ -61,6 +60,9 @@ export class PageShell {
       { id: 'shell-history', title: '观看历史', cat: '跳转', icon: ICONS.history, run: () => openBili('https://www.bilibili.com/history') },
       { id: 'shell-off', title: '本次回到 B 站原版', cat: '操作', icon: ICONS.exit, keys: ['原版'], run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
     ]);
+    panels.fav = fav;
+    panels.later = later;
+    panels.hist = hist;
     this.head = createHeader({
       onTheme: () => this.toggleTheme(),
       onSearch: (q, origin) => palette.open(q, origin),
@@ -90,9 +92,9 @@ export class PageShell {
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     this.root.append(this.app);
+    mountUpdateNotice(this.app);
     const lg = filtersIn(this.root);
-    this.head.glass.forEach((g) => attachGlass(g, lg));
-    attachGlass(this.head.thumb, lg, { blur: 2, strength: 0.4 });
+    attachNavigationGlass(this.head, lg);
     this.applyTheme();
     this.media.addEventListener('change', () => this.applyTheme());
   }

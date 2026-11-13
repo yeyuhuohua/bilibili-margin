@@ -20,6 +20,7 @@ export type AppMessage =
   | { margin: 'app'; op: 'feed'; idx: number }
   | { margin: 'app'; op: 'save'; key: string; mid: number; expiresIn: number }
   | { margin: 'app'; op: 'revoke' }
+  | { margin: 'app'; op: 'remember'; enabled: boolean }
   | { margin: 'app'; op: 'dislike'; aid: number; mid: number; reason: 1 | 4; cancel?: boolean };
 
 /** 后台回给页面的推荐卡片（已经去掉广告、直播、专栏、横幅，只留视频） */

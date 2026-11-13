@@ -629,13 +629,16 @@ try {
       if (u.includes('geocoding-api.open-meteo.com')) return cities(u);
       if (u.includes('api.open-meteo.com')) forecasts.push(new URL(u).searchParams.get('latitude'));
     };
-    await seed({ weather: true, privacyExternal: true, footprint: true, reduceMotion: true });
+    // Prepare legacy storage before mounting weather; an active card can repopulate a cleared location.
+    await seed({ weather: false, privacyExternal: true, footprint: true, reduceMotion: true });
     await page.goto('https://www.bilibili.com/');
-    // Legacy same-name location must remain editable, with no automatic migration.
+    // Migrate the explicit old selection without silently changing its coordinates.
     await page.evaluate(() => {
       localStorage.setItem('margin:weather-loc', JSON.stringify({ name: '珠海', lat: 35.87124, lon: 119.99638, manual: true }));
       localStorage.removeItem('margin:weather-cache');
     });
+    await sw.evaluate(() => chrome.storage.local.remove('margin:weather-location-v2'));
+    await seed({ weather: true });
     await page.reload();
     const city = page.locator('.wx-city');
     await city.waitFor();
@@ -643,10 +646,10 @@ try {
     await city.click();
     await page.locator('.wx input').fill('珠海');
     await page.locator('.wx input').press('Enter');
-    const choice = page.locator('.wx [role="option"]').filter({ hasText: '广东省' });
+    const choice = page.locator('.wx [role="option"]').filter({ hasText: '广东省' }).filter({ has: page.getByText('珠海市', { exact: true }) });
     await choice.waitFor({ timeout: 2500 });
-    assert.equal(await page.locator('.wx [role="option"]').count(), 2);
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('margin:weather-loc')).lat), 35.87124);
+    assert((await page.locator('.wx [role="option"]').count()) >= 1);
+    assert.equal(await sw.evaluate(async () => (await chrome.storage.local.get('margin:weather-location-v2'))['margin:weather-location-v2'].loc.lat), 35.87124);
     for (const [width, theme] of [[1440, 'dark'], [900, 'light']]) {
       await page.setViewportSize({ width, height: 1000 });
       await seed({ theme });
@@ -657,10 +660,10 @@ try {
     const before = forecasts.length;
     await choice.focus(); await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelector('.wx-city')?.textContent === '珠海市');
-    const selected = await page.evaluate(() => JSON.parse(localStorage.getItem('margin:weather-loc')));
-    assert.equal(selected.lat, guangdong.latitude);
+    const selected = await sw.evaluate(async () => (await chrome.storage.local.get('margin:weather-location-v2'))['margin:weather-location-v2'].loc);
+    assert.equal(selected.lat, 22.2716);
     assert(selected.region.includes('广东省'));
-    assert.deepEqual(forecasts.slice(before), [String(guangdong.latitude)]);
+    assert.deepEqual(forecasts.slice(before), ['22.2716']);
     await city.click();
     await page.locator('.wx input').press('Escape');
     assert.equal(await page.locator('.wx input').count(), 0);
@@ -676,9 +679,10 @@ try {
     const options = page.locator('.sheet-layer .city-list [role="option"]');
     override = u => u.includes('geocoding-api.open-meteo.com') ? cities(u) : undefined;
     await input.fill('珠海'); await input.press('Enter');
-    await options.filter({ hasText: '广东省' }).waitFor({ timeout: 2500 });
-    await options.filter({ hasText: '山东省' }).click();
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('margin:weather-loc')).lat), shandong.latitude);
+    await options.filter({ hasText: '广东省' }).first().waitFor({ timeout: 2500 });
+    await options.filter({ hasText: '广东省' }).filter({ has: page.getByText('珠海市', { exact: true }) }).click();
+    await options.first().waitFor({ state: 'hidden' });
+    assert.equal(await sw.evaluate(async () => (await chrome.storage.local.get('margin:weather-location-v2'))['margin:weather-location-v2'].loc.lat), 22.2716);
     // Clearing, editing during debounce, and returning to automatic location invalidate in-flight searches.
     for (const action of ['clear', 'edit', 'auto']) {
       const pending = [];
@@ -693,7 +697,7 @@ try {
       assert.equal(await options.filter({ hasText: '过期城市' }).count(), 0);
       await input.fill('');
     }
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('margin:weather-loc'))?.manual !== true);
+    await sw.evaluate(async () => { const state = (await chrome.storage.local.get('margin:weather-location-v2'))['margin:weather-location-v2']; if (state.loc?.manual) throw Error('Automatic location was not restored'); });
     const failure = route => route.fulfill({ status: 503, body: 'Unavailable' });
     await ctx.route('https://geocoding-api.open-meteo.com/**', failure);
     try {

@@ -3,13 +3,14 @@ import type { Video } from './feed';
 
 export interface Folder { id: number; title: string; count: number; cover: string; mid: number; kind?: 'collected' | 'season'; /** 默认收藏夹不能删除 */ isDefault: boolean; isPrivate: boolean }
 
-/** 空间页只列出该 UP 自己创建的公开收藏夹。 */
+/** 其他人的空间只列公开收藏夹；登录者自己的空间也保留私密夹。 */
 export async function publicFolders(mid: number, page: number): Promise<{ list: Folder[]; more: boolean }> {
   const data = await getJSON<{ list?: { id: number; title: string; media_count: number; cover?: string; attr: number }[]; count?: number; has_more?: boolean } | null>(
     '/x/v3/fav/folder/created/list', { up_mid: mid, pn: page, ps: 20 });
+  const own = data?.list?.some(f => f.attr & 1) ? await nav().then(n => n.isLogin && n.mid === mid, () => false) : false;
   return {
-    list: (data?.list || []).filter(f => Number.isInteger(f.attr) && (f.attr & 1) === 0).map(f => ({
-      id: f.id, title: f.title, count: f.media_count, cover: https(f.cover), mid, isDefault: (f.attr & 2) === 0, isPrivate: false,
+    list: (data?.list || []).filter(f => Number.isInteger(f.attr) && ((f.attr & 1) === 0 || own)).map(f => ({
+      id: f.id, title: f.title, count: f.media_count, cover: https(f.cover), mid, isDefault: (f.attr & 2) === 0, isPrivate: (f.attr & 1) === 1,
     })),
     more: data?.has_more ?? page * 20 < (data?.count || 0),
   };
@@ -17,20 +18,24 @@ export async function publicFolders(mid: number, page: number): Promise<{ list: 
 
 export async function publicFolder(mid: number, id: number): Promise<Folder> {
   const data = await getJSON<{ id: number; mid: number; title: string; media_count: number; cover?: string; attr: number } | null>('/x/v3/fav/folder/info', { media_id: id });
-  if (!data || data.mid !== mid || !Number.isInteger(data.attr) || (data.attr & 1)) throw new Error('收藏夹未公开或不属于当前空间');
-  return { id: data.id, mid, title: data.title, count: data.media_count, cover: https(data.cover), isDefault: (data.attr & 2) === 0, isPrivate: false };
+  if (!data || data.mid !== mid || !Number.isInteger(data.attr)) throw new Error('收藏夹不可用或不属于当前空间');
+  if (data.attr & 1) {
+    const own = await nav().then(n => n.isLogin && n.mid === mid, () => false);
+    if (!own) throw new Error('收藏夹未公开');
+  }
+  return { id: data.id, mid, title: data.title, count: data.media_count, cover: https(data.cover), isDefault: (data.attr & 2) === 0, isPrivate: (data.attr & 1) === 1 };
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export async function folders(): Promise<Folder[] | null> {
-  const n = await nav();
+export async function folders(refreshLogin = false): Promise<Folder[] | null> {
+  const n = await nav(refreshLogin);
   if (!n?.isLogin || !n.mid) return null;
   const data = await getJSON<{ list: any[] | null }>('/x/v3/fav/folder/created/list', { up_mid: n.mid, pn: 1, ps: 50 });
   return (data.list ?? []).map((f) => ({ id: f.id, title: f.title, count: f.media_count, cover: String(f.cover || '').replace(/^http:/, 'https:'), mid: n.mid!, isDefault: (f.attr & 2) === 0, isPrivate: (f.attr & 1) === 1 }));
 }
 
-export async function collectedFolders(page = 1): Promise<{ list: Folder[]; more: boolean } | null> {
-  const n = await nav();
+export async function collectedFolders(page = 1, refreshLogin = false): Promise<{ list: Folder[]; more: boolean } | null> {
+  const n = await nav(refreshLogin);
   if (!n?.isLogin || !n.mid) return null;
   const data = await getJSON<{ list: any[] | null; has_more: boolean }>('/x/v3/fav/folder/collected/list', { up_mid: n.mid, pn: page, ps: 50, platform: 'web' });
   return { list: (data.list ?? []).filter((f) => f.type === 11 || f.type === 21).map((f) => ({
@@ -42,7 +47,7 @@ export async function collectedFolders(page = 1): Promise<{ list: Folder[]; more
 export const folderUrl = (f: Folder) => `https://space.bilibili.com/${f.mid}/favlist?fid=${f.id}${f.kind ? `&ftype=collect&ctype=${f.kind === 'season' ? 21 : 11}` : ''}`;
 const https = (url: unknown) => String(url || '').replace(/^http:/, 'https:').replace(/^\/\//, 'https://');
 const mediaVideo = (m: any, upper = m.upper): Video => ({
-  bvid: m.bvid, cid: m.ugc?.first_cid ?? 0, title: m.title,
+  bvid: m.bvid, aid: Number(m.id) || undefined, cid: m.ugc?.first_cid ?? 0, title: m.title,
   cover: https(m.cover), duration: m.duration ?? 0,
   author: upper?.name ?? '', mid: upper?.mid ?? 0, face: upper?.face ?? '',
   views: m.cnt_info?.play ?? 0, danmaku: m.cnt_info?.danmaku ?? 0, pubdate: m.fav_time ?? m.pubtime ?? 0,
@@ -80,3 +85,11 @@ export async function createFolder(title: string, isPrivate: boolean, intro = ''
 
 /** 删除收藏夹（连同里面的收藏记录，B 站不可恢复） */
 export const deleteFolder = (id: number) => post<unknown>('/x/v3/fav/folder/del', { media_ids: id });
+
+/** Remove one resource from this owned folder, without deleting the video or other favorites. */
+export async function removeFolderVideo(folder: number, aid: number): Promise<void> {
+  if (!Number.isSafeInteger(aid) || aid <= 0) throw new Error('视频标识缺失，请刷新收藏夹后重试');
+  await post('/x/v3/fav/resource/batch-del', { media_id: folder, resources: `${aid}:2` });
+}
+
+export const folderPlayUrl = (f: Folder) => `https://www.bilibili.com/list/ml${f.id}?sid=${f.id}`;

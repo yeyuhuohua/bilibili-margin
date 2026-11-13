@@ -18,6 +18,9 @@ import { createLaterDrawer } from './drawer';
 import { createScrollRuler } from './scroll-ruler';
 import { skinComments } from './comment-skin';
 import css from '../styles/index';
+import { mountUpdateNotice } from './update-notice';
+import { mountSearchControls } from './search-controls';
+import { attachNavigationGlass } from './navigation-glass';
 import { BackgroundLayer } from '../bg/background';
 import { startTriple } from './triple';
 import { startWatchCard } from './watch-card';
@@ -122,10 +125,11 @@ export class WatchSkin {
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     root.append(this.app);
+    mountUpdateNotice(this.app);
+    if (kind === 'search') mountSearchControls();
     if (isWatch) { skinComments(); alignAuthorCard(); }
     const lg = filtersIn(root);
-    this.head.glass.forEach((g) => attachGlass(g, lg));
-    attachGlass(this.head.thumb, lg, { blur: 2, strength: 0.4 });
+    attachNavigationGlass(this.head, lg);
     const favGrid = this.fav.el.querySelector('.fav-grid') as HTMLElement | null;
     if (favGrid) bindCardMenu(favGrid, cm, () => this.app, { onLater: () => later.open() });
     de.append(this.host);

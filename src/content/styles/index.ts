@@ -14,5 +14,6 @@ import home_search from './08-home-search.css?inline';
 import appearance from './09-appearance.css?inline';
 import batch from './10-batch.css?inline';
 import settings from './11-settings.css?inline';
+import materials from './12-materials.css?inline';
 
-export default [base, header, cards, glass_folder, footprint, watch, overlays, home_search, appearance, batch, settings].join('');
+export default [base, header, cards, glass_folder, footprint, watch, overlays, home_search, appearance, batch, settings, materials].join('');

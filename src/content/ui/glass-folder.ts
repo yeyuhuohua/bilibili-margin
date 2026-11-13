@@ -81,7 +81,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   let disposed = false;
   let files: GFFile[] = [];
 
-  const root = h('div', { class: 'gf-root', 'data-place': 'bottom-left', style: `width:${width}px;height:${(H + HEADROOM) * k}px` });
+  const root = h('div', { class: 'gf-root', 'data-place': 'bottom-left', style: `width:${width}px;height:${(H + HEADROOM) * k}px;--gf-water:url(#${uid}-water)` });
   const stage = h('div', { class: 'gf-stage', style: `transform:translateY(${HEADROOM * k}px) scale(${k})` });
   const tilt = h('div', { class: 'gf-tilt' });
 
@@ -94,6 +94,9 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   // 毛玻璃前板（底边铰链）
   const grad = document.createElementNS(NS, 'defs');
   setMarkup(grad, `<linearGradient id="${uid}-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/></linearGradient>`);
+  const water = document.createElementNS(NS, 'filter'); water.id = `${uid}-water`;
+  setMarkup(water, '<feTurbulence type="fractalNoise" baseFrequency=".012 .025" numOctaves="1" seed="17" result="noise"/><feGaussianBlur in="noise" stdDeviation="2" result="softMap"/><feDisplacementMap in="SourceGraphic" in2="softMap" scale="3" xChannelSelector="R" yChannelSelector="G"/>');
+  grad.append(water);
   const hit = h('button', { type: 'button', class: 'gf-hit', 'aria-expanded': 'false' }) as HTMLButtonElement;
   const metaEl = h('span', { class: 'gf-meta' });
   // 毛玻璃不用 backdrop-filter：Chromium 里它在缩放 / 变换 / 滚动容器中会只模糊一块矩形，
@@ -127,7 +130,8 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   stage.append(tilt);
   root.append(stage);
 
-  let arts = [...root.querySelectorAll<HTMLElement>('.gf-art')];
+  // Pointer parallax moves the real cover only; keep its blurred copy cacheable.
+  const arts = [...back.querySelectorAll<HTMLElement>('.gf-art')];
   let frostRaf = 0;
   function syncFrost() {
     if (disposed || frostRaf) return;
@@ -143,7 +147,6 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
         a.forEach((cv, i) => { const d = c[i]; d.width = cv.width; d.height = cv.height; if (cv.width > 1) d.getContext('2d')?.drawImage(cv, 0, 0); });
       }
       frost.replaceChildren(b, f);
-      arts = [...root.querySelectorAll<HTMLElement>('.gf-art')];
     });
   }
 
@@ -292,6 +295,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   // Esc 与点外面：关掉当前打开的（菜单优先）。影子 DOM 里要用 composedPath 判断
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
+    e.preventDefault();
     e.stopPropagation(); // 先关文件夹，不要连抽屉一起关
     if (menuOpen) { setMenu(false); key.focus(); } else { setOpen(false); hit.focus(); }
   };
@@ -306,7 +310,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
     if (want === listening) return;
     listening = want;
     const m = want ? 'addEventListener' : 'removeEventListener';
-    document[m]('keydown', onKey as EventListener);
+    document[m]('keydown', onKey as EventListener, true);
     document[m]('pointerdown', onDown as EventListener);
   }
 

@@ -79,6 +79,8 @@ export function apiBody(u) {
   if (u.includes('/x/web-interface/wbi/index/top/feed/rcmd')) {
     const items = P.map((v, i) => ({ goto: 'av', ...arc(v, i), is_ad: i === 2, rcmd_reason: i % 4 === 0 ? { content: '已关注' } : undefined }));
     items.push({ goto: 'av', ...arc(P[0], 99), bvid: 'BV1ad0000000', title: '广告推广视频', is_ad: true });
+    // 热门样本都是真视频，不为了测试去改它们的播放/弹幕数；0 弹幕的覆盖用这条完全虚构的投稿
+    items.push({ goto: 'av', ...arc(P[0], 98), bvid: 'BV1zero00000', title: '还没人发弹幕的新投稿', pubdate: NOW - 3600, pic: '', owner: { name: '映间测试', mid: 1, face: '' }, stat: { view: 138, danmaku: 0 } });
     return { code: 0, data: { item: items } };
   }
   if (u.includes('/x/web-interface/popular')) return { code: 0, data: { list: P.map(arc), no_more: true } };

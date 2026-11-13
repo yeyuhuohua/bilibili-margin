@@ -28,6 +28,16 @@ const PAGES = [
     const dates = [...r.querySelectorAll('.grid .card .pubtime')].map((e) => e.textContent.trim())
       .filter((t) => t.length === 19 && t[4] === '-' && t[10] === ' ' && t[13] === ':' && t[16] === ':');
     if (dates.length < 4) miss.push('card publish time missing');
+    // 信息行：作者/播放/弹幕用图标 + 数字，不再带「播放 / 弹幕」字样
+    const stats = [...r.querySelectorAll('.grid .card .meta > .stat')];
+    if (stats.length < 4) miss.push('.meta > .stat');
+    if (!stats.every((s) => s.querySelector('svg') && /^[0-9]/.test(s.textContent.trim()))) miss.push('.stat svg + number');
+    if (stats.some((s) => /播放|弹幕/.test(s.textContent))) miss.push('.stat still has unit text');
+    if (!r.querySelector('.grid .card .meta > .author > svg')) miss.push('.author > svg');
+    // 弹幕为 0 的视频也要有弹幕图标 + 0，不能整段省略（mocks 里那条「还没人发弹幕的新投稿」给的就是 0）
+    const cards = [...r.querySelectorAll('.grid .card:not(.sk)')];
+    if (!cards.every((c) => c.querySelectorAll('.meta > .stat').length === 2)) miss.push('card with missing play/danmaku stat');
+    if (!stats.some((s) => s.textContent.trim() === '0' && s.getAttribute('aria-label') === '0 弹幕')) miss.push('zero-danmaku stat');
     return miss; })()`],
   ['watch', 'https://www.bilibili.com/video/BV1mdxN68E7F/', `(() => { const miss = [];
     if (!document.documentElement.classList.contains('margin-watch')) miss.push('html.margin-watch');
@@ -2020,17 +2030,17 @@ for (const theme of THEMES) {
       if (!requests.some((u) => u.includes('web-dynamic/v1/detail'))) miss.push('missing comment metadata was not resolved');
       if (ctx.pages().length !== before) miss.push('inline comments opened a new tab');
       await comment.click();
-      if (await card.locator('.dy-cbox').count()) miss.push('comments did not collapse');
+      if (!await card.locator('.dy-cbox').isHidden()) miss.push('comments did not collapse');
       const broken = root.locator('.fd-list .dy-text .dy-emoji').first();
       await broken.evaluate((el) => el.dispatchEvent(new Event('error')));
       if (!(await root.locator('.fd-list .dy-text').allTextContents()).some((t) => t.includes('[开心]'))) miss.push('failed emoji did not restore text');
-      // 查详情失败时保持页内状态和外部入口，不允许发布到未知评论区。
+      // 查详情失败时保留页内重试入口，不允许发布到未知评论区。
       mockOverride = (u) => u.includes('web-dynamic/v1/detail?') ? { code: -101, message: '未登录' } : null;
       try {
         const other = root.locator('.fd-list > .dy').nth(1);
         await other.getByRole('button', { name: /^评论/ }).click();
         await other.locator('.dy-rempty').filter({ hasText: '评论加载失败' }).waitFor({ timeout: 8000 });
-        if (!(await other.locator('.dy-rall').count())) miss.push('fallback link missing');
+        if (!await other.getByRole('button', { name: '重试加载评论', exact: true }).isVisible()) miss.push('inline retry missing');
         if (!(await other.getByRole('button', { name: '发布', exact: true }).isDisabled())) miss.push('posting enabled without comment target');
       } finally { mockOverride = null; }
       return miss;

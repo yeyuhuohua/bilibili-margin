@@ -3,7 +3,8 @@ import { dayKey, hhmm, sanitizeActivity, type Activity, type DayRecord, type FpM
 export { dayKey, type Activity, type DayRecord };
 
 const ITEM_CAP = 20 * 60;
-const MAX_PAGES = 60;
+export const HISTORY_PAGES = 60;
+export const DEEP_HISTORY_PAGES = 200;
 const REQUEST_TIMEOUT = 12_000;
 export const ACTIVE_MIN = 60;
 
@@ -36,6 +37,10 @@ export async function loadActivity(): Promise<Activity> {
   const data = sanitizeActivity(reply.data);
   if (!data) throw new Error('足迹数据格式无效');
   return data;
+}
+
+export async function importActivity(days: Activity): Promise<void> {
+  await send({ margin: 'fp', op: 'import', days });
 }
 
 interface HistoryItem {
@@ -82,7 +87,8 @@ async function requestPage(query: URLSearchParams, signal?: AbortSignal): Promis
 }
 
 /** Bounded pagination. Incomplete days are not written; failed writes are never success. */
-async function collectHistory(since: Date, signal?: AbortSignal): Promise<BackfillResult> {
+interface ReadOptions { deep?: boolean; onProgress?: (pages: number, entries: number) => void }
+async function collectHistory(since: Date, signal?: AbortSignal, options: ReadOptions = {}): Promise<BackfillResult> {
   const floor = Math.floor(+since / 1000);
   if (!Number.isFinite(floor)) return failedBackfill('malformed');
   const sums: Record<string, number> = {}, firsts: Record<string, string> = {};
@@ -91,7 +97,7 @@ async function collectHistory(since: Date, signal?: AbortSignal): Promise<Backfi
   let max = 0, viewAt = 0, business = '', oldest = Infinity;
   let reached = false, pages = 0, entries = 0, malformed = false;
   let reason: BackfillReason | undefined;
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < (options.deep ? DEEP_HISTORY_PAGES : HISTORY_PAGES); page++) {
     if (signal?.aborted) return { ...failedBackfill('cancelled'), pages, entries };
     try {
       if (page) await new Promise<void>((r) => setTimeout(r, 250));
@@ -116,6 +122,7 @@ async function collectHistory(since: Date, signal?: AbortSignal): Promise<Backfi
         sums[k] = Math.min(86400, (sums[k] || 0) + itemSeconds(it));
         if (!firsts[k] || t < firsts[k]) firsts[k] = t;
       }
+      options.onProgress?.(pages, entries);
       if (reached || !list.length) { reached = true; break; }
       const c = j.data!.cursor;
       const nextMax = c?.max ?? 0, nextView = c?.view_at ?? 0;
@@ -147,8 +154,8 @@ async function collectHistory(since: Date, signal?: AbortSignal): Promise<Backfi
 }
 
 let inFlight: Promise<BackfillResult> | null = null;
-export function backfill(since: Date, signal?: AbortSignal): Promise<BackfillResult> {
-  if (!inFlight) inFlight = collectHistory(since, signal).finally(() => { inFlight = null; });
+export function backfill(since: Date, signal?: AbortSignal, options: ReadOptions = {}): Promise<BackfillResult> {
+  if (!inFlight) inFlight = collectHistory(since, signal, options).finally(() => { inFlight = null; });
   return inFlight;
 }
 

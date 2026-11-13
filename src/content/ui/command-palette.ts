@@ -35,8 +35,9 @@ export function createCommandPalette(commands: Command[]): Palette {
       h('span', { class: 'cp-hint' }, h('span', {}, '选择'), h('kbd', {}, '↑'), h('kbd', {}, '↓'), h('b', {}, '|'), h('span', {}, '切换搜索 / 命令'), h('kbd', {}, 'Tab'), h('b', {}, '|'), h('span', {}, '执行'), h('kbd', {}, '↵')),
     ),
   );
-  // 形变期间贴着裁剪边缘显示搜索框里的 / 键；完全展开后才换成面板自己的 Esc
-  const morphKbd = h('kbd', { class: 'cp-morph-kbd', 'aria-hidden': 'true' }, '/');
+  // 形变期间贴着裁剪边缘显示按键：展开时是 Esc（搜索框的 / 当帧就消失了），
+  // 收回时反过来从第一帧换回 /，结束时正好由搜索框自己的键原位接替
+  const morphKbd = h('kbd', { class: 'cp-morph-kbd', 'aria-hidden': 'true' }, 'Esc');
   const shell = h('div', { class: 'cp-shell' }, panel, morphKbd);
   const el = h('div', { class: 'cp', 'data-open': 'false', hidden: '' }, h('div', { class: 'cp-scrim' }), shell);
   acceptTextDrop(panel.querySelector<HTMLElement>('.cp-input')!, (text) => {
@@ -197,12 +198,20 @@ export function createCommandPalette(commands: Command[]): Palette {
 
   const rect = (el: Element): DOMRect => el.getBoundingClientRect();
   const onScreen = (r: DOMRect) => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight;
-  function setBox(r: DOMRect, radius: string): void {
+  /** 胶囊的 999px 计算值按短边夹取；直角档保留 0，不能再拿 height / 2 猜起点 */
+  function usedRadius(el: Element, r: DOMRect): string {
+    const css = parseFloat(getComputedStyle(el).borderTopLeftRadius);
+    const cap = Math.min(r.width, r.height) / 2;
+    return `${Math.min(Number.isFinite(css) ? css : cap, cap)}px`;
+  }
+  const cornerShape = (el: Element) => getComputedStyle(el).getPropertyValue('corner-shape').trim() || 'round';
+  function setBox(r: DOMRect, radius: string, shape: string): void {
     shell.style.left = `${r.left}px`;
     shell.style.top = `${r.top}px`;
     shell.style.width = `${r.width}px`;
     shell.style.height = `${r.height}px`;
     shell.style.borderRadius = radius;
+    shell.style.setProperty('corner-shape', shape);
   }
   function cleanupMorph(): void {
     cancelAnimationFrame(openFrame);
@@ -218,6 +227,7 @@ export function createCommandPalette(commands: Command[]): Palette {
     const reversing = !el.hidden && el.classList.contains('cp-clipping');
     const current = reversing ? rect(shell) : null;
     const currentRadius = reversing ? getComputedStyle(shell).borderRadius : '';
+    const currentShape = reversing ? cornerShape(shell) : '';
     origin ??= reversing ? morphOrigin ?? undefined : undefined;
     cleanupMorph();
     lastFocus = (el.getRootNode() as ShadowRoot).activeElement ?? document.activeElement;
@@ -227,6 +237,7 @@ export function createCommandPalette(commands: Command[]): Palette {
     const animate = morph && !reducedMotion();
     morphOrigin = morph ? origin! : null;
     el.hidden = false;
+    morphKbd.textContent = 'Esc';
     el.style.setProperty('--cp-k', String(animK));
     // 顶栏搜索框可能正在轮播热搜；形变当帧沿用同一句话，避免点击瞬间文字跳变
     const word = origin?.querySelector('.search-ph-w:not(.out)')?.textContent?.trim();
@@ -236,13 +247,16 @@ export function createCommandPalette(commands: Command[]): Palette {
     render();
     // 外壳落位与原点隐藏放在同一个任务里：点击后的第一帧就是裁剪到搜索框大小的面板
     let to: DOMRect | null = null;
+    let toRadius = '', toShape = '';
     if (animate) {
       el.classList.add('cp-measuring');
       to = rect(panel);
+      toRadius = getComputedStyle(panel).borderTopLeftRadius;
+      toShape = cornerShape(panel);
       el.classList.remove('cp-measuring');
       el.classList.add('cp-clipping');
       shell.style.transition = 'none';
-      setBox(current ?? from!, currentRadius || `${from!.height / 2}px`);
+      setBox(current ?? from!, currentRadius || usedRadius(origin!, from!), currentShape || cornerShape(origin!));
       void shell.offsetWidth;
       shell.style.removeProperty('transition');
     }
@@ -250,7 +264,7 @@ export function createCommandPalette(commands: Command[]): Palette {
     el.dataset.open = 'true';
     openFrame = requestAnimationFrame(() => {
       if (to) {
-        setBox(to, '16px');
+        setBox(to, toRadius, toShape);
         morphTimer = window.setTimeout(() => {
           el.classList.remove('cp-clipping');
           shell.removeAttribute('style');
@@ -268,7 +282,8 @@ export function createCommandPalette(commands: Command[]): Palette {
     // 展开途中也要能反向：从外壳当前所在的位置收回，而不是跳回全尺寸再淡出
     const clipping = el.classList.contains('cp-clipping');
     const from = clipping ? rect(shell) : rect(panel);
-    const fromRadius = clipping ? getComputedStyle(shell).borderRadius : '16px';
+    const fromRadius = clipping ? getComputedStyle(shell).borderTopLeftRadius : getComputedStyle(panel).borderTopLeftRadius;
+    const fromShape = clipping ? cornerShape(shell) : cornerShape(panel);
     const to = morphOrigin?.isConnected ? rect(morphOrigin) : null;
     el.dataset.open = 'false';
     ctrl?.abort();
@@ -276,12 +291,13 @@ export function createCommandPalette(commands: Command[]): Palette {
     window.clearTimeout(hideTimer);
     // 反向裁剪回搜索框；没有来源或减少动画时直接淡出
     if (to && onScreen(to) && !reducedMotion()) {
+      morphKbd.textContent = '/';
       el.classList.add('cp-clipping');
       shell.style.transition = 'none';
-      setBox(from, fromRadius);
+      setBox(from, fromRadius, fromShape);
       void shell.offsetWidth;
       shell.style.removeProperty('transition');
-      setBox(to, `${to.height / 2}px`);
+      setBox(to, usedRadius(morphOrigin!, to), cornerShape(morphOrigin!));
       // 收到搜索框尺寸后整块一次换回原控件。提前露出搜索框会让模糊的面板压在它上面，
       // 淡出过程中出现一下发虚；两端材质和文字已经对齐，直接切换看不出接缝
       hideTimer = window.setTimeout(() => { el.hidden = true; cleanupMorph(); }, 300 * animK);
@@ -296,6 +312,7 @@ export function createCommandPalette(commands: Command[]): Palette {
   loadSettings().then((st) => { cmdK = st.cmdK; animK = 100 / st.paletteSpeed; }).catch(() => {});
   onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && el.dataset.open === 'true') { e.preventDefault(); close(); return; }
     if (cmdK && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); el.dataset.open === 'true' ? close() : open(); return; }
     if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || el.dataset.open === 'true') return;
     const typing = e.composedPath().some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement || (n instanceof HTMLElement && n.isContentEditable));

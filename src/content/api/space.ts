@@ -172,8 +172,13 @@ export function createSpaceSearch(mid: number, keyword: string, order: VideoOrde
   };
 }
 
-export async function spaceVideos(mid: number, pn: number, order: VideoOrder, keyword = '', signal?: AbortSignal): Promise<{ list: Video[]; total: number }> {
-  const d = await getWbi<any>('/x/space/wbi/arc/search', { mid, ps: 30, pn, order, tid: 0, keyword, order_avoided: 'true', platform: 'web', web_location: 1550101 }, signal);
+/** 投稿筛选：B 站原生空间「更多筛选」里的「充电专属」用的就是 special_type=charging */
+export type VideoKind = 'all' | 'charging';
+
+export async function spaceVideos(mid: number, pn: number, order: VideoOrder, keyword = '', signal?: AbortSignal, kind: VideoKind = 'all'): Promise<{ list: Video[]; total: number; charging: number }> {
+  const params: Record<string, string | number> = { mid, ps: 30, pn, order, tid: 0, keyword, order_avoided: 'true', platform: 'web', web_location: 1550101 };
+  if (kind === 'charging') params.special_type = 'charging';
+  const d = await getWbi<any>('/x/space/wbi/arc/search', params, signal);
   const list: Video[] = (d.list?.vlist ?? []).map((v: any) => ({
     bvid: v.bvid, cid: 0, title: v.title, cover: https(v.pic), duration: parseLen(v.length),
     author: v.author, mid: v.mid, face: '', views: Number(v.play) || 0, danmaku: v.video_review ?? 0, pubdate: v.created ?? 0,
@@ -182,7 +187,10 @@ export async function spaceVideos(mid: number, pn: number, order: VideoOrder, ke
     // 老接口只给 is_charging_arc 时兜底成「充电专属」
     badge: String(v.elec_arc_badge || '').trim() || (v.is_charging_arc === 1 ? '充电专属' : undefined),
   }));
-  return { list, total: d.page?.count ?? list.length };
+  // 不带筛选时接口在 list.slist 里给「充电专属」的总数，用来决定要不要显示筛选
+  const slist: any[] = Array.isArray(d.list?.slist) ? d.list.slist : [];
+  const charging = Number(slist.find((x) => x?.special_type === 'charging')?.count) || 0;
+  return { list, total: d.page?.count ?? list.length, charging };
 }
 
 /** 最近投币 / 最近点赞的视频（v0.47，评论区：主页下方没有最近投币和点赞了）。对方没公开时 B 站返回 53013，这里返回 null，界面就不显示那个标签 */

@@ -9,6 +9,10 @@ const code = (Array.isArray(bundle) ? bundle[0] : bundle).output.find((x) => x.t
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' }) });
 try {
   const page = await browser.newPage({ reducedMotion: 'no-preference' });
+  // The standalone scheduler fixture has no extension storage environment.
+  await page.evaluate(() => Object.defineProperty(globalThis, 'chrome', {
+    configurable: true, value: { storage: { onChanged: { addListener() {} } } },
+  }));
   await page.addScriptTag({ content: code });
   for (const hz of [60, 100, 120, 144, 165, 240]) {
     const result = await page.evaluate((hz) => frameTest.frameBudget(hz), hz);

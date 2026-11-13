@@ -1,6 +1,8 @@
 import barMap from '../assets/glass-bar.webp?inline';
 import thumbMap from '../assets/glass-thumb.webp?inline';
 import { setMarkup } from './dom';
+import { materialCanvas } from './material-maps';
+import { addDynamicGlassFilter } from './dynamic-glass';
 
 /**
  * 液态玻璃：21st「Apple Liquid glass switcher」（dennysdionigi / Den Dionigi）的原生移植。
@@ -58,20 +60,24 @@ function makeMap(w: number, h: number, radius: number, bezel: number): HTMLCanva
 
 /** 同尺寸同圆角的位移图全站共用一张（顶栏几个按钮尺寸相同），只算一次（v0.44） */
 const maps = new Map<string, Promise<string | null>>();
-function mapUrl(w: number, h: number, radius: number, bezel: number): Promise<string | null> {
-  const k = `${w}x${h}r${radius}b${bezel}`;
+function mapUrl(w: number, h: number, radius: number, bezel: number, profile?: 'lens' | 'gradient'): Promise<string | null> {
+  const k = `${profile ?? 'snell'}:${w}x${h}r${radius}b${bezel}`;
   let p = maps.get(k);
   if (!p) {
-    p = new Promise((res) => makeMap(w, h, radius, bezel).toBlob((b) => res(b ? URL.createObjectURL(b) : null)));
+    p = new Promise((res) => (profile ? materialCanvas(w, h, radius, bezel, profile) : makeMap(w, h, radius, bezel)).toBlob((b) => res(b ? URL.createObjectURL(b) : null)));
     maps.set(k, p);
   }
   return p;
 }
 
-export interface GlassOpts { blur?: number; strength?: number; sat?: string }
+export interface GlassOpts { blur?: number; strength?: number; sat?: string; profile?: 'lens' | 'gradient' }
 
 /** 给元素挂一块会按尺寸重算的玻璃滤镜；filters 是放滤镜的 <svg>（与元素同一个 shadow root） */
-export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpts = {}): void {
+export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpts = {}): () => void {
+  const previous = el.style.backdropFilter;
+  const previousMaterial = el.getAttribute('data-material');
+  if (o.profile) el.dataset.material = o.profile;
+  let disposed = false;
   const id = `lg-${++seq}`;
   const f = document.createElementNS(NS, 'filter');
   f.id = id;
@@ -79,17 +85,34 @@ export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpt
   const img = document.createElementNS(NS, 'feImage');
   for (const [k, v] of Object.entries({ result: 'map', x: '0', y: '0', preserveAspectRatio: 'none' })) img.setAttribute(k, v);
   const disp = document.createElementNS(NS, 'feDisplacementMap');
-  for (const [k, v] of Object.entries({ in: 'SourceGraphic', in2: 'map', xChannelSelector: 'R', yChannelSelector: 'G' })) disp.setAttribute(k, v);
+  for (const [k, v] of Object.entries({ in: 'SourceGraphic', in2: 'map', xChannelSelector: 'R', yChannelSelector: o.profile === 'gradient' ? 'B' : 'G' })) disp.setAttribute(k, v);
   f.append(img, disp);
+  const displacements = [disp];
+  if (o.profile === 'lens') {
+    disp.setAttribute('result', 'dispR');
+    for (const channel of ['G', 'B']) {
+      const next = disp.cloneNode() as SVGFEDisplacementMapElement; next.setAttribute('result', `disp${channel}`); f.append(next); displacements.push(next);
+    }
+    for (const [index, channel] of ['R', 'G', 'B'].entries()) {
+      const matrix = document.createElementNS(NS, 'feColorMatrix'); matrix.setAttribute('in', `disp${channel}`); matrix.setAttribute('type', 'matrix'); matrix.setAttribute('result', channel);
+      const values = Array(20).fill(0); values[index * 5 + index] = 1; values[18] = 1;
+      matrix.setAttribute('values', values.join(' ')); f.append(matrix);
+    }
+    for (const [a, b, result] of [['R', 'G', 'rg'], ['rg', 'B', 'rgb']]) {
+      const blend = document.createElementNS(NS, 'feBlend'); blend.setAttribute('in', a); blend.setAttribute('in2', b); blend.setAttribute('mode', 'screen'); blend.setAttribute('result', result); f.append(blend);
+    }
+  }
   filters.append(f);
 
   let url = '', lastKey = '', timer = 0, building = false;
   const de = document.documentElement;
   const transparency = matchMedia('(prefers-reduced-transparency: reduce)');
-  let liquid = de.dataset.marginGlass === 'liquid' && !transparency.matches;
+  const canRefract = CSS.supports('backdrop-filter', 'url(#x)') && !/Firefox|^(?=.*Safari)(?!.*(?:Chrome|Chromium|Edg|OPR))/.test(navigator.userAgent);
+  let liquid = canRefract && de.dataset.marginGlass === 'liquid' && !transparency.matches;
   const paint = () => {
+    if (disposed) return;
     el.style.backdropFilter = transparency.matches || de.dataset.marginGlass === 'flat' ? 'none' : liquid && url
-      ? `blur(${o.blur ?? 6}px) url(#${id}) saturate(${o.sat ?? '150%'})`
+      ? o.profile ? `url(#${id}) blur(${o.blur ?? .5}px) saturate(${o.sat ?? '135%'})` : `blur(${o.blur ?? 6}px) url(#${id}) saturate(${o.sat ?? '150%'})`
       : el.classList.contains('et-thumb') ? 'none' : 'blur(16px) saturate(110%)';
   };
   // 尺寸来自 ResizeObserver 的 borderBoxSize，不读 offsetWidth（避免强制布局）
@@ -103,9 +126,9 @@ export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpt
     building = true;
     const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || h / 2;
     const bezel = Math.min(h / 2, w / 2, 22);
-    void mapUrl(w, h, radius, bezel).then((u) => {
+    void mapUrl(w, h, radius, bezel, o.profile).then((u) => {
       building = false;
-      if (!liquid || key !== lastKey) return;
+      if (disposed || !liquid || key !== lastKey) return;
       if (!u) return;
       url = u;
       img.setAttribute('href', url);
@@ -121,23 +144,29 @@ export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpt
     // Keep the existing map stretched with the control during its width animation.
     // Generate exact optics once the dimensions settle instead of on every frame.
     img.setAttribute('width', String(w)); img.setAttribute('height', String(h));
-    disp.setAttribute('scale', String(Math.round(h * (o.strength ?? 0.55))));
+    const scale = h * (o.strength ?? .55);
+    displacements.forEach((node, index) => node.setAttribute('scale', String(scale + (o.profile === 'lens' ? [1, 0, -1][index] : 0))));
     clearTimeout(timer);
     if (!url && !building) build();
     else if (`${w}x${h}` !== lastKey) timer = window.setTimeout(build, 80);
   };
-  new ResizeObserver(([en]) => resize(en)).observe(el);
+  const sizes = new ResizeObserver(([en]) => resize(en)); sizes.observe(el);
   const sync = () => {
-    const next = de.dataset.marginGlass === 'liquid' && !transparency.matches;
+    const next = canRefract && de.dataset.marginGlass === 'liquid' && !transparency.matches;
     if (next !== liquid) {
       liquid = next;clearTimeout(timer);lastKey = '';building = false;
       if (liquid) resize();
     }
     paint();
   };
-  new MutationObserver(sync).observe(de,{attributes:true,attributeFilter:['data-margin-glass']});
+  const mode = new MutationObserver(sync); mode.observe(de,{attributes:true,attributeFilter:['data-margin-glass']});
   transparency.addEventListener('change',sync);
   paint();
+  return () => {
+    disposed = true; clearTimeout(timer); sizes.disconnect(); mode.disconnect();
+    transparency.removeEventListener('change', sync); f.remove(); el.style.backdropFilter = previous;
+    if (previousMaterial === null) el.removeAttribute('data-material'); else el.setAttribute('data-material', previousMaterial);
+  };
 }
 
 /** 原版两张位移图（兜底 / 首帧），CSS 里可用 url(#lg-bar) / url(#lg-thumb) */
@@ -155,6 +184,7 @@ export function glassFilters(): SVGSVGElement {
     setMarkup(f, `<feImage result="map" width="100%" height="100%" x="0" y="0" preserveAspectRatio="none" href="${map}"/><feGaussianBlur in="SourceGraphic" stdDeviation="${sd}" result="blur"/><feDisplacementMap in="blur" in2="map" scale="0.5" xChannelSelector="R" yChannelSelector="G"/>`);
     svg.append(f);
   }
+  addDynamicGlassFilter(svg);
   return svg;
 }
 

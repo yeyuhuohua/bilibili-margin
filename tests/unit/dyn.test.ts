@@ -134,6 +134,19 @@ describe('评论标识与置顶评论', () => {
     expect(r.list.map((x) => x.rpid)).toEqual(['2', '1']); expect(r.count).toBe(8);
     expect(r.list[0].richText).toEqual([{ text: '赞' }, { text: '[开心]', emoji: 'https://i0.hdslb.com/happy.png' }]);
   });
+  it('置顶不挤掉第一页普通评论，后续页不重复合并置顶', async () => {
+    const reply = (rpid: number) => ({ rpid, content: { message: `评论 ${rpid}` } });
+    get.mockResolvedValue({ top_replies: [reply(99)], replies: Array.from({ length: 8 }, (_, i) => reply(i + 1)), page: { count: 10, size: 8 } });
+    const first = await dynReplies(17, '1001');
+    expect(first.list.map(r => r.rpid)).toEqual(['99', '1', '2', '3', '4', '5', '6', '7', '8']);
+    expect(first.more).toBe(true);
+    get.mockResolvedValue({ top_replies: [reply(99)], replies: [reply(9), reply(10)], page: { count: 10, size: 8 } });
+    const second = await dynReplies(17, '1001', 8, 2);
+    expect(second.list.map(r => r.rpid)).toEqual(['9', '10']); expect(second.more).toBe(false);
+    expect(get).toHaveBeenLastCalledWith('/x/v2/reply', { type: 17, oid: '1001', sort: 1, ps: 8, pn: 2 });
+    get.mockResolvedValue({ replies: [], page: { count: 100 } });
+    expect((await dynReplies(17, '1001')).more).toBe(false);
+  });
   it('楼中楼保留长根评论 ID，按服务器总数分页', async () => {
     const id = '900001234567890123';
     get.mockResolvedValue({ replies: [{ rpid: Number(id), rpid_str: id, member: { mid: '42' }, content: { message: '回复' } }], page: { count: 12, size: 10 } });

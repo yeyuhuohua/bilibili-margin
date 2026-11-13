@@ -71,15 +71,17 @@ export function createFootprintCard(): HTMLElement {
   let readFailed = false, disposed = false, syncBusy = false, syncStarted = false;
   let refreshVersion = 0, refreshFrame = 0;
   let syncResult: BackfillResult | null = null;
+  let syncPages = 0, syncEntries = 0;
   const lifetime = new AbortController();
   const retry = h('button', {
     type: 'button', class: 'fp-sync-btn', 'aria-label': '同步 B 站观看历史',
     style: 'flex:none;border:1px solid currentColor;border-radius:999px;padding:4px 10px;background:transparent;color:inherit;font:inherit;cursor:pointer',
-    onclick: () => { void runSync(true); },
+    title: '手动同步最多读取 200 页，补全近一年内可获取的观看历史',
+    onclick: () => { void runSync(true, true); },
   }, '同步历史');
   function status() {
     note = readFailed ? '无法读取本机足迹；扩展更新后请刷新 B 站页面重试，已有数据未清除'
-      : syncStarted ? '正在补全 B 站观看历史…' : syncNote(syncResult, activity);
+      : syncStarted ? `正在补全 B 站观看历史…${syncPages ? ` 已读取 ${syncPages} 页、${syncEntries} 条` : ''}` : syncNote(syncResult, activity);
     el.dataset.syncState = readFailed ? 'read-error' : syncStarted ? 'loading' : syncResult?.status ?? 'idle';
     const target = el.querySelector('.fp-status');
     if (target && target.textContent !== note) target.textContent = note;
@@ -104,13 +106,13 @@ export function createFootprintCard(): HTMLElement {
     if (disposed || refreshFrame || !el.isConnected || document.hidden) return;
     refreshFrame = requestAnimationFrame(() => { refreshFrame = 0; void refresh(); });
   };
-  async function runSync(force = false) {
+  async function runSync(force = false, deep = false) {
     if (disposed || syncBusy || !el.isConnected || document.hidden) return;
     syncBusy = true;
     status();
     const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - 364 - since.getDay());
     try {
-      const result = await syncHistory(since, { force, signal: lifetime.signal, onStart: () => { syncStarted = true; status(); } });
+      const result = await syncHistory(since, { force, deep, signal: lifetime.signal, onStart: () => { syncPages = syncEntries = 0; syncStarted = true; status(); }, onProgress: (pages, entries) => { if (!disposed) { syncPages = pages; syncEntries = entries; status(); } } });
       if (!disposed) syncResult = result;
     } finally {
       syncBusy = false; syncStarted = false;

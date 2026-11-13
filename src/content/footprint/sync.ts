@@ -1,4 +1,4 @@
-import { activeOf, backfill, dayKey, failedBackfill, type Activity, type BackfillResult } from './store';
+import { activeOf, backfill, dayKey, DEEP_HISTORY_PAGES, failedBackfill, type Activity, type BackfillResult } from './store';
 
 /** Versioned state deliberately ignores the old, potentially false-positive success stamp. */
 export const SYNC_KEY = 'margin:activity-sync-v2';
@@ -13,7 +13,7 @@ export interface SyncState {
   result: BackfillResult;
 }
 export type SyncOutcome = BackfillResult & { cached?: boolean; retryAt?: number };
-interface SyncOptions { force?: boolean; signal?: AbortSignal; onStart?: () => void }
+interface SyncOptions { force?: boolean; deep?: boolean; signal?: AbortSignal; onStart?: () => void; onProgress?: (pages: number, entries: number) => void }
 
 export function parseSyncState(raw: unknown): SyncState | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -41,12 +41,13 @@ async function run(since: Date, options: SyncOptions): Promise<SyncOutcome> {
   let prev: SyncState | null;
   try { prev = await readSyncState(); } catch { return failedBackfill('storage'); }
   const now = Date.now();
-  if (prev && ((!options.force && now < prev.nextRetry) || now - prev.at < 15_000))
+  const expand = options.deep && prev?.result.reason === 'limit' && prev.result.pages < DEEP_HISTORY_PAGES;
+  if (prev && !expand && ((!options.force && now < prev.nextRetry) || now - prev.at < 15_000))
     return { ...prev.result, cached: true, retryAt: prev.nextRetry };
   if (options.signal?.aborted) return failedBackfill('cancelled');
   options.onStart?.();
   let result: BackfillResult;
-  try { result = await backfill(since, options.signal); } catch { result = failedBackfill('storage'); }
+  try { result = await backfill(since, options.signal, options); } catch { result = failedBackfill('storage'); }
   if (result.reason === 'cancelled') return result;
   const failures = result.status === 'ok' || result.status === 'empty' ? 0 : Math.min((prev?.failures ?? 0) + 1, 100);
   const at = Date.now(), nextRetry = at + nextDelay(result, failures);
@@ -61,7 +62,10 @@ async function run(since: Date, options: SyncOptions): Promise<SyncOutcome> {
 let inFlight: Promise<SyncOutcome> | null = null;
 export function syncHistory(since: Date, options: SyncOptions = {}): Promise<SyncOutcome> {
   if (inFlight) return inFlight;
-  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  // Firefox's page LockManager cannot resolve an extension-compartment Promise.
+  // Keep local inFlight deduplication; background merges are already serialized.
+  const firefoxContent = chrome.runtime?.getURL?.('').startsWith('moz-extension:') === true;
+  const locks = !firefoxContent && typeof navigator !== 'undefined' ? navigator.locks : undefined;
   // Homepage cards share www.bilibili.com's lock across tabs. No extra extension permission.
   const job: Promise<SyncOutcome> = Promise.resolve().then(async () => {
     if (!locks) return run(since, options);
@@ -81,7 +85,7 @@ export function syncNote(r: BackfillResult | null, data: Activity): string {
   if (r.reason === 'storage') return '足迹读取或保存失败；已有记录未清除，扩展更新后请刷新 B 站页面再重试';
   if (r.reason === 'nologin' || r.status === 'nologin') return '登录 B 站后可补全过去的记录；本机计时不受影响，登录后可点击重试';
   if (r.status === 'partial') return r.reason === 'limit'
-    ? `已读取 ${r.pages} 页，达到单次读取上限；更早记录尚未补全，已有足迹保留`
+    ? `已读取 ${r.pages} 页，${r.pages < DEEP_HISTORY_PAGES ? '可点击同步历史扩大读取范围' : '达到本次读取上限，更早记录尚未补全'}；已有足迹保留`
     : `历史补全中断，已保存 ${r.days} 个完整日期；已有足迹保留，将退避重试`;
   if (r.status === 'fail') return r.reason === 'timeout'
     ? '读取观看历史超时；显示本机记录，将自动重试，也可手动同步'

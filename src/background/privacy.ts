@@ -17,7 +17,7 @@ export function trustedSender(sender: chrome.runtime.MessageSender, extensionId:
 
 export async function protectAuthStorage(): Promise<void> {
   await chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-  // 升级后清理旧的持久 App 授权，后续授权仅存放在后台会话中。
+  // 清理旧版 storage.local 凭据；主动记住的授权由后台专用 IndexedDB 保存。
   await chrome.storage.local.remove(APP_AUTH_KEY);
 }
 

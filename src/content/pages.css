@@ -33,6 +33,19 @@ html.margin-skin .search-layout, html.margin-skin .search-content { background: 
 html.margin-skin .bili-footer, html.margin-skin #biliMainFooter { background: transparent !important; }
 
 /* ── 搜索页：编辑式排版，和首页同一套语言 ── */
+/* 壁纸亮暗不固定，文字所在的控件区保留足够底色，不再直接叠在图片上。 */
+html.margin-search { --m-search-surface: color-mix(in srgb, var(--m-surface) 96%, transparent); --ms-glass: rgb(250 250 248 / .8); --ms-ink: #242831; --ms-muted: #343b46; --ms-pill: var(--margin-primary, #ffffffd9); --ms-selected: var(--margin-primary-fg, #171d28); --ms-rim: #ffffff90; }
+html.margin-search[data-margin-theme="dark"] { --ms-glass: rgb(22 25 31 / .72); --ms-ink: #f1f4f8; --ms-muted: #e1e6ed; --ms-pill: var(--margin-primary, #f2f5f8); --ms-selected: var(--margin-primary-fg, #202630); --ms-rim: #ffffff40; }
+html.margin-search .search-tabs,
+html.margin-search .search-conditions {
+  background: transparent !important; border: 0 !important; box-sizing: border-box;
+}
+html.margin-search .search-conditions { padding-block: 0; margin-top: 16px !important; }
+html.margin-search .search-conditions .date-trigger {
+  background: var(--m-chip) !important; color: var(--m-ink) !important; border: 1px solid var(--m-line);
+}
+html.margin-search .search-conditions .separator,
+html.margin-search .search-conditions .search-channel-item { color: var(--m-muted) !important; }
 html.margin-search .search-header { padding-top: 0; margin-top: 4px; margin-bottom: 14px; }
 /* 搜索框与映间顶栏的搜索同一种样子：44px 玻璃胶囊、细描边、内高光、无黑色按钮（回车搜索） */
 html.margin-search .search-input-wrap {
@@ -43,6 +56,10 @@ html.margin-search .search-input-wrap {
   transition: background-color .2s, border-color .2s;
 }
 html.margin-search[data-margin-theme="dark"] .search-input-wrap { box-shadow: inset 0 1px 0 rgb(255 255 255 / .08), var(--sh-sm) !important; }
+html.margin-search[data-margin-glass="liquid"] .search-input-wrap[data-material="lens"] {
+  background: var(--ms-glass) !important; border-color: var(--ms-rim) !important;
+  box-shadow: inset 0 1.5px 1px #ffffff50, inset 0 -1px 1px #00000020, var(--sh-sm) !important;
+}
 html.margin-search .search-input-wrap:focus-within { background: var(--m-surface) !important; border-color: color-mix(in srgb, var(--m-ink) 18%, transparent) !important; }
 html.margin-search .search-input-el { flex: 1 !important; padding: 0 !important; margin: 0 !important; text-align: left !important; font: 400 14px/1 "Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", "Arial Unicode MS", "Sinhala MN", "Nirmala UI", "Noto Sans Sinhala", system-ui, sans-serif !important; color: var(--m-ink) !important; letter-spacing: 0; }
 html.margin-search .search-input-el::placeholder { color: var(--m-faint) !important; }
@@ -59,23 +76,55 @@ html.margin-search body::after { content: ""; position: fixed; inset: 0; z-index
 html.margin-search[data-margin-theme="dark"] body::after { background: rgb(0 0 0 / .5); }
 html.margin-search:has(.search-input-wrap:focus-within) body::after { opacity: 1; }
 
-/* 分类标签：衬线 + 底部细线指示 */
-html.margin-search .search-tabs { border-bottom: 1px solid var(--m-line); }
-html.margin-search .vui_tabs--nav-item { color: var(--m-muted) !important; font-size: 14px !important; }
-html.margin-search .vui_tabs--nav-item:hover { color: var(--m-ink) !important; }
-html.margin-search .vui_tabs--nav-item-active, html.margin-search .vui_tabs--nav-item-active:hover { color: var(--margin-primary, var(--m-ink)) !important; font-weight: 600 !important; }
-html.margin-search .vui_tabs--nav-item-active .vui_tabs--nav-text, html.margin-search .vui_tabs--nav-item-active { font-family: var(--m-serif) !important; }
-html.margin-search .vui_tabs--nav-bar, html.margin-search .vui_tabs--nav-link-active::after { background: var(--margin-primary, var(--m-ink)) !important; height: 2px !important; border-radius: 2px; }
-html.margin-search .vui_tabs--nav-num { font-family: var(--m-mono) !important; font-size: 11px !important; color: var(--m-faint) !important; }
-
-/* 排序 / 筛选：胶囊 */
-html.margin-search .search-conditions .vui_button, html.margin-search .conditions-order .vui_button,
-html.margin-search .search-condition-row .vui_button, html.margin-search .more-conditions .vui_button {
-  border-radius: 999px !important; border: 0 !important; background: transparent !important; color: var(--m-muted) !important; padding: 0 14px !important;
+/* 21st segmented controls: native category/sort nodes, compact optical surfaces. */
+html.margin-search .search-line { display: none !important; }
+html.margin-search .search-tabs .vui_tabs { width: fit-content; max-width: 100%; }
+html.margin-search .search-tabs .vui_tabs--navbar { overflow: visible; height: auto !important; min-height: 0 !important; }
+html.margin-search :is(.vui_tabs--nav, .search-condition-row, .i_button_more) {
+  position: relative; isolation: isolate; width: fit-content; max-width: min(100%, calc(100vw - 128px)); box-sizing: border-box;
+  background: var(--ms-glass) !important; color: var(--ms-ink); border: 1px solid var(--ms-rim) !important;
+  border-radius: 999px !important; padding: 4px !important;
+  box-shadow: inset 0 1px 0 var(--ms-rim), inset 0 -1px 0 #00000014, 0 5px 18px #00000018;
+  backdrop-filter: blur(5px) saturate(125%);
 }
-html.margin-search .vui_button--active, html.margin-search .search-conditions .vui_button--active,
-html.margin-search .search-condition-row .vui_button--active { background: var(--margin-primary, var(--m-ink)) !important; color: var(--margin-primary-fg, var(--m-canvas)) !important; }
-html.margin-search .vui_button:not(.search-button):not(.vui_button--active):hover { color: var(--m-ink) !important; background: var(--m-chip) !important; }
+html.margin-search :is(.vui_tabs--nav, .search-condition-row) { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+html.margin-search :is(.vui_tabs--nav, .search-condition-row)::before {
+  content: ''; position: absolute; top: 0; left: 0; pointer-events: none; background: var(--ms-pill); border-radius: 999px;
+  width: var(--ms-w, 0); height: var(--ms-h, 0); transform: translate(var(--ms-x, 0), var(--ms-y, 0));
+  box-shadow: inset 0 1px 0 #fff9, 0 1px 3px #0002;
+  transition: transform .45s cubic-bezier(.2,.95,.25,1.08), width .45s cubic-bezier(.2,.95,.25,1.08), height .2s;
+}
+html.margin-search .vui_tabs--nav-item { position: relative; flex: none; margin: 0 !important; padding: 0 !important; color: var(--ms-muted) !important; font: 500 13px/1 var(--m-sans) !important; }
+html.margin-search .vui_tabs--nav-link { display: flex; align-items: center; gap: 6px; height: 32px !important; padding: 0 14px !important; border-radius: 999px; }
+html.margin-search .search-tabs .vui_tabs .vui_tabs--nav.vui_tabs--nav-pl0 > .vui_tabs--nav-item:first-child > .vui_tabs--nav-link { padding-left: 14px !important; }
+html.margin-search .vui_tabs--nav-text { font-size: 13px !important; }
+html.margin-search .vui_tabs--nav-item-active, html.margin-search .vui_tabs--nav-item-active .vui_tabs--nav-text { color: var(--ms-selected) !important; font-family: var(--m-sans) !important; }
+html.margin-search .vui_tabs--nav-bar, html.margin-search .vui_tabs--nav-slider, html.margin-search .vui_tabs--nav-link-active::after { display: none !important; }
+html.margin-search .vui_tabs--nav-num { font: 500 10px/1 var(--m-mono) !important; color: inherit !important; background: #00000015 !important; opacity: 1 !important; padding: 2px 4px; border-radius: 999px; }
+html.margin-search .vui_tabs--nav-item-active .vui_tabs--nav-num { color: var(--ms-selected) !important; background: #00000014 !important; }
+html.margin-search .vui_tabs--nav-num:empty::before { content: '…'; }
+html.margin-search .conditions-order { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+html.margin-search .more-conditions .search-condition-row { margin-top: 8px; }
+html.margin-search .more-conditions .search-condition-row > :is(.mt_sm,.mr_sm),
+html.margin-search .more-conditions .search-channel-item { margin-block: 0 !important; }
+html.margin-search .search-date-picker__trigger { display: flex; align-items: center; gap: 8px; height: 32px; }
+html.margin-search .search-conditions .date-trigger { height: 32px !important; min-height: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding-block: 0 !important; font: 500 13px/1 var(--m-sans) !important; }
+html.margin-search .search-conditions .vui_button {
+  position: relative; flex: none; height: 32px; margin: 0 !important; padding: 0 14px !important;
+  border: 0 !important; border-radius: 999px !important; background: transparent !important; color: var(--ms-muted) !important; font: 500 13px/1 var(--m-sans) !important;
+}
+html.margin-search .search-conditions .vui_button--active { color: var(--ms-selected) !important; }
+html.margin-search .search-conditions .i_button_more { height: 42px; padding: 0 16px !important; color: var(--ms-ink) !important; background: var(--ms-glass) !important; border: 1px solid var(--ms-rim) !important; margin-left: auto !important; }
+html.margin-search :is(.vui_tabs--nav-link, .search-conditions .vui_button):not(.vui_button--active):hover { background-color: #ffffff0d !important; }
+html.margin-search :is(.vui_tabs--nav-item-active .vui_tabs--nav-link, .search-conditions .vui_button--active):hover { background: transparent !important; }
+html.margin-search :is(.vui_tabs--nav-item, .search-conditions .vui_button):focus-visible { outline: 2px solid var(--m-accent); outline-offset: -2px; }
+html.margin-search[data-margin-glass="flat"] :is(.vui_tabs--nav, .search-condition-row, .i_button_more) { background: var(--m-surface) !important; backdrop-filter: none !important; }
+@media (prefers-reduced-transparency: reduce) {
+  html.margin-search :is(.vui_tabs--nav, .search-condition-row, .i_button_more) { background: var(--m-surface) !important; backdrop-filter: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.margin-search :is(.vui_tabs--nav, .search-condition-row)::before { transition: none !important; }
+}
 
 /* 视频卡片 */
 html.margin-search .bili-video-card__image, html.margin-search .bili-video-card__cover,
@@ -100,11 +149,59 @@ html.margin-search .user-name, html.margin-search .media-card-content-head-title
 /* 分页 */
 html.margin-search .vui_pagenation--btn { border-radius: 999px !important; border: 0 !important; background: color-mix(in srgb, var(--m-surface) 80%, transparent) !important; color: var(--m-ink) !important; font-family: var(--m-mono) !important; }
 html.margin-search .vui_pagenation--btn-num.vui_button--active, html.margin-search .vui_pagenation--btn.vui_button--active { background: var(--margin-primary, var(--m-ink)) !important; color: var(--margin-primary-fg, var(--m-canvas)) !important; }
+/* Both directions share the native page-number height; reserve hover width. */
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side {
+  --m-arrow-size: 32px; --m-arrow-wide: 60px; --m-arrow-delta: 28px;
+  position: relative; flex: 0 0 var(--m-arrow-wide); width: var(--m-arrow-wide) !important; height: var(--m-arrow-size) !important;
+  padding: 0 !important; font-size: 0 !important; background: transparent !important;
+  clip-path: inset(0 var(--m-arrow-delta) 0 0 round 16px); transition: clip-path .3s ease-in-out !important;
+}
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; box-sizing: border-box; width: var(--m-arrow-size);
+  border: 1px solid currentColor; border-radius: 50%; corner-shape: round;
+  background: linear-gradient(currentColor, currentColor) left 16px center / 0 1.5px no-repeat;
+  transition: width .3s ease-in-out, border-radius .3s ease-in-out, background-size .3s ease-in-out; pointer-events: none;
+}
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::after {
+  content: ''; position: absolute; top: 50%; left: 8px; width: 16px; height: 16px; pointer-events: none;
+  background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  transform: translate(var(--m-arrow-move, 0px), -50%) scaleX(var(--m-arrow-flip, 1)); transition: transform .3s ease-in-out;
+}
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child { --m-arrow-flip: -1; clip-path: inset(0 0 0 var(--m-arrow-delta) round 16px); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child::before { inset: 0 0 0 auto; background-position: right 16px center; }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child::after { left: auto; right: 8px; }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: var(--m-arrow-delta); clip-path: inset(0 round 8px 16px 16px 8px); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled)::before { width: var(--m-arrow-wide); border-radius: 8px 16px 16px 8px; background-size: var(--m-arrow-delta) 1.5px; }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: calc(-1 * var(--m-arrow-delta)); clip-path: inset(0 round 16px 8px 8px 16px); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled)::before { border-radius: 16px 8px 8px 16px; }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:focus-visible::before { box-shadow: inset 0 0 0 2px var(--m-accent); }
+@media (prefers-reduced-motion: reduce) {
+  html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side,
+  html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::before,
+  html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::after { transition: none !important; }
+}
 html.margin-search .vui_button--disabled { opacity: .45; }
 
 /* 广告：统一由 global.css 的 html.margin-ads-hide 控制（v0.47） */
 
 /* ── 其他页面：热门 / 排行 / 番剧等，统一卡片圆角与表面 ── */
+/* 稍后再看：保留原生网格和事件，只移除横跨页面与列表的整块底色。 */
+html.margin-page .watchlater-list-nav,
+html.margin-page .watchlater-list-container { background: transparent !important; }
+html.margin-page .watchlater-list-nav .breadcrums-nav {
+  background: color-mix(in srgb, var(--m-surface) 96%, transparent) !important;
+  border: 1px solid var(--m-line); border-radius: 12px;
+}
+html.margin-page .watchlater-list-title-left {
+  background: color-mix(in srgb, var(--m-surface) 96%, transparent); border-radius: 12px; padding: 4px 12px;
+}
+html.margin-page .watchlater-list .bili-video-card {
+  background: color-mix(in srgb, var(--m-surface) 96%, transparent); border-radius: 12px; overflow: hidden;
+}
+html.margin-page .watchlater-list .bili-video-card__details { margin-top: 0; padding: 10px 12px; }
+html.margin-page .watchlater-list .bili-video-card__title { color: var(--m-ink) !important; }
+html.margin-page .watchlater-list .bili-video-card__subtitle,
+html.margin-page .watchlater-list .bili-video-card__author { color: var(--m-muted) !important; }
 /* 新版 /c/ 分区使用另一套封面和标题组件，和首页共享字体、颜色及圆角。 */
 html.margin-page .feedchannel,
 html.margin-page .feedchannel-body,

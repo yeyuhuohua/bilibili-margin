@@ -1,6 +1,7 @@
 import type { BgMode, HomeBit, HomeSection, Settings, ShaderId, Theme } from '../../shared/settings';
 import { BG_IMAGE_KEY, clampPaletteSpeed, cleanFont, DEFAULTS, HOME_BITS, HOME_SECTION_NAMES, normalizeHomeOrder, replaceSettings, sanitizeSettings, saveSettings } from '../../shared/settings';
-import { ACTIVITY_KEY, sanitizeActivity, type FpMessage } from '../../shared/activity';
+import { ACTIVITY_KEY, sanitizeActivity } from '../../shared/activity';
+import { importActivity } from '../footprint/store';
 import { compressImage } from '../bg/background';
 import { SHADER_IDS, SHADER_NAMES } from '../bg/shaders';
 import { cachedThumb, shaderThumb } from '../bg/program';
@@ -9,8 +10,8 @@ import { clampBatchSize } from '../../shared/batch';
 import { fmtCount, h, icon, ICONS } from './dom';
 import { createSettingsPage, type SettingsPage } from './settings-page';
 import { SITE_LINKS } from './header';
-import { appPoll, appQr, appRevoke, appState } from '../api/appfeed';
-import { clearLoc, savedLoc, setLoc as setLocWithName } from '../api/weather';
+import { appPoll, appQr, appRemember, appRevoke, appState } from '../api/appfeed';
+import { clearLoc, loadLoc, savedLoc, setLoc as setLocWithName } from '../api/weather';
 import { createCityPicker } from './city-picker';
 import { forgetSearch } from '../api/search-history';
 
@@ -129,8 +130,8 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   paintOrder();
   // 天气城市（#3）：输入后列出候选，点一个就固定；「自动」回到 IP 定位
   const cityAuto = h('button', { class: 'city-auto', type: 'button' }, '自动');
-  const cityPicker = createCityPicker(place => {
-    setLocWithName(place);
+  const cityPicker = createCityPicker(async place => {
+    await setLocWithName(place);
     say(`天气城市：${place.name} · ${place.region}`);
   });
   cityPicker.input.placeholder = '自动定位';
@@ -141,9 +142,13 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     cityPicker.input.value = loc?.manual ? loc.name : '';
     cityAuto.hidden = !loc?.manual;
   };
-  cityAuto.addEventListener('click', () => { clearLoc(); paintCity(); say('天气改回按 IP 自动定位'); });
+  cityAuto.addEventListener('click', async () => {
+    try { await clearLoc(); paintCity(); say('天气改回按 IP 粗定位'); }
+    catch { say('天气位置保存失败，请重试'); }
+  });
   addEventListener('margin:wx-loc', paintCity);
   paintCity();
+  void loadLoc().then(paintCity, () => say('天气位置读取失败，请重试'));
   const cityBox = cityPicker.el;
   const cols = segmented<string>([['0', '自动'], ['4', '4 个'], ['5', '5 个'], ['6', '6 个']], String(s0.cols), (v) => save({ cols: Number(v) as 0 | 4 | 5 | 6 }));
   const fontS = segmented<'serif' | 'sans'>([['serif', '衬线'], ['sans', '无衬线']], s0.titleFont, (v) => save({ titleFont: v }));
@@ -195,6 +200,8 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   const radS = segmented<string>([['0', '直角'], ['50', '小'], ['100', '默认'], ['150', '大']], String(s0.radius), (v) => save({ radius: Number(v) as 0 | 50 | 100 | 150 }));
   const cfsS = segmented<string>([['14', '14'], ['15', '15'], ['16', '16'], ['17', '17']], String(s0.commentSize), (v) => save({ commentSize: Number(v) as 14 | 15 | 16 | 17 }));
   const hoverT = toggle(s0.headHover, '顶栏悬停指示', (v) => save({ headHover: v }));
+  const labelsT = toggle(s0.headLabels, '顶栏显示文字', (v) => save({ headLabels: v }));
+  const feedLayout = segmented<Settings['feedLayout']>([['classic', '经典'], ['sidebar', '左侧关注']], s0.feedLayout, v => save({ feedLayout: v }));
   const cmdKT = toggle(s0.cmdK, 'Ctrl+K 打开命令面板', (v) => save({ cmdK: v }));
   // 视频 CDN 节点（v0.47.2）：列表 + 延迟测速；选中后新打开的视频生效
   const CDNS: [string, string][] = [
@@ -362,6 +369,57 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     say('背景图已更新');
   });
   const upload = h('button', { type: 'button', class: 'ghost small', onclick: () => file.click() }, icon(ICONS.image), h('span', {}, '上传图片'));
+  const imageUrl = h('input', { type: 'url', class: 'city-in', placeholder: 'https://…', 'aria-label': '背景图片 URL', spellcheck: 'false' });
+  const imagePreview = h('img', { alt: '背景图片预览', hidden: true, style: 'display:none;width:100%;max-height:160px;object-fit:cover;border-radius:12px' });
+  const imageNote = h('small', { role: 'status', 'aria-live': 'polite' });
+  const previewUrl = h('button', { type: 'button', class: 'ghost small' }, '预览');
+  const applyUrl = h('button', { type: 'button', class: 'ghost small', disabled: true }, '应用链接');
+  let imageRun = 0, previewedUrl = '';
+  imageUrl.addEventListener('input', () => {
+    imageRun++; previewedUrl = ''; applyUrl.disabled = true; previewUrl.disabled = false;
+    imagePreview.hidden = true; imagePreview.style.display = 'none'; imageNote.textContent = '';
+  });
+  previewUrl.onclick = async () => {
+    const run = ++imageRun;
+    applyUrl.disabled = true; previewedUrl = '';
+    try {
+      const url = new URL(imageUrl.value.trim());
+      if (url.protocol !== 'https:' || url.username || url.password) throw new Error('请填写 HTTPS 图片直链');
+      previewUrl.disabled = true; imageNote.textContent = '正在加载图片…';
+      const probe = new Image(); probe.referrerPolicy = 'no-referrer';
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => { probe.src = ''; reject(new Error('图片加载超时，请重试')); }, 12000);
+        probe.onload = () => { clearTimeout(timer); resolve(); };
+        probe.onerror = () => { clearTimeout(timer); reject(new Error('图片加载失败，请检查直链或防盗链限制')); };
+        probe.src = url.href;
+      });
+      if (run !== imageRun) return;
+      imagePreview.src = url.href; imagePreview.hidden = false; imagePreview.style.display = 'block';
+      previewedUrl = url.href; applyUrl.disabled = false; imageNote.textContent = '图片可用，点击应用后设为背景';
+    } catch (error) {
+      if (run === imageRun) imageNote.textContent = error instanceof TypeError ? '请输入有效的 HTTPS 图片直链' : error instanceof Error ? error.message : '图片加载失败';
+    } finally { if (run === imageRun) previewUrl.disabled = false; }
+  };
+  imageUrl.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); previewUrl.click(); }
+  });
+  applyUrl.onclick = async () => {
+    if (!previewedUrl || applyUrl.disabled) return;
+    const url = previewedUrl;
+    applyUrl.disabled = true;
+    imageUrl.disabled = true; previewUrl.disabled = true;
+    try {
+      await chrome.storage.local.set({ [BG_IMAGE_KEY]: url });
+      await save({ bg: { ...get().bg, mode: 'image' } });
+      dispatchEvent(new CustomEvent('margin:bg-image'));
+      imageNote.textContent = '链接背景已应用'; say('背景图已更新');
+    } catch { imageNote.textContent = '保存失败，请重试'; }
+    finally { applyUrl.disabled = previewedUrl !== url; imageUrl.disabled = false; previewUrl.disabled = false; }
+  };
+  void chrome.storage.local.get(BG_IMAGE_KEY).then(data => {
+    const value = data[BG_IMAGE_KEY];
+    if (!imageRun && !imageUrl.value && typeof value === 'string' && value.startsWith('https://')) imageUrl.value = value;
+  }).catch(() => {});
 
   // ── 数据：导出 / 导入设置与足迹（JSON 文件，只在本机处理） ──
   const exportData = async () => {
@@ -381,10 +439,11 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     } catch { say('导出失败，请重试；若浏览器拦截下载，请检查下载提示。'); }
   };
   const json = h('input', { type: 'file', accept: 'application/json,.json', hidden: true, 'aria-label': '选择要导入的备份文件' });
+  let importing = false;
   json.addEventListener('change', async () => {
     const f = json.files?.[0];
     json.value = '';
-    if (!f) return;
+    if (!f || importing) return;
     let raw: Record<string, unknown>;
     try {
       if (f.size > 5e6) throw new Error('文件太大');
@@ -398,9 +457,16 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     const parts = [settings ? '用备份覆盖当前设置（主题、背景、过滤）' : '', days ? `合并 ${days} 天足迹（同一天取较长时长、较早首次打开）` : ''].filter(Boolean);
     const when = typeof raw.exportedAt === 'string' ? `（${raw.exportedAt.slice(0, 10)} 导出）` : '';
     if (!confirm(`导入映间备份${when}：\n· ${parts.join('\n· ')}\n\n继续吗？`)) return;
-    if (activity && days) await chrome.runtime.sendMessage({ margin: 'fp', op: 'import', days: activity } satisfies FpMessage);
-    if (settings) await replaceSettings(settings);
-    say(`已导入${settings ? '设置' : ''}${settings && days ? '和' : ''}${days ? ` ${days} 天足迹` : ''}`);
+    importing = true; importBtn.disabled = true;
+    let savedDays = 0;
+    try {
+      if (activity && days) { await importActivity(activity); savedDays = days; }
+      if (settings) await replaceSettings(settings);
+      say(`已导入${settings ? '设置' : ''}${settings && days ? '和' : ''}${days ? ` ${days} 天足迹` : ''}`);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : '保存失败，请重试';
+      say(savedDays ? `已导入 ${savedDays} 天足迹，但设置导入失败：${reason}` : `导入失败：${reason}`);
+    } finally { importing = false; importBtn.disabled = false; }
   });
   const exportBtn = h('button', { type: 'button', class: 'ghost small', onclick: exportData }, h('span', {}, '导出'));
   const importBtn = h('button', { type: 'button', class: 'ghost small', onclick: () => json.click() }, h('span', {}, '导入'));
@@ -416,10 +482,24 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   const appOff = h('button', { type: 'button', class: 'ghost small', hidden: true }, h('span', {}, '取消授权')) as HTMLButtonElement;
   let pollT = 0, pollRun = 0;
   let authed = false;
+  const rememberT = toggle(false, '记住授权', async (enabled) => {
+    rememberT.disabled = true;
+    try {
+      const result = await appRemember(enabled);
+      if (!result.ok) throw new Error(result.error || '保存失败');
+      await paintApp();
+    } catch {
+      rememberT.setAttribute('aria-checked', String(!enabled));
+      say('授权选项保存失败，请重试');
+    } finally { rememberT.disabled = false; }
+  });
+  rememberT.disabled = true;
   const stopPoll = () => { window.clearTimeout(pollT); pollT = 0; pollRun++; appBtn.disabled = false; };
   const paintApp = async () => {
     const st = await appState().catch(() => null);
     authed = !!st?.authed;
+    rememberT.setAttribute('aria-checked', String(st?.remember === true));
+    rememberT.disabled = !st?.ok;
     appStat.textContent = authed ? `已授权 · UID ${st!.mid}${st!.exp ? ` · ${new Date(st!.exp * 1000).toLocaleDateString()} 到期` : ''}` : '未授权：推荐来自 App，但不是你的个性化推荐';
     appBtn.querySelector('span')!.textContent = authed ? '重新扫码' : '扫码授权';
     appOff.hidden = !authed;
@@ -538,6 +618,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     row('收藏夹列数', null, favCols),
     row('账号卡片可拖拽', '关掉后头像下的卡片固定挂着，不能甩动，点一下仍可翻面', idD),
     row('动态页关注列表', '显示左侧关注列表，顶部头像条保留', followListT),
+    block('动态页布局', '左侧关注将近期更新移到左栏，直播移到右栏；选择 UP 后回到顶部', feedLayout),
     sub('背景'),
     block('模式', '随机：每次打开换一款，不连续重复', mode),
     block('样式', null, swatches),
@@ -547,7 +628,9 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       block('强度', null, intensity),
       h('div', { class: 'row' },
         h('div', { class: 'row-label' }, h('span', {}, '自定义图片'), h('small', {}, '压缩后只保存在本机')),
-        upload, file)));
+        upload, file),
+      block('图片链接', '粘贴 HTTPS 图片直链。应用后由浏览器加载，图片服务会收到请求 IP。',
+        h('div', { class: 'city-box' }, h('div', { class: 'city-row' }, imageUrl, previewUrl, applyUrl), imageNote, imagePreview))));
 
   sheet.section('home', '首页', '首页显示什么、怎么排。',
     row('搜索框', '关掉后用顶栏的小搜索框', searchT),
@@ -569,6 +652,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     palSpeedRow,
     row('Ctrl+K 打开命令面板', 'B 站自己没有 Ctrl+K；和浏览器或其他扩展冲突时关掉，按 / 照样能打开', cmdKT),
     row('悬停指示', '指示条跟随鼠标移到的顶栏图标；关闭后跟随点击', hoverT),
+    row('顶栏显示文字', '在快捷入口图标旁显示名称，默认关闭', labelsT),
     drawer('顶栏入口', () => { const n = get().headHide.length; return n ? `已隐藏 ${n} 个` : '全部显示'; },
       h('p', { class: 'sd-note' }, '关掉的入口不在顶栏显示；用箭头调整快捷入口顺序。「设置」始终保留'),
       headList, h('div', { class: 'hl-foot' }, headReset)));
@@ -601,7 +685,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     row('允许外部辅助服务', '默认关闭；开启后允许天气定位、天气查询、社区广告片段和 GitHub 更新查询。服务会接收请求 IP。', externalT),
     row('保存最近搜索', '默认关闭；开启后只存扩展内，最多 8 条、30 天过期，读取时清理。', historyT),
     row('搜索记录', null, clearHistory),
-    h('p', { class: 'stg-note' }, 'App 授权仅保留在当前浏览器会话，重启后需重新扫码。'),
+    h('p', { class: 'stg-note' }, 'App 授权默认仅保留在当前会话；可在实验功能中开启「记住授权」，最多保存 30 天。'),
     h('div', { class: 'row' },
       h('div', { class: 'row-label' },
         h('span', {}, '备份与迁移'),
@@ -611,7 +695,8 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   sheet.section('lab', '实验功能', '可能随版本调整的功能，默认关闭。',
     row('App 推荐流', '首页「推荐」改用手机 App 的推荐；关掉就是网页版原来的推荐', appT),
     drawer('App 授权', () => (authed ? '已授权' : '未授权'),
-      h('p', { class: 'sd-note' }, '用 B 站 App 扫码授权。凭证只保存在本次浏览器会话，重启后需重新扫码，可随时取消。'),
+      h('p', { class: 'sd-note' }, '用 B 站 App 扫码授权，可随时取消。默认重启浏览器后需重新扫码。'),
+      row('记住授权', '默认关闭。开启后在本机保留最多 30 天，以 B 站有效期为上限；关闭后仅保留当前会话。', rememberT),
       h('div', { class: 'af-row' }, appStat, h('div', { class: 'data-acts' }, appBtn, appOff)), appQrBox, appQrNote),
     row('X 式重排', '按你的观看历史重新排：常看完的 UP 往前，秒退和「不感兴趣」的往后，混入关注的人 48 小时内的新稿，看过的不再出现。只在本机计算，可和 App 推荐流一起用', rankT));
 
@@ -670,6 +755,8 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       accent.set(s.accent);
       glass.set(s.glass);
       hoverT.setAttribute('aria-checked', String(s.headHover));
+      labelsT.setAttribute('aria-checked', String(s.headLabels));
+      feedLayout.set(s.feedLayout);
       cmdKT.setAttribute('aria-checked', String(s.cmdK));
       paintCdn();
       paintHead();

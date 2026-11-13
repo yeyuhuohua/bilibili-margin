@@ -6,6 +6,9 @@ html.margin-live #sidebar-vm .side-bar-cntr { display: none !important; }
 html.margin-live, html.margin-live body, html.margin-live .live-room-app, html.margin-live .app-content {
   background-color: var(--m-canvas) !important; background-image: none !important;
 }
+html.margin-live.margin-has-bg body, html.margin-live.margin-has-bg .live-room-app, html.margin-live.margin-has-bg .app-content {
+  background-color: transparent !important;
+}
 html.margin-live body { font-family: var(--m-sans) !important; }
 html.margin-live:not(.margin-webscreen) body { padding-top: 72px !important; }
 html.margin-live.margin-webscreen body { padding-top: 0 !important; }

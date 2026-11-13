@@ -1,6 +1,7 @@
 import { h, icon, ICONS } from './dom';
 import type { Sheet } from './sheet';
 import { uiReducedMotion } from '../motion';
+import { containModalFocus } from './modal-focus';
 
 export interface SettingsSection {
   id: string;
@@ -195,21 +196,20 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
     show(sections[n].id, true);
   });
 
-  let lastFocus: Element | null = null;
+  let releaseFocus: (() => void) | null = null;
   const api: SettingsPage = {
     el, body, section,
     open() {
       if (api.isOpen()) return;
-      lastFocus = (el.getRootNode() as ShadowRoot).activeElement;
       el.dataset.open = 'true';
       el.inert = false;
+      releaseFocus = containModalFocus(el, panel, () => api.close());
       search.value = '';
       applyFilter('');
       activate(active || sections[0]?.id || '');
       body.scrollTop = 0;
       opts.onOpen?.();
       el.dispatchEvent(new CustomEvent('margin:sheet', { bubbles: true }));
-      requestAnimationFrame(() => panel.focus({ preventScroll: true }));
     },
     close() {
       if (!api.isOpen()) return;
@@ -217,12 +217,11 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
       el.inert = true;
       clearSearch();
       el.dispatchEvent(new CustomEvent('margin:sheet', { bubbles: true }));
-      (lastFocus as HTMLElement | null)?.focus?.({ preventScroll: true });
+      releaseFocus?.(); releaseFocus = null;
     },
     isOpen: () => el.dataset.open === 'true',
   };
   closeBtn.addEventListener('click', () => api.close());
   scrim.addEventListener('click', () => api.close());
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && api.isOpen()) api.close(); });
   return api;
 }

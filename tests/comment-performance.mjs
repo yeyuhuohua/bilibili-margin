@@ -28,7 +28,8 @@ async function run(file, label) {
       const onSettingsChange = fn => __listeners.push(fn);`;
     const expose = `globalThis.commentFixture = { skinComments, nest,
       tick: () => __tick(), settings: value => __listeners.forEach(fn => fn({ replyTree: value })) };`;
-    const code = ts.transpileModule(shim + '\n' + source + '\n' + expose, {
+    const send = readFileSync('src/content/ui/send-button.ts', 'utf8').replace(/export function /g, 'function ');
+    const code = ts.transpileModule(shim + '\n' + send + '\n' + source + '\n' + expose, {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
     }).outputText;
     await page.setContent('<!doctype html><html><head></head><body></body></html>');

@@ -6,8 +6,8 @@
 .hs-scrim { position: fixed; inset: 0; z-index: 9; pointer-events: none; opacity: 0; background: rgb(20 20 22 / .28); transition: opacity .3s var(--ease-out); }
 .app[data-theme="dark"] .hs-scrim, :host([data-theme="dark"]) .hs-scrim { background: rgb(0 0 0 / .5); }
 .app.hs-open .hs-scrim { opacity: 1; pointer-events: auto; }
-.hero-search { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-direction: column; border-radius: 28px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.4); box-shadow: var(--sh-sm); overflow: hidden;
-  transition: border-radius .3s var(--ease-out), box-shadow .3s var(--ease-out), border-color .2s var(--ease-out), background-color .3s var(--ease-out); }
+.hero-search { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-direction: column; border-radius: 28px; corner-shape: round; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.4); box-shadow: var(--sh-sm); overflow: hidden;
+  transition: border-radius .3s var(--ease-out), corner-shape .3s var(--ease-out), box-shadow .3s var(--ease-out), border-color .2s var(--ease-out), background-color .3s var(--ease-out); }
 .hero-search:focus-within { border-color: color-mix(in srgb, var(--ink) 24%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink) 6%, transparent), var(--sh-sm); }
 .hero-search[data-open="true"].has-list { border-radius: 24px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--ring), var(--sh-lg); }
 .hs-row { display: flex; align-items: center; gap: 12px; height: 54px; flex: none; padding: 0 5px 0 24px; }
@@ -31,7 +31,7 @@
 @keyframes hs-ph-out { to { opacity: 0; transform: translateY(-14px); filter: blur(4px); } }
 /* 顶栏小搜索框的热搜占位：只显示热词，切换沿用上面的动画；原生 placeholder 让位 */
 .search { position: relative; }
-.search.has-hot input::placeholder { color: transparent; }
+.top .search.has-hot input::placeholder { color: transparent; }
 .search-ph { position: absolute; left: 44px; right: 46px; top: 0; bottom: 0; display: flex; align-items: center; overflow: hidden; pointer-events: none; color: var(--faint); font-size: 14px; white-space: nowrap; }
 .search-ph-ws { position: relative; flex: 1; min-width: 0; height: 100%; }
 .search-ph-w { position: absolute; inset: 0; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -205,6 +205,7 @@
 .app[data-theme="dark"] .wx { background: rgb(0 0 0 / .2); border-color: rgb(255 255 255 / .1); box-shadow: 0 25px 50px -12px rgb(0 0 0 / .25);
   --i-off: rgb(255 255 255 / .06); --i-moon: #ececee; --i-star: #c9ccd2; --i-cloud: #8b8f98; --i-cloud-d: #5d6169; --i-snow: #dbe6f3; --i-hill: #9a9ba0; --i-hz: #64656a; --well: rgb(0 0 0 / .28); }
 .wx-empty { grid-column: 1 / -1; margin: auto; font-size: 13px; color: var(--muted); }
+.wx-recovery { display: flex; gap: 8px; margin-top: 12px; }
 .wx-sky { position: relative; min-height: 0; overflow: hidden; border-radius: 12px; background: var(--well); box-shadow: inset 0 1px 2px rgb(0 0 0 / .08), inset 0 0 0 var(--hair) rgb(0 0 0 / .05); }
 .wx-sky.sk { animation: pulse 1.6s ease-in-out infinite; }
 .wx-sky svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -217,7 +218,7 @@
 .wx-cond { padding-bottom: 2px; font-size: 13px; font-weight: 500; color: var(--ink); }
 .wx-side { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
 .wx-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.wx-place { min-width: 0; display: grid; gap: 2px; }
+.wx-place { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .wx-city { all: unset; font: 600 14px/1.3 var(--sans); color: var(--ink); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; }
 .wx-city:hover { color: var(--accent); }
 .wx-city:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -225,7 +226,7 @@
 .wx .wx-city-picker { position: absolute; top: 12px; right: 12px; width: min(340px, calc(100% - 24px)); padding: 10px; border-radius: 14px; background: var(--surface); box-shadow: var(--ring), var(--sh-md); }
 .wx-city-picker .city-list { max-height: 240px; overflow-y: auto; }
 .wx-place small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wx-live { flex: none; display: flex; align-items: center; gap: 6px; font: 500 10px/1 var(--mono); letter-spacing: .08em; color: var(--muted); }
+.wx-live { flex: none; display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: 55%; align-items: center; gap: 6px; font: 500 10px/1.4 var(--mono); letter-spacing: .08em; color: var(--muted); }
 .wx-led { width: 6px; height: 6px; border-radius: 50%; background: #30a46c; box-shadow: 0 0 0 2px rgb(48 164 108 / .18); }
 .wx-clock { font-variant-numeric: tabular-nums; color: var(--ink); }
 .wx-hours { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
@@ -528,6 +529,8 @@
 .hl-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
 .dp-end { margin: 0; padding: 12px 0 4px; text-align: center; font-size: 12px; color: var(--muted); }
 .dp-tail { display: block; height: 1px; }
+.dp-more { display: block; width: 100%; padding: 10px; color: var(--accent-text); font-size: 12px; text-align: center; }
+.dp-more:disabled { opacity: .5; cursor: wait; }
 
 /* 设置抽屉（v0.47.4）：grid 0fr→1fr 展开，不读布局 */
 .sd { border-radius: 12px; margin: 4px 0; background: color-mix(in srgb, var(--ink) 3%, transparent); box-shadow: var(--ring); }

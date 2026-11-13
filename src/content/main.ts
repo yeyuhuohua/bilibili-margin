@@ -44,6 +44,7 @@ type Pages = {
   'danmaku-jump': typeof import('./pages/danmaku-jump');
   'danmaku-airborne': typeof import('./pages/danmaku-airborne');
   'channel-carousel': typeof import('./pages/channel-carousel');
+  'search-exact': typeof import('./pages/search-exact');
 };
 /** 按需加载页面模块；content script 不能是 ES module，但可以动态 import 扩展里的 ES 模块 */
 const load = <K extends keyof Pages>(name: K): Promise<Pages[K]> => import(/* @vite-ignore */ chrome.runtime.getURL(`pages/${name}.js`));
@@ -194,6 +195,9 @@ async function startWatch(kind: SkinKind = 'watch'): Promise<void> {
   const settings = await startupSettings().catch(error => { unskin(kind); throw error; });
   // 屏蔽词在原生页面独立生效；即使关闭了「其他页面重设计」，只开过滤也能用
   if (settings.enabled && kind !== 'live') startNativeFilter(kind, settings);
+  if (settings.enabled && kind === 'search') {
+    load('search-exact').then(m => m.mountSearchExact()).catch(e => console.error('[MARGIN] 搜索试用加载失败', e));
+  }
   const on = settings.enabled && settings.watch;
   setSkinMirror(on ? settings.theme : '0');
   if (!on) { unskin(kind); return; }

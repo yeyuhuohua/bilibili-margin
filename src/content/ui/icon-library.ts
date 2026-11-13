@@ -46,4 +46,5 @@ export const ICON_PATHS = {
   chevronRight: "<g data-iconmcp=\"chevron-right\" transform=\"scale(1.5)\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g><path d=\"M5.875 3.75 L10.125 8 L5.875 12.25\"/></g></g>",
   arrowUp: "<g data-iconmcp=\"arrow-up\" transform=\"scale(1.5)\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g transform=\"rotate(-90 8 8)\"><line x1=\"2.75\" y1=\"8\" x2=\"13.25\" y2=\"8\"/><path d=\"M8.5 3.25 L13.25 8 L8.5 12.75\"/></g></g>",
   arrowDown: "<g data-iconmcp=\"arrow-down\" transform=\"scale(1.5)\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g transform=\"rotate(90 8 8)\"><line x1=\"2.75\" y1=\"8\" x2=\"13.25\" y2=\"8\"/><path d=\"M8.5 3.25 L13.25 8 L8.5 12.75\"/></g></g>",
+  play: "<g data-iconmcp=\"play\" transform=\"scale(1.5)\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><g><path d=\"M5.25 2.75 L13 8 L5.25 13.25 Z\"/></g></g>",
 } as const;

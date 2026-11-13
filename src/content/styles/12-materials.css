@@ -1,0 +1,19 @@
+/* Supplied lens / CTA techniques, scoped to the existing small navigation surfaces. */
+.app { --nav-glass: rgb(250 250 248 / .8); --nav-ink: #242831; --nav-muted: #343b46; --nav-rim: #ffffffa8; }
+.app[data-theme="dark"] { --nav-glass: rgb(22 25 31 / .72); --nav-ink: #f1f4f8; --nav-muted: #dce2ea; --nav-rim: #ffffff50; }
+.app .top [data-material] {
+  background: var(--nav-glass); color: var(--nav-ink); outline: 1px solid var(--nav-rim); outline-offset: -1px;
+  box-shadow: inset 0 1.5px 1px #ffffff60, inset 0 -1px 1px #00000018, 0 2px 8px #00000012, 0 8px 24px #0000000c;
+}
+.app[data-theme="dark"] .top [data-material] { box-shadow: inset 0 1px 1px #ffffff42, inset 0 -1px 1px #0005, 0 3px 12px #0003; }
+.top .et-btn, .top .search input::placeholder { color: var(--nav-muted); }
+.top .et-btn:is(:hover,[data-selected]), .top .search, .top .search input { color: var(--nav-ink); }
+.top .et-thumb { backdrop-filter: none !important; }
+.top .upload[data-material] { border-radius: 999px; background: var(--margin-primary, var(--nav-glass)); color: var(--margin-primary-fg, var(--nav-ink)); }
+.top .upload[data-material]:hover { transform: translateY(-1px); }
+.top .upload[data-material]:active { transform: scale(.97); }
+.app[data-glass="flat"] .top [data-material] { background: var(--surface); backdrop-filter: none !important; }
+@media(prefers-reduced-transparency:reduce) {
+  .app .top [data-material] { background: var(--surface); backdrop-filter: none !important; }
+  .gf-front-rim { filter: none !important; }
+}

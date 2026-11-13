@@ -3,7 +3,7 @@ import type { Settings } from '../../shared/settings';
 import { nav } from '../api/http';
 import { followings } from '../api/dyn';
 import { account, accountStat } from '../api/account';
-import { followFeed, portal, searchFollowing, type FeedType, type LiveUp, type Up } from '../api/dyn';
+import { followFeed, followingLive, portal, searchFollowing, type FeedType, type LiveUp, type Up } from '../api/dyn';
 import { hotSearch } from '../api/search';
 import { dynCard } from './dyn';
 import { compileDynFilter } from '../filter';
@@ -47,9 +47,26 @@ export class FeedApp {
 
   update(s: Settings): void {
     this.shell.update(s);
+    this.applyLayout();
     const box = this.shell.app.querySelector<HTMLElement>('.fd-follows');
-    if (box) box.hidden = !s.feedFollowList;
+    if (box) box.hidden = !s.feedFollowList || s.feedLayout === 'sidebar';
     else if (s.feedFollowList && this.followParent) void this.renderFollowList(this.followParent);
+  }
+
+  private applyLayout(): void {
+    const app = this.shell.app;
+    const sidebar = this.shell.settings.feedLayout === 'sidebar';
+    app.classList.toggle('fd-sidebar', sidebar);
+    const left = app.querySelector('.fd-left');
+    const right = app.querySelector('.fd-right');
+    const bar = app.querySelector('.fd-bar');
+    if (sidebar) { if (this.strip.parentElement !== left) left?.append(this.strip); }
+    else if (this.strip.nextElementSibling !== bar) bar?.before(this.strip);
+    const live = app.querySelector('.fd-live');
+    const liveParent = sidebar ? right : left;
+    if (live && live.parentElement !== liveParent) liveParent?.append(live);
+    const follows = app.querySelector<HTMLElement>('.fd-follows');
+    if (follows) follows.hidden = sidebar || !this.shell.settings.feedFollowList;
   }
 
   private render(): void {
@@ -75,6 +92,7 @@ export class FeedApp {
       h('div', { class: 'bar-row fd-bar' }, this.tabs),
       this.list, this.status, this.sentinel);
     s.main.append(h('div', { class: 'fd' }, left, center, right));
+    this.applyLayout();
     new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) this.load(); }, { root: s.app, rootMargin: '1200px 0px' }).observe(this.sentinel);
     // 动态流同时用 compileDynFilter（含转发内容）和 FilterRuntime，条件变化后重新拉取一次
     this.shell.filter.onChange(() => this.reload());
@@ -91,7 +109,7 @@ export class FeedApp {
       }
       this.renderMe(left);
       this.followParent = left;
-      portal().then((p) => { this.renderUps(p.ups); this.renderLive(left, p.live, p.liveCount); }).catch(() => { /* 头像条可缺省 */ });
+      portal().then((p) => { this.renderUps(p.ups); this.renderLive(left, p.live, p.liveCount); this.applyLayout(); }).catch(() => { /* 头像条可缺省 */ });
       void this.renderFollowList(left);
       this.load();
     }).catch(() => this.load());
@@ -99,7 +117,7 @@ export class FeedApp {
 
   /** #16：左侧「关注」列表——比头像条能装更多人，点一行就把动态流切成该 UP */
   private async renderFollowList(left: HTMLElement): Promise<void> {
-    if (this.followingStarted || !this.shell.settings.feedFollowList) return;
+    if (this.followingStarted || !this.shell.settings.feedFollowList || this.shell.settings.feedLayout === 'sidebar') return;
     this.followingStarted = true;
     const a = await account().catch(() => null);
     if (!a || !this.shell.settings.feedFollowList) { this.followingStarted = false; return; }
@@ -109,6 +127,7 @@ export class FeedApp {
       h('h3', {}, '关注'),
       h('a', { class: 'ghost', href: `https://space.bilibili.com/${a.mid}/fans/follow`, target: '_blank', rel: 'noopener' }, '全部'));
     const box = h('section', { class: 'fd-card fd-follows' }, head, list, more);
+    box.hidden = this.shell.app.classList.contains('fd-sidebar') || !this.shell.settings.feedFollowList;
     left.append(box);
 
     let pn = 0, done = false, loading = false;
@@ -158,11 +177,25 @@ export class FeedApp {
 
   private renderLive(left: HTMLElement, live: LiveUp[], count: number): void {
     if (!live.length) return;
+    const row = (u: LiveUp) => h('a', { class: 'fd-live-row', href: u.url, ...ext },
+      h('span', { class: 'fd-live-face' }, face(u.face, '', 80)),
+      h('span', { class: 'fd-live-b' }, h('b', {}, u.name), h('span', {}, u.title)));
+    let entries = live, shown = Math.min(8, live.length), complete = count <= live.length, busy = false;
+    const list = h('div', {}, ...entries.slice(0, shown).map(row));
+    const more = h('button', { class: 'ghost small fd-live-more', type: 'button', hidden: shown >= entries.length && complete }, '加载更多') as HTMLButtonElement;
+    more.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true; more.disabled = true; more.textContent = '加载中…';
+      try {
+        if (!complete) { const extra = await followingLive(); const seen = new Set(entries.map(u => u.url)); entries = [...entries]; for (const u of extra) if (!seen.has(u.url)) { seen.add(u.url); entries.push(u); } complete = true; }
+        const next = entries.slice(shown, shown + 8); shown += next.length; list.append(...next.map(row));
+        more.hidden = shown >= entries.length; more.textContent = '加载更多';
+      } catch { more.textContent = '加载失败，重试'; }
+      finally { busy = false; more.disabled = false; }
+    });
     left.append(h('section', { class: 'fd-card fd-live' },
       h('div', { class: 'fd-card-h' }, h('span', {}, '正在直播'), h('b', {}, String(count))),
-      ...live.map((u) => h('a', { class: 'fd-live-row', href: u.url, ...ext },
-        h('span', { class: 'fd-live-face' }, face(u.face, '', 80)),
-        h('span', { class: 'fd-live-b' }, h('b', {}, u.name), h('span', {}, u.title))))));
+      list, more));
   }
 
   private renderUps(ups: Up[]): void {
@@ -172,6 +205,7 @@ export class FeedApp {
       b.dataset.mid = String(mid);
       if (fresh) b.classList.add('fresh');
       b.addEventListener('click', () => {
+        if (this.shell.settings.feedLayout === 'sidebar') this.shell.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' });
         b.classList.remove('fresh');
         this.setHost(mid);
         if (b.parentElement === row) {

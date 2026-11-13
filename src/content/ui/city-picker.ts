@@ -3,7 +3,7 @@ import { h } from './dom';
 import { PrivacyBlocked } from '../../shared/privacy';
 
 /** 天气卡和设置共用候选搜索，选中带地区的地点后才保存。 */
-export function createCityPicker(onPick: (place: Place) => void) {
+export function createCityPicker(onPick: (place: Place) => void | Promise<void>) {
   const input = h('input', { class: 'city-in', type: 'search', placeholder: '输入城市', 'aria-label': '天气城市', autocomplete: 'off' }) as HTMLInputElement;
   const row = h('div', { class: 'city-row' }, input);
   const list = h('ul', { class: 'city-list', role: 'listbox', 'aria-label': '城市候选', hidden: '' });
@@ -25,7 +25,13 @@ export function createCityPicker(onPick: (place: Place) => void) {
       if (request !== sequence || !el.isConnected) return;
       list.replaceChildren(...(places.length ? places.map(place => {
         const option = h('li', { role: 'option', tabindex: '0' }, h('b', {}, place.name), h('small', {}, place.region));
-        const pick = () => { cancel(); input.value = place.name; onPick(place); };
+        let saving = false;
+        const pick = async () => {
+          if (saving) return;
+          saving = true;
+          try { await onPick(place); cancel(); input.value = place.name; }
+          catch { saving = false; list.replaceChildren(h('li', { class: 'empty', role: 'status' }, '保存失败，请重新选择城市')); }
+        };
         option.addEventListener('click', pick);
         option.addEventListener('keydown', event => {
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pick(); }

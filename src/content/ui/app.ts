@@ -31,6 +31,8 @@ import { uiReducedMotion as reducedMotion } from '../motion';
 import { createFloatingMenu } from './floating-menu';
 import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
+import { mountUpdateNotice } from './update-notice';
+import { attachNavigationGlass } from './navigation-glass';
 
 type Tab = 'rcmd' | 'popular' | 'classic';
 type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; done: boolean; round: number; batchStart: number };
@@ -334,8 +336,7 @@ export class MarginApp {
       }, 160);
     }, { passive: true });
     const lg = filtersIn(this.root);
-    head.glass.forEach((g) => attachGlass(g, lg));
-    attachGlass(head.thumb, lg, { blur: 2, strength: 0.4 });
+    attachNavigationGlass(head, lg);
     attachGlass(tabs, lg); attachGlass(refresh, lg); attachGlass(this.batchBar, lg);
     bindCardMenu(this.grid, cm, () => this.app, { onBlock: (x) => this.blockUp(x), onLater: () => later.open(), onDislike: (x, el) => this.nope(x, el) });
     const favGrid = this.fav.el.querySelector('.fav-grid') as HTMLElement | null;
@@ -358,6 +359,7 @@ export class MarginApp {
     };
     hashOpen();
     addEventListener('hashchange', hashOpen);
+    mountUpdateNotice(this.app);
 
     this.load();
   }

@@ -37,7 +37,7 @@ try {
     return null;
   });
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
-  await worker.evaluate(() => chrome.storage.local.set({ 'margin:settings': { intro: false, theme: 'dark', bg: { mode: 'off' }, favDirect: true } }));
+  await worker.evaluate(async () => { await globalThis.marginLocalGlassReady; await chrome.storage.local.set({ 'margin:settings': { intro: false, theme: 'dark', bg: { mode: 'off' }, favDirect: true } }); });
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   const sheet = page.getByRole('dialog', { name: '收藏夹', exact: true });

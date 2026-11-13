@@ -1,16 +1,16 @@
 import { build } from 'vite';
 import { wgslVitePlugin } from '@vgpu/wgsl/loader-vite';
-import { cp, rm, mkdir } from 'node:fs/promises';
+import { cp, rm, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { transformRadii } from './radius.mjs';
 
 // 圆角强度（v0.50，设置 → 布局与细节 → 圆角）：把 CSS 里所有 px / em 圆角改成乘 --margin-rk（html 上设置，默认 1）。
-// 百分比圆角（头像、圆点）不动。在构建时统一改，源码保持原样好读。
-const RADIUS_RE = /(border(?:-(?:top|bottom)-(?:left|right))?-radius\s*:\s*)([^;}"'`\n!]+)/g;
+// 普通圆角使用浏览器原生 squircle；圆形和胶囊保留 round。不支持新属性的浏览器沿用 border-radius。
 const radiusPlugin = {
   name: 'margin-radius',
   enforce: 'post',
   transform(code, id) {
     if (!/\.(css|ts)(\?|$)/.test(id) || !code.includes('radius')) return null;
-    const out = code.replace(RADIUS_RE, (_m, k, v) => k + v.replace(/(^|[\s(,])(\d*\.?\d+)(px|em)\b/g, (_n, pre, n, u) => (Number(n) === 0 ? `${pre}${n}${u}` : `${pre}calc(${n}${u}*var(--margin-rk,1))`)));
+    const out = transformRadii(code);
     return out === code ? null : { code: out, map: null };
   },
 };
@@ -22,7 +22,7 @@ const entries = [
   { name: 'background', entry: 'src/background/sw.ts' },
 ];
 // 按路由动态 import 的页面模块（ES，共享代码自动拆成 pages/chunk-*.js）
-const PAGES = ['home', 'watch', 'space', 'message', 'history', 'feed', 'detail', 'space-hooks', 'danmaku-jump', 'danmaku-airborne', 'channel-carousel'];
+const PAGES = ['home', 'watch', 'space', 'message', 'history', 'feed', 'detail', 'space-hooks', 'danmaku-jump', 'danmaku-airborne', 'channel-carousel', 'search-exact'];
 
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
@@ -79,4 +79,7 @@ await build({
 });
 
 await cp('public', 'dist', { recursive: true });
+const popup = await readFile('dist/popup.html', 'utf8');
+await writeFile('dist/popup.html', popup.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
+  (_match, open, css, close) => open + transformRadii(css) + close));
 console.log('built → dist/');

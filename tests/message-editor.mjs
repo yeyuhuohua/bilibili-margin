@@ -18,7 +18,11 @@ writeFileSync(entry, `import { createMessageComposer } from ${JSON.stringify(res
     const composer=createMessageComposer({me:1,to:2,name:'测试联系人',csrf:()=> 'test-csrf',say:text=>window.composerNotices.push(text),onSent:async()=>{}});
     app.append(composer.el);
   };`);
-await build({ configFile: false, publicDir: false, logLevel: 'error', build: { outDir: out, emptyOutDir: false, lib: { entry, name: 'composerHarness', formats: ['iife'], fileName: () => 'composer.js' } } });
+await build({ configFile: false, publicDir: false, logLevel: 'error', plugins: process.env.MESSAGE_EDITOR_BASELINE ? [{
+  name: 'editor-regression-baseline', enforce: 'pre', transform(_code, id) {
+    if (id.replaceAll('\\', '/').endsWith('/src/content/ui/message-editor.ts')) return readFileSync(process.env.MESSAGE_EDITOR_BASELINE, 'utf8');
+  },
+}] : [], build: { outDir: out, emptyOutDir: false, lib: { entry, name: 'composerHarness', formats: ['iife'], fileName: () => 'composer.js' } } });
 const css = readdirSync('src/content/styles').filter(name => name.endsWith('.css')).sort().map(name => readFileSync(join('src/content/styles', name), 'utf8')).join('\n')
   + readFileSync('src/content/takeover.css', 'utf8') + '\n.app{position:relative;inset:auto;min-height:800px;overflow:visible;padding:360px 24px 24px;width:760px;max-width:100%;--ink:#222;--muted:#777;--canvas:#fafafa;--surface:#fff;--line:#ddd;--chip:#eee;font:14px Arial}';
 const results = [];
@@ -37,7 +41,28 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox]]) {
     await page.evaluate(css => { document.body.replaceChildren(); window.composerCSS = css; }, css);
     await page.addScriptTag({ path: bundle }); await page.evaluate(() => window.mountComposer());
     const input = page.locator('#composer-test .wh-input');
+    await input.fill('abc中文'); await input.press('End'); await input.press('Backspace');
+    assert.equal(await draftValue(input), 'abc中');
+    await input.press('Home'); await input.press('Delete');
+    assert.equal(await draftValue(input), 'bc中');
+    results.push(name + ': Backspace and Delete edit plain text inside shadow root');
     const insertEmoji = async () => { await page.getByRole('button', { name: '选择表情', exact: true }).click(); await page.getByRole('button', { name: '[tv_doge]', exact: true }).click(); };
+    await input.fill('ab');
+    await input.evaluate(el => {
+      const root = el.getRootNode(), original = root.getSelection?.bind(root) || document.getSelection.bind(document);
+      Object.defineProperty(root, 'getSelection', { configurable: true, value: () => {
+        const selected = original();
+        return new Proxy(selected, { get(target, key) {
+          if (key === 'getRangeAt') return () => { const r = document.createRange(); r.setStartBefore(root.host); r.collapse(true); return r; };
+          if (key === 'getComposedRanges') return () => [new StaticRange({ startContainer: el.firstChild, startOffset: 1, endContainer: el.firstChild, endOffset: 1 })];
+          const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value;
+        } });
+      } });
+    });
+    await selectDraftText(input, 1, 1); await insertEmoji();
+    await input.evaluate(el => { delete el.getRootNode().getSelection; });
+    assert.equal(await draftValue(input), 'a[tv_doge]b');
+    results.push(name + ': composed selection survives host-retargeted getRangeAt');
     await input.fill('abc'); await selectDraftText(input, 1, 2); await insertEmoji();
     assert.equal(await draftValue(input), 'a[tv_doge]c'); assert.equal(await input.locator('img').count(), 1);
     await input.press('Control+z'); assert.equal(await draftValue(input), 'abc');

@@ -92,6 +92,8 @@ export interface Settings {
   /** 顶栏入口（v0.47.1，评论区：想隐藏分区、大会员这些、调顺序）：隐藏的入口名；B 站入口的顺序 */
   headHide: string[];
   headOrder: string[];
+  headLabels: boolean;
+  feedLayout: 'classic' | 'sidebar';
   /** 内容缩放（v0.47.1，评论区：字有点小）：首页和接管页正文区整体放大，100 / 110 / 120 */
   zoom: 100 | 110 | 120;
   /** Ctrl+K 打开命令面板（v0.47.2，评论区：和浏览器 / 其他扩展的 Ctrl+K 冲突时可以关掉，/ 键仍可用） */
@@ -186,6 +188,8 @@ export const DEFAULTS: Settings = {
   monoNum: true,
   headHide: [],
   headOrder: [],
+  headLabels: false,
+  feedLayout: 'classic',
   zoom: 100,
   cmdK: true,
   cdn: '',
@@ -253,6 +257,8 @@ function merge(raw: Partial<Settings> | undefined): Settings {
     monoNum: r.monoNum !== false,
     headHide: strList(r.headHide),
     headOrder: strList(r.headOrder),
+    headLabels: r.headLabels === true,
+    feedLayout: r.feedLayout === 'sidebar' ? 'sidebar' : 'classic',
     zoom: r.zoom === 110 || r.zoom === 120 ? r.zoom : 100,
     tabRefresh: r.tabRefresh === true,
     batchNav: r.batchNav === true,
@@ -330,6 +336,8 @@ export function sanitizeSettings(raw: unknown): Settings | null {
   if (typeof r.bodyFont === 'string') out.bodyFont = cleanFont(r.bodyFont);
   if (Array.isArray(r.headHide)) out.headHide = strList(r.headHide);
   if (Array.isArray(r.headOrder)) out.headOrder = strList(r.headOrder);
+  if (typeof r.headLabels === 'boolean') out.headLabels = r.headLabels;
+  if (r.feedLayout === 'classic' || r.feedLayout === 'sidebar') out.feedLayout = r.feedLayout;
   if (typeof r.cmdK === 'boolean') out.cmdK = r.cmdK;
   if (typeof r.cdn === 'string') out.cdn = cleanHost(r.cdn);
   if (r.zoom === 100 || r.zoom === 110 || r.zoom === 120) out.zoom = r.zoom;
