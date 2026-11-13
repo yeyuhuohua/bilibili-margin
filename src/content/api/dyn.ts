@@ -192,6 +192,7 @@ export async function dynCommentTarget(d: Dyn): Promise<{ type: number; oid: str
 
 export interface Reply {
   rpid: string; name: string; face: string; mid: number; text: string; emotes?: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
+  pics: string[];
   location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string }; top?: boolean;
   medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
 }
@@ -212,6 +213,8 @@ export function toReply(r: any): Reply {
   const out: Reply = {
     rpid: String(r.rpid_str ?? r.rpid), name: m.uname ?? '', face: https(m.avatar), mid: Number(r.mid ?? m.mid) || 0,
     text: r.content?.message ?? '',
+    pics: (Array.isArray(r.content?.pictures) ? r.content.pictures : [])
+      .map((p: any) => https(p?.img_src)).filter((url: string) => /^https:\/\//.test(url)),
     emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
     richText: String(r.content?.message ?? '').split(/(\[[^\]\r\n]+\])/g).filter(Boolean).map((text) => {
       const emoji = https(r.content?.emote?.[text]?.url);

@@ -218,6 +218,17 @@ function kindLabel(d: Dyn): string {
 }
 
 function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement {
+  const pictures = r.pics.length ? h('div', { class: `dy-r-pics n${Math.min(r.pics.length, 3)}` },
+    ...r.pics.map((src, i) => {
+      const link = h('a', { href: src, 'aria-label': `查看评论图片 ${i + 1}`, ...ext },
+        h('img', { src, alt: `评论图片 ${i + 1}`, loading: 'lazy', decoding: 'async' }));
+      link.addEventListener('click', (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        openLightbox(r.pics, i, link.getRootNode());
+      });
+      return link;
+    })) : null;
   return h('div', { class: 'dy-r' },
     h('a', { class: `dy-r-face${r.pendant ? ' has-pendant' : ''}`, href: `https://space.bilibili.com/${r.mid}`, ...ext },
       h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
@@ -227,6 +238,7 @@ function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement
       ownerMid > 0 && r.mid === ownerMid ? h('span', { class: 'dy-r-tag dy-r-up', 'aria-label': '动态作者' }, 'UP') : null,
       r.top ? h('span', { class: 'dy-r-tag dy-r-top' }, '置顶') : null,
       h('p', {}, ...(r.richText ? richText(r.text, r.richText) : replyText(r.text, r.emotes))),
+      pictures,
       h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.location, r.like ? `赞 ${fmtCount(r.like)}` : ''].filter(Boolean).join(' · '),
         onReply ? h('button', { type: 'button', class: 'dy-r-reply', 'aria-label': `回复 ${r.name}`, onclick: onReply }, '回复') : null)));
 }

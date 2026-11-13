@@ -16,7 +16,9 @@ const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir()
 const rootId = '900001234567890123';
 const reply = (i, root = false) => ({ rpid: Number(rootId) + i, rpid_str: root ? rootId : `9100012345678901${String(i).padStart(2, '0')}`,
   member: { mid: i + 1, uname: root ? '根评论作者' : `回复作者 ${i}`, avatar: `https://i0.hdslb.com/face-${i}.jpg` }, rcount: root ? 12 : 0,
-  content: { message: root ? '可以展开的评论' : `楼中楼 ${i}[开心]`, emote: { '[开心]': { url: 'https://i0.hdslb.com/happy.gif' } } } });
+  content: { message: root ? '可以展开的评论' : `楼中楼 ${i}[开心]`, emote: { '[开心]': { url: 'https://i0.hdslb.com/happy.gif' } },
+    pictures: root ? [{ img_src: '//i0.hdslb.com/comment-main.jpg' }]
+      : i === 1 ? [{ img_src: 'https://i0.hdslb.com/comment-child.jpg' }, { img_src: 'https://i0.hdslb.com/comment-child.gif' }] : [] } });
 let fail = false, delay = 0;
 try {
   await installMocks(context, async url => {
@@ -55,6 +57,38 @@ try {
     assert.equal(await card.locator('.dy-sublist .dy-emoji').count(), 10);
     assert.equal(await card.locator('.dy-sublist .dy-r-name').first().getAttribute('href'), 'https://space.bilibili.com/2');
     assert.equal(context.pages().length, tabs);
+    const rootPictures = card.locator('.dy-rlist > .dy-r > .dy-r-b > .dy-r-pics');
+    const childPictures = card.locator('.dy-sublist > .dy-r').first().locator('.dy-r-pics');
+    assert.equal(await rootPictures.locator('img').count(), 1);
+    assert.equal(await childPictures.locator('img').count(), 2);
+    assert.equal(await card.locator('.dy-sublist > .dy-r').nth(1).locator('.dy-r-pics').count(), 0);
+    await rootPictures.locator('img').scrollIntoViewIfNeeded();
+    assert(await rootPictures.locator('img').evaluate(async img => { await img.decode(); return img.naturalWidth > 0; }));
+    await rootPictures.getByRole('link').click();
+    const viewer = page.getByRole('dialog', { name: '查看图片' });
+    await viewer.waitFor();
+    assert.match(await viewer.locator('.lb-img').getAttribute('src'), /comment-main\.jpg/);
+    await page.keyboard.press('Escape'); await viewer.waitFor({ state: 'hidden' });
+    await childPictures.getByRole('link').nth(1).click(); await viewer.waitFor();
+    assert.equal(await viewer.locator('.lb-count').textContent(), '2 / 2');
+    assert.equal(await viewer.locator('.lb-img').getAttribute('src'), 'https://i0.hdslb.com/comment-child.gif');
+    await viewer.getByRole('button', { name: '上一张', exact: true }).click();
+    assert.equal(await viewer.locator('.lb-count').textContent(), '1 / 2');
+    await page.keyboard.press('Escape'); await viewer.waitFor({ state: 'hidden' });
+    assert.equal(context.pages().length, tabs);
+    for (const width of [800, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await childPictures.scrollIntoViewIfNeeded();
+      await card.screenshot({ path: join(out, `${entry}-${theme}-images-${width}.png`) });
+      const bounds = await childPictures.evaluate(el => {
+        const box = el.getBoundingClientRect(), parent = el.parentElement.getBoundingClientRect();
+        const images = [...el.querySelectorAll('a')].map(a => a.getBoundingClientRect().toJSON());
+        return { width: box.width, parent: parent.toJSON(), images,
+          within: box.width > 0 && images.every(image => image.left >= parent.left - 1 && image.right <= parent.right + 1) };
+      });
+      assert(bounds.within, JSON.stringify(bounds));
+    }
+    passed(`${entry} ${theme} main and nested pictures render, stay within narrow columns and open a GIF-preserving gallery`);
     const collapse = card.getByRole('button', { name: '收起回复', exact: true });
     await collapse.click(); assert.equal(await card.locator('.dy-sublist').isVisible(), false);
     await toggle.click(); assert.equal(await card.locator('.dy-sublist').isVisible(), true);

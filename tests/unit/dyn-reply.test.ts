@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { toReply } from '../../src/content/api/dyn';
 
+describe('动态评论图片', () => {
+  it('保留图片顺序、完整地址和 GIF，并统一为 HTTPS', () => {
+    const reply = toReply({ content: { message: '带图评论', pictures: [
+      { img_src: '//i0.hdslb.com/comment.jpg' },
+      { img_src: 'http://i0.hdslb.com/comment.gif' },
+      { img_src: 'https://i0.hdslb.com/comment.png?original=1' },
+    ] } });
+    expect(reply.pics).toEqual([
+      'https://i0.hdslb.com/comment.jpg', 'https://i0.hdslb.com/comment.gif',
+      'https://i0.hdslb.com/comment.png?original=1',
+    ]);
+    expect(reply.text).toBe('带图评论');
+  });
+
+  it('纯文字评论、异常图片列表和无效图片地址不生成图片', () => {
+    expect(toReply({ content: { message: '纯文字' } }).pics).toEqual([]);
+    expect(toReply({ content: { pictures: {} } }).pics).toEqual([]);
+    expect(toReply({ content: { pictures: [null, {}, { img_src: '' }, { img_src: 'javascript:alert(1)' }] } }).pics).toEqual([]);
+  });
+});
+
 describe('动态评论用户资料', () => {
   it('读取等级、动态头像框、粉丝勋章和铭牌', () => {
     const reply = toReply({

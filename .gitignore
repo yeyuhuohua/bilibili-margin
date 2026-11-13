@@ -13,3 +13,4 @@ dist-firefox
 .security-tools/
 .browsers/
 artifacts/
+.debug/
