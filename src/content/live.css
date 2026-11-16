@@ -1,7 +1,8 @@
 /* 映间 MARGIN · 直播间（v0.47.2，评论区：直播页还是原版，有割裂感）
    只换外观：顶栏换成映间顶栏，房间皮肤背景换成画布色，播放器和弹幕栏变圆角卡片。播放器、弹幕、礼物、发言的行为都不动。
    活动页（整页模板 + iframe 里的房间）不处理。 */
-html.margin-live .link-navbar-ctnr, html.margin-live #link-navbar-vm { display: none !important; }
+html.margin-live .link-navbar-ctnr, html.margin-live #link-navbar-vm,
+html.margin-live #prehold-nav-vm, html.margin-live .prehold-nav { display: none !important; }
 html.margin-live #sidebar-vm .side-bar-cntr { display: none !important; }
 html.margin-live, html.margin-live body, html.margin-live .live-room-app, html.margin-live .app-content {
   background-color: var(--m-canvas) !important; background-image: none !important;

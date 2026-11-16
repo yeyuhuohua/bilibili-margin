@@ -123,7 +123,7 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
     // 3 天：低温→高温点条，共用一个刻度（原 Weather.Week）
     const days = w.days.slice(0, 3).map((day, index) => {
       if (!w.stale) return day;
-      const date = new Date(w.at + w.offset * 1000 + index * 86400000);
+      const date = new Date(day.date ? day.date + 'T00:00:00Z' : w.at + w.offset * 1000 + index * 86400000);
       return { ...day, name: `${date.getUTCMonth() + 1}/${date.getUTCDate()}` };
     });
     const lo = Math.floor(Math.min(...days.map((d) => d.low), w.temp));
@@ -150,10 +150,11 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
       }));
     const side = h('div', { class: 'wx-side' },
       h('header', { class: 'wx-head' },
-        h('div', { class: 'wx-place' }, place, h('small', {}, `体感 ${deg(w.feels)} · 降水 ${w.rainPct}% · ${Math.round(w.wind)} km/h`)),
+        h('div', { class: 'wx-place' }, place, h('small', {}, [w.feels === null ? '' : `体感 ${deg(w.feels)}`, w.rainPct === null ? '' : `降水 ${w.rainPct}%`, w.wind === null ? '' : `${Math.round(w.wind)} km/h`].filter(Boolean).join(' · '))),
         h('div', { class: 'wx-live' }, h('i', { class: 'wx-led' }),
-          h('span', { title: `数据采集时间：${new Date(w.at).toLocaleString()}` }, w.cached ? `${w.stale ? '待更新 · ' : ''}本地缓存 · ${new Date(w.at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : refreshFailed ? `待更新 · ${new Date(w.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Live'), clockEl)),
-      hours, week);
+          w.source === 'nmc' ? h('a', { class: 'wx-source', href: 'https://www.nmc.cn/', target: '_blank', rel: 'noopener', title: `中央气象台实况发布于 ${new Date(w.sourceAt!).toLocaleString()}` }, '中央气象台') : null,
+          h('span', { title: `数据采集时间：${new Date(w.at).toLocaleString()}` }, w.cached ? `${w.stale ? '待更新 · ' : ''}本地缓存 · ${new Date(w.at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : refreshFailed ? `待更新 · ${new Date(w.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : w.source === 'nmc' ? `${new Date(w.sourceAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 发布` : 'Live'), clockEl)),
+      w.hours.length ? hours : null, week);
     el.replaceChildren(sky, side);
     paint();
     run();
@@ -181,8 +182,8 @@ export function createWeather(onPrivacy?: () => void): HTMLElement {
         return;
       }
       console.warn('[margin] weather', err);
-      if (quiet && wx && wx.loc.lat === savedLoc()?.lat && wx.loc.lon === savedLoc()?.lon) {
-        refreshFailed = true; render(); return;
+      if (wx && wx.loc.lat === savedLoc()?.lat && wx.loc.lon === savedLoc()?.lon) {
+        wx = { ...wx, cached: true, stale: true }; refreshFailed = true; render(); return;
       }
       wx = null; run();
       closeCity?.();

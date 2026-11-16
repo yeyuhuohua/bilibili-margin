@@ -61,20 +61,110 @@ export async function dislike(v: Video, reason: 1 | 4, cancel = false): Promise<
   });
 }
 
-export async function recommended(round: number): Promise<Video[]> {
-  const data = await getWbi<{ item: any[] }>('/x/web-interface/wbi/index/top/feed/rcmd', {
-    web_location: 1430650,
-    feed_version: 'V8',
-    homepage_ver: 1,
-    fresh_type: 4,
-    y_num: 4,
-    last_y_num: 5,
-    ps: 12,
-    fresh_idx: round,
-    fresh_idx_1h: round,
-    brush: round,
-  });
-  return (data.item || []).filter((v) => v.goto === 'av' && v.bvid).map(toVideo);
+export type RecommendScene = 'scroll' | 'refresh';
+type FeedRecord = { report: string; clicked: string; shown: boolean };
+
+/** Page-local request history, following the homepage feed protocol. */
+export class RecommendationFeed {
+  private index = -1;
+  private initialized = false;
+  private hourlyIndex = -1;
+  private hourStarted = Date.now();
+  private row = -2;
+  private scrollBrush = -1;
+  private refreshBrush = -1;
+  private groups: FeedRecord[][] = [];
+  private records = new WeakMap<Video, FeedRecord>();
+  private clicks: string[] = [];
+  private queue: Promise<void> = Promise.resolve();
+
+  load(scene: RecommendScene, columns: number, signal: AbortSignal): Promise<Video[]> {
+    const request = this.queue.then(() => this.request(scene, columns, signal));
+    this.queue = request.then(() => {}, () => {});
+    return request;
+  }
+
+  expose(video: Video): void {
+    const record = this.records.get(video);
+    if (record) record.shown = true;
+  }
+
+  click(video: Video): void {
+    const record = this.records.get(video);
+    if (!record) return;
+    record.shown = true;
+    this.clicks.push(record.clicked);
+    if (this.clicks.length > 50) this.clicks.shift();
+  }
+
+  private async request(scene: RecommendScene, columns: number, signal: AbortSignal): Promise<Video[]> {
+    signal.throwIfAborted();
+    const initial = !this.initialized;
+    const freshType = initial ? 0 : scene === 'refresh' ? 5 : 4;
+    if (Date.now() - this.hourStarted > 3600000) {
+      this.hourlyIndex = 0;
+      this.hourStarted = Date.now();
+    }
+    this.index++;
+    this.hourlyIndex++;
+    if (initial || freshType === 5) this.row = -2;
+    this.row += 3;
+    const brush = freshType === 5 ? ++this.refreshBrush : ++this.scrollBrush;
+    const size = freshType === 4 ? 12 : 10;
+    const cookie = (name: string) => document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith(name + '='))?.slice(name.length + 1) || '';
+    const ua = navigator.userAgent;
+    const device = /windows|win32|win64|wow32|wow64/i.test(ua) ? 'win'
+      : /macintosh|macintel|macppc|mac68k|macos/i.test(ua) ? 'mac'
+      : /linux/i.test(ua) && !/android/i.test(ua) || /x11/i.test(ua) ? 'linux' : 'unknown';
+    const lastShowlist = this.groups.map(group => group.map(record => record.shown
+      ? record.report.replace('_n_', '_') : record.report).join(',')).join(';');
+    const data = await getWbi<{ item: any[] }>('/x/web-interface/wbi/index/top/feed/rcmd', {
+      web_location: 1430650,
+      feed_version: 'V8',
+      homepage_ver: 1,
+      fresh_type: freshType,
+      y_num: columns,
+      last_y_num: Number(cookie('home_feed_column')) || 0,
+      screen: cookie('browser_resolution'),
+      device,
+      ps: size,
+      domestic_zh_ps: size,
+      domestic_other_ps: size,
+      overseas_zh_ps: size,
+      overseas_other_ps: 15,
+      fresh_idx: this.index,
+      fresh_idx_1h: this.hourlyIndex,
+      fetch_row: this.row,
+      brush,
+      last_showlist: lastShowlist,
+      last_clicklist: this.clicks.join(','),
+    }, signal);
+    signal.throwIfAborted();
+    this.initialized = true;
+    const group: FeedRecord[] = [];
+    const list: Video[] = [];
+    for (const item of data.item || []) {
+      const id = item.id || item.aid || item.business_info?.src_id;
+      const adAid = item.goto === 'ad' ? item.business_info?.archive?.aid : undefined;
+      const record = id && item.goto ? {
+        report: `${item.goto}_n_${id}${adAid ? '_' + adAid : ''}`,
+        clicked: `${item.goto}_${id}`,
+        shown: false,
+      } : undefined;
+      if (record) group.push(record);
+      if (item.goto !== 'av' || !item.bvid) continue;
+      const video = toVideo(item);
+      if (record) this.records.set(video, record);
+      list.push(video);
+    }
+    if (group.length) this.groups.push(group);
+    // Keep whole request groups, including the current batch and its optional prefetch.
+    let count = this.groups.reduce((total, items) => total + items.length, 0);
+    while (this.groups.length > 1 && count - this.groups[0].length >= 50) {
+      count -= this.groups.shift()!.length;
+    }
+    return list;
+  }
 }
 
 export async function popular(page: number): Promise<{ list: Video[]; done: boolean }> {

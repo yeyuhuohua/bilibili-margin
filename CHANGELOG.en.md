@@ -6,6 +6,47 @@
 
 - Align the following-list scroll arrows with avatar centers on the dynamics page, with layout regression checks at multiple viewport widths.
 
+## v0.6.63 · 2026-11-15
+
+- Integrate PR #185 with header dynamic details after a half-second hover over a row. Images open their dynamic page, video covers open playback, and details support reading, Escape and retry.
+- Cancel detail requests on close or selection changes and ignore stale responses. Cache up to 20 details for 60 seconds, invalidate them with the list, and preserve article and other content links.
+- Fix #188 by distinguishing initial, scroll and whole-list refresh recommendation requests. Include request counters, rows, columns and device metadata, and serialize requests so each can report the preceding batch.
+- Record viewport exposure and video-link clicks. Filtered, unrendered and prefetched cards stay unexposed. Keep recent request groups and the last 50 clicks in page memory.
+- Add unit coverage for recommendation parameters, cancellation and recovery, plus installed-extension regressions for recommendation feedback and header details on home and playback pages.
+
+## v0.6.58 · 2026-11-15
+
+- Add a listening shortcut to the video-page header with video/danmaku and cover/lyrics views, using the current player, playback position, volume and speed.
+- Automatically enable live audio visualization during playback, with rounded spectrum bars and a smooth waveform view. Reuse the existing background layer and synchronize the home background, intensity and theme settings.
+- Support loaded player captions, local LRC/text imports, synchronized lyrics with seeking, and an adjustable original-video lyric region. Cover loading includes fallback sources and manual retry.
+- Load the listening module on first use. Suspend continuous spectrum drawing while paused, hidden or using reduced motion, and restore the native layout and release audio-analysis resources on exit.
+- Remove the native dynamic-detail dark-theme backdrop that caused an abrupt brightness boundary between the header and MARGIN wallpaper.
+- Hide the native live-room navigation placeholder that could create a white strip and cover MARGIN controls, including placeholders mounted asynchronously.
+- Add header regression coverage using the actual wallpaper layer across the dynamic feed, dynamic details, live rooms and home page, in both themes and scroll positions.
+
+## v0.6.57 · 2026-11-14
+
+- Prefer National Meteorological Center observations and daily forecasts for supported Chinese cities, avoiding a timeout-only experience when the original forecast host is unreachable. Retain the original provider for overseas or unavailable domestic data.
+- Match stations using bundled coordinates, province and city names. Add no browser permissions, geolocation permissions, settings or runtime dependencies.
+- Show the source and observation publication time. Hide unavailable hourly forecasts, precipitation probability and missing observation fields; never display the missing-value sentinel 9999 as weather.
+- Preserve historical cache timestamps and actual forecast dates. Keep the external-services consent gate.
+- Cover direct domestic retrieval, fallback, offline cache, homonymous cities, missing or stale data and privacy boundaries. Public builds exclude the local listening experiment.
+
+## v0.6.56 · 2026-11-14
+
+- Add native favorite move/copy actions using existing account permissions and CSRF. Update the source only after confirmation, retain failed drafts and prevent duplicate submissions.
+- Keep native music details and the scrolling mini player above the sidebar. Apply the configured radius to music details and restore normal column stacking when closed.
+- Share cached fallback results across concurrent weather refreshes. Retain cached weather and its original timestamp after same-city location updates or failed manual reloads.
+- Verify existing card metadata toggles and four-column home layouts. Add real Firefox temporary-addon keyboard coverage; issue #181 remains open because it was not reproduced.
+- Public builds exclude the local listening experiment. No new runtime dependencies or permissions.
+
+## v0.6.55 · 2026-11-13
+
+- Integrate PR #178: retain readable upload-button accent colors in flat and reduced-transparency modes; disable backdrop filtering in the latter.
+- Match the All Updates windmill to the header icon, with a distinct clip-path ID and retained layout/selection behavior.
+- Cover both themes, three accents, reduced transparency and both feed layouts. Background image URLs shipped in 0.6.52.
+- Public builds do not include the local listening experiment.
+
 ## v0.6.52 · 2026-11-12
 
 - Support HTTPS image URLs for custom backgrounds. Preview before applying, persist the URL and synchronize open MARGIN pages.

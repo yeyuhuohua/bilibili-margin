@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/** 天气：Open-Meteo（免密钥、CORS 开放）+ ipwho.is 按 IP 粗定位；城市可手动改（Open-Meteo 地理编码）。 */
+/** 天气：中国城市优先中央气象台，其他情况沿用 Open-Meteo；ipwho.is 提供 IP 粗定位，城市可手动改。 */
 import { optionalFetch, PrivacyBlocked } from '../../shared/privacy';
 import { loadSettings } from '../../shared/settings';
 import { AUTO_LOCATION_TTL, WEATHER_LOCATION_KEY, validLocation, type Loc, type WeatherLocation, type WeatherLocationMessage } from '../../shared/weather-location';
@@ -8,12 +8,14 @@ export type { Loc } from '../../shared/weather-location';
 
 export type WeatherKind = 'clear' | 'partly' | 'cloud' | 'rain' | 'drizzle' | 'storm' | 'snow' | 'sleet' | 'mist' | 'windy' | 'heat';
 export interface WxHour { label: string; hour: number; kind: WeatherKind; temp: number }
-export interface WxDay { name: string; kind: WeatherKind; low: number; high: number }
+export interface WxDay { name: string; kind: WeatherKind; low: number; high: number; date?: string }
 export interface Wx {
-  loc: Loc; temp: number; feels: number; wind: number; rainPct: number; kind: WeatherKind; condition: string;
+  loc: Loc; temp: number; feels: number | null; wind: number | null; rainPct: number | null; kind: WeatherKind; condition: string;
   offset: number; hours: WxHour[]; days: WxDay[]; at: number;
   cached?: boolean;
   stale?: boolean;
+  source?: 'nmc';
+  sourceAt?: number;
 }
 
 const LOC_KEY = 'margin:weather-loc';
@@ -31,7 +33,7 @@ function acceptLocation(next: WeatherLocation): void {
   location = next;
   if (previous && previous.revision !== next.revision) {
     locRevision++;
-    localStorage.removeItem(CACHE_KEY);
+    if (!previous.loc || !next.loc || previous.loc.lat !== next.loc.lat || previous.loc.lon !== next.loc.lon) localStorage.removeItem(CACHE_KEY);
     dispatchEvent(new Event('margin:wx-loc'));
   }
 }
@@ -155,10 +157,11 @@ function readCache(loc: Loc | null): Wx | null {
   try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') as Wx | null;
     if (!c || !validLocation(c.loc) || c.loc.lat !== loc.lat || c.loc.lon !== loc.lon
-      || ![c.temp, c.feels, c.wind, c.rainPct, c.offset, c.at].every(Number.isFinite)
+      || ![c.temp, c.offset, c.at].every(Number.isFinite) || ![c.feels, c.wind, c.rainPct].every(x => x === null || Number.isFinite(x))
+      || (c.source !== undefined && c.source !== 'nmc') || (c.source === 'nmc' && !Number.isFinite(c.sourceAt))
       || c.at <= 0 || c.at > Date.now() || typeof c.condition !== 'string' || typeof c.kind !== 'string'
       || !Array.isArray(c.hours) || !c.hours.every(x => x && Number.isFinite(x.temp) && Number.isFinite(x.hour) && typeof x.label === 'string' && typeof x.kind === 'string')
-      || !Array.isArray(c.days) || !c.days.every(x => x && Number.isFinite(x.low) && Number.isFinite(x.high) && typeof x.name === 'string' && typeof x.kind === 'string')) return null;
+      || !Array.isArray(c.days) || !c.days.every(x => x && Number.isFinite(x.low) && Number.isFinite(x.high) && typeof x.name === 'string' && typeof x.kind === 'string' && (x.date === undefined || /^\d{4}-\d{2}-\d{2}$/.test(x.date)))) return null;
     return { ...c, loc, cached: true, stale: Date.now() - c.at >= TTL };
   } catch { return null; }
 }
@@ -199,6 +202,15 @@ export async function weather(): Promise<Wx> {
   const revision = locRevision, stateRevision = location!.revision;
   if (fetchingWeather?.revision === stateRevision) return fetchingWeather.promise;
   const getForecast = async (): Promise<Wx> => {
+    let domestic: Wx | null = null;
+    try { domestic = await (await import('./weather-cn')).chinaWeather(loc); }
+    catch (error) { if (error instanceof PrivacyBlocked) throw error; }
+    if (domestic) {
+      await loadLoc();
+      if (revision !== locRevision || location!.revision !== stateRevision) throw new DOMException('天气位置已更改', 'AbortError');
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(domestic)); } catch { /* Fresh weather is still usable. */ }
+      return domestic;
+    }
     const u = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto&forecast_days=7`
       + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m'
       + '&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min';
@@ -235,10 +247,8 @@ export async function weather(): Promise<Wx> {
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(wx)); } catch { /* Fresh weather remains usable when storage is full. */ }
     return wx;
   };
-  const pending = { revision: stateRevision, promise: getForecast() };
-  fetchingWeather = pending;
-  try { return await pending.promise; }
-  catch (error) {
+  // All consumers must share the recovered result, not the raw network promise.
+  const pending = { revision: stateRevision, promise: getForecast().catch(error => {
     if (revision !== locRevision || location!.revision !== stateRevision || error instanceof PrivacyBlocked) throw error;
     const fallback = readCache(loc) ?? (cached?.loc.lat === loc.lat && cached.loc.lon === loc.lon ? { ...cached, loc, cached: true, stale: true } : null);
     if (fallback) {
@@ -246,5 +256,8 @@ export async function weather(): Promise<Wx> {
       return fallback;
     }
     throw error;
-  } finally { if (fetchingWeather === pending) fetchingWeather = null; }
+  }) };
+  fetchingWeather = pending;
+  try { return await pending.promise; }
+  finally { if (fetchingWeather === pending) fetchingWeather = null; }
 }

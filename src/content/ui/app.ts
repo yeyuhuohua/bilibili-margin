@@ -1,4 +1,4 @@
-import { dislike, popular, recommended, type Video } from '../api/feed';
+import { dislike, popular, RecommendationFeed, type RecommendScene, type Video } from '../api/feed';
 import { openBili } from '../navigation';
 import { appDislike, appRecommended } from '../api/appfeed';
 import { noteNegative, rerank, resetRank } from '../rank';
@@ -20,6 +20,7 @@ import { createFootprintCard } from './footprint';
 import { createWeather } from './weather';
 import type { SunMoon } from './sun-moon';
 import { attachPreview } from './preview';
+import { attachRecommendationFeedback } from './recommendation-feedback';
 import { createSettingsPanel, type SettingsPanel } from './settings-panel';
 import type { Sheet } from './sheet';
 import { attachGlass, filtersIn } from './liquid-glass';
@@ -35,7 +36,7 @@ import { mountUpdateNotice } from './update-notice';
 import { attachNavigationGlass } from './navigation-glass';
 
 type Tab = 'rcmd' | 'popular' | 'classic';
-type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; done: boolean; round: number; batchStart: number };
+type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; done: boolean; batchStart: number };
 
 export class MarginApp {
   readonly host: HTMLElement;
@@ -54,7 +55,9 @@ export class MarginApp {
   private dash!: HTMLElement;
   private wx: HTMLElement | null = null;
   private tab: Tab = 'rcmd';
-  private round = 1;
+  private recommendations = new RecommendationFeed();
+  private recommendationRequest = new AbortController();
+  private recommendationScene: RecommendScene = 'scroll';
   /** App 推荐流的翻页游标（上一批最后一张卡的 idx），换一批时归零 */
   private appIdx = 0;
   private appHinted = false;
@@ -281,6 +284,7 @@ export class MarginApp {
     this.status = h('div', { class: 'status' });
     this.sentinel = h('div', { class: 'sentinel' });
     attachPreview(this.grid, () => this.settings.hoverPreview);
+    attachRecommendationFeedback(this.grid, this.app, this.recommendations, () => this.tab === 'rcmd' && !this.settings.appFeed);
 
     const footer = h('footer', { class: 'foot' }, h('span', {}, '映间 MARGIN · 非 B 站官方'));
     const main = h('main', { class: 'main' });
@@ -390,18 +394,21 @@ export class MarginApp {
     this.batchBusy = false;
     this.prefetching = null;
     this.batchRender++;
+    this.recommendationRequest.abort();
+    this.recommendationRequest = new AbortController();
     this.tab = id;
     tabs.querySelectorAll<HTMLElement>('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === id)));
     this.syncBatchBar();
     const m = this.tabMem.get(id);
     if (!m) { this.reload(false, Math.min(this.app.scrollTop, this.videoTop())); return; }
+    this.recommendationScene = 'scroll';
     this.tabMem.delete(id);
     const s = m.s!;
     this.gen++;
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.items = s.items.slice();
     this.seen = new Set(s.items.map((v) => v.bvid));
-    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done; this.round = s.round;
+    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done;
     this.batchStart = s.batchStart;
     this.loading = false;
     this.refreshBusy(false);
@@ -417,18 +424,21 @@ export class MarginApp {
   private snap: Snap | null = null;
 
   private snapshot(): typeof this.snap {
-    return { tab: this.tab, items: this.items.slice(), page: this.page, appIdx: this.appIdx, done: this.done, round: this.round, batchStart: this.batchStart };
+    return { tab: this.tab, items: this.items.slice(), page: this.page, appIdx: this.appIdx, done: this.done, batchStart: this.batchStart };
   }
 
   private restore(): void {
     const s = this.snap;
     if (!s || s.tab !== this.tab || this.batchOn()) return;
     this.snap = this.snapshot();
+    this.recommendationRequest.abort();
+    this.recommendationRequest = new AbortController();
+    this.recommendationScene = 'scroll';
     this.gen++;
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.items = s.items.slice();
     this.seen = new Set(s.items.map((v) => v.bvid));
-    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done; this.round = s.round;
+    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done;
     this.loading = false;
     this.refreshBusy(false);
     this.status.replaceChildren();
@@ -439,7 +449,10 @@ export class MarginApp {
   private reload(keep = false, top = 0): void {
     if (this.batchOn()) { if (keep) void this.appendBatch(); else this.resetBatch(); return; }
     if (keep && this.refreshBtn?.getAttribute('aria-busy') === 'true') return;
-    const prev = { snap: this.snap, page: this.page, round: this.round, appIdx: this.appIdx, done: this.done };
+    this.recommendationRequest.abort();
+    this.recommendationRequest = new AbortController();
+    this.recommendationScene = 'refresh';
+    const prev = { snap: this.snap, page: this.page, appIdx: this.appIdx, done: this.done };
     const gen = ++this.gen;
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.snap = keep && this.items.length ? this.snapshot() : null;
@@ -449,7 +462,6 @@ export class MarginApp {
     this.done = false;
     this.loading = false;
     this.page = 1;
-    this.round++;
     this.appIdx = 0;
     resetRank();
     resetClassics();
@@ -471,7 +483,7 @@ export class MarginApp {
   }
 
   /** 换一批：旧列表撑到新一批就绪，整块替换后回到视频区顶部；本来就在页面顶部时原地刷新，不往下跳 */
-  private async swapFeed(gen: number, prev: { snap: Snap | null; page: number; round: number; appIdx: number; done: boolean }): Promise<void> {
+  private async swapFeed(gen: number, prev: { snap: Snap | null; page: number; appIdx: number; done: boolean }): Promise<void> {
     const fresh = { items: [] as Video[], seen: new Set<string>() };
     const frag = document.createDocumentFragment();
     const target = this.videoTop();
@@ -486,7 +498,7 @@ export class MarginApp {
     try {
       for (let batches = 0; batches < 4; batches++) {
         if (batches && (this.done || got >= need)) break;
-        const list = await this.fetchBatchRetry(fresh, gen);
+        const list = await this.fetchBatchRetry(fresh, gen, batches === 0 ? 'refresh' : 'scroll');
         if (!list || gen !== this.gen) return;
         await this.filter.prepare(list.map((v) => v.bvid));
         if (gen !== this.gen) return;
@@ -515,7 +527,7 @@ export class MarginApp {
       // 失败时旧列表原样保留，游标和「上一批」也退回去，不影响继续浏览
       this.snap = prev.snap;
       if (this.backBtn) this.backBtn.hidden = !this.snap;
-      this.page = prev.page; this.round = prev.round; this.appIdx = prev.appIdx; this.done = prev.done;
+      this.page = prev.page; this.appIdx = prev.appIdx; this.done = prev.done;
       toast(this.app, `换一批失败：${(err as Error).message}`);
     } finally {
       if (gen === this.gen) { this.loading = false; this.refreshBusy(false); }
@@ -697,6 +709,9 @@ export class MarginApp {
 
   /** 清空队列并从第一页重新开始（进入推荐标签、切换推荐来源、开关批次导航） */
   private resetBatch(): void {
+    this.recommendationRequest.abort();
+    this.recommendationRequest = new AbortController();
+    this.recommendationScene = 'refresh';
     this.gen++;
     this.batchRender++;
     this.batchBusy = false;
@@ -709,7 +724,7 @@ export class MarginApp {
     this.seen = new Set<string>();
     this.batchStart = 0;
     this.loading = false;
-    this.page = 1; this.round++; this.appIdx = 0; this.done = false;
+    this.page = 1; this.appIdx = 0; this.done = false;
     resetRank();
     resetClassics();
     this.grid.querySelectorAll('.card.sk').forEach((n) => n.remove());
@@ -781,7 +796,7 @@ export class MarginApp {
       const before = this.items.length;
       let added = 0;
       for (let tries = 0; tries < 2 && added === 0; tries++) {
-        const list = await this.fetchBatchRetry({ items: this.items, seen: this.seen }, gen);
+        const list = await this.fetchBatchRetry({ items: this.items, seen: this.seen }, gen, refresh && tries === 0 ? 'refresh' : 'scroll');
         if (!list || gen !== this.gen) return;
         for (const v of list) {
           if (this.seen.has(v.bvid)) continue;
@@ -852,6 +867,9 @@ export class MarginApp {
     const s = this.settings;
     if (prev.batchNav !== s.batchNav) {
       if (this.tab === 'rcmd') {
+        this.recommendationRequest.abort();
+        this.recommendationRequest = new AbortController();
+        this.recommendationScene = 'scroll';
         this.gen++; this.batchRender++;
         this.loading = false; this.batchBusy = false; this.prefetching = null;
         this.refreshBusy(false);
@@ -874,7 +892,7 @@ export class MarginApp {
   }
 
   /** 按当前分类拉一批视频，游标随之前进；ctx 是换一批时用的独立去重 / 重排上下文 */
-  private async fetchBatch(ctx?: { items: Video[]; seen: Set<string> }): Promise<Video[]> {
+  private async fetchBatch(ctx?: { items: Video[]; seen: Set<string> }, scene = this.recommendationScene): Promise<Video[]> {
     const gen = this.gen;
     let list: Video[];
     if (this.tab === 'rcmd' && this.settings.appFeed) {
@@ -887,10 +905,14 @@ export class MarginApp {
       list = [...a.list, ...b.list];
       if (!a.personal && !this.appHinted) { this.appHinted = true; toast(this.app, '正在用 App 推荐（未授权，不是个性化的）。在设置 → 实验功能里扫码授权'); }
     } else if (this.tab === 'rcmd') {
-      const batches = await Promise.all([recommended(this.round), recommended(this.round + 1)]);
+      const columns = getComputedStyle(this.grid).gridTemplateColumns.split(' ').filter(Boolean).length;
+      const signal = this.recommendationRequest.signal;
+      const first = await this.recommendations.load(scene, columns, signal);
       if (gen !== this.gen) return [];
-      this.round += 2;
-      list = batches.flat();
+      const second = await this.recommendations.load('scroll', columns, signal);
+      if (gen !== this.gen) return [];
+      this.recommendationScene = 'scroll';
+      list = [...first, ...second];
     } else if (this.tab === 'classic') {
       const me = (await account())?.mid;
       if (gen !== this.gen) return [];
@@ -914,9 +936,9 @@ export class MarginApp {
   }
 
   /** 换一批时静默重试两次，和列表加载的容错保持一致 */
-  private async fetchBatchRetry(ctx: { items: Video[]; seen: Set<string> }, gen: number): Promise<Video[] | null> {
+  private async fetchBatchRetry(ctx: { items: Video[]; seen: Set<string> }, gen: number, scene: RecommendScene = 'scroll'): Promise<Video[] | null> {
     for (let attempt = 0; ; attempt++) {
-      try { return await this.fetchBatch(ctx); } catch (err) {
+      try { return await this.fetchBatch(ctx, scene); } catch (err) {
         if (attempt >= 2) throw err;
         await new Promise((r) => window.setTimeout(r, 800 * (attempt + 1)));
         if (gen !== this.gen) return null;

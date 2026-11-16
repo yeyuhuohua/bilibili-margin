@@ -61,6 +61,8 @@
 .fav-video-remove svg { width: 13px; height: 13px; }
 .fav-video-remove:hover { color: var(--ink); }
 .fav-video-remove:disabled { opacity: .5; cursor: wait; }
+.fav-video-transfer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+.fav-video-target { min-width: 0; max-width: 100%; flex: 1; padding: 6px 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .fav-video-error { font-size: 12px; color: var(--ink); }
 .fav-play-all { margin-left: auto; }
 .group { padding: 20px 0 6px; border-bottom: 1px solid var(--line); }

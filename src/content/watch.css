@@ -415,6 +415,10 @@ html.margin-watch .bpx-player-sending-area::before { display: none !important; }
 /* v0.41.0 一张卡片（21st Post Card / shadcnui-blocks card-06）：播放器 + 互动条 + 简介 + 标签共用一块表面；
    底板 .m-wcard 由 ui/watch-card.ts 对齐。播放器贴卡片顶边，下面的内容内缩 20px */
 html.margin-watch :is(.left-container, .playlist-container--left) { position: relative; isolation: isolate; }
+/* 原生音乐详情和滚动小窗会伸到右栏；提升所属层，保留卡片底板的隔离。 */
+html.margin-watch :is(.left-container, .playlist-container--left):is(:has(#bgm-entry[style*="z-index"]), :has(.bpx-player-container[data-screen="mini"])) { z-index: 2; }
+html.margin-watch #bgm-entry #musicApp { border-radius: 20px !important; }
+html.margin-watch #bgm-entry .mainWarp { border-radius: 0 !important; }
 html.margin-watch .m-wcard {
   position: absolute; left: 0; right: 0; z-index: -1; pointer-events: none;
   background: var(--m-surface); border-radius: 20px; box-shadow: var(--ring), var(--sh-sm);

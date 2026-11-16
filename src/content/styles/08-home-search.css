@@ -606,3 +606,48 @@
 @keyframes refresh-spin { to { transform: rotate(360deg); } }
 .card:hover .coop, .card:focus-within .coop { opacity: 0; }
 .coop { transition: opacity 150ms var(--ease-out); }
+
+/* 动态按需摘要，与顶栏列表共用主题变量。 */
+.dp-detail { position: absolute; left: calc(100% + 12px); top: 0; width: 380px; max-height: min(560px, calc(100dvh - 96px)); display: flex; flex-direction: column; border-radius: 20px; background: var(--surface); box-shadow: var(--ring), var(--sh-lg); }
+.dp-detail[hidden] { display: none; }
+.dp-detail-left { left: auto; right: calc(100% + 12px); }
+.dp-detail-scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 12px 20px; font-size: 13px; line-height: 1.7; }
+.dp-detail-content { overflow-wrap: anywhere; }
+.dp-detail-content > .dy { padding: 0; margin: 12px 0 0; border: 0; }
+.dp-detail-content .dy-body { margin: 0; }
+.dp-detail-content .dy-video { grid-template-columns: 1fr; }
+.dp-detail-content .dy-vcover { width: 100%; }
+.dp-detail-content .dy-pics.n1 { max-width: 100%; }
+.dp-detail-content .dy-orig { margin-inline: 0; }
+.dp-detail-content .dy-text { font-size: 13px; }
+.dp-detail-overlay { left: 0; right: auto; width: 100%; z-index: 2; }
+.dp-detail-retry { font: inherit; color: var(--accent-text); padding: 4px 8px; border-radius: 8px; background: var(--chip); cursor: pointer; }
+.dp-detail-actions { display: flex; align-items: center; gap: 4px; }
+.dp-detail-actions .dp-detail-action { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--nav-muted, var(--muted)); background: transparent; cursor: pointer; }
+.dp-detail-actions .dp-detail-action:hover { color: var(--ink); background: var(--chip); text-decoration: none; }
+.dp-detail-action svg { width: 18px; height: 18px; }
+.dp-detail-scroll { padding-bottom: 20px; }
+:is(.dp-detail-action, .dp-detail-retry):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 800px) { .dp-detail, .dp-detail-left { left: 0; right: auto; width: 100%; z-index: 2; } .dp { max-width: calc(100vw - 24px); } }
+
+.dp-detail-content .dy-body { display: flex; flex-direction: column; gap: 14px; }
+.dp-detail-content .dy-title { margin: 0; font: 600 18px/1.5 var(--serif); }
+.dp-detail-content .dy-text { margin: 0; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dp-detail-content .dy-text.fold { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.dp-detail-content .dy-more { align-self: start; color: var(--accent-text); font-size: 12px; }
+.dp-detail-content .dy-emoji { width: 1.35em; height: 1.35em; vertical-align: -.25em; }
+.dp-detail-content .dy-video { display: grid; gap: 12px; }
+.dp-detail-content .dy-vcover { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; }
+.dp-detail-content .dy-vcover img { width: 100%; height: 100%; object-fit: cover; }
+.dp-detail-content .dur { position: absolute; bottom: 8px; right: 8px; padding: 3px 6px; border-radius: 6px; background: rgb(0 0 0 / .65); color: white; font-size: 12px; }
+.dp-detail-content .dy-vbody { display: flex; flex-direction: column; gap: 8px; }
+.dp-detail-content .dy-vtitle { font: 600 16px/1.5 var(--serif); }
+.dp-detail-content :is(.dy-vdesc, .dy-vmeta) { font-size: 12px; color: var(--muted); }
+.dp-detail-content .dy-pics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dp-detail-content .dy-pics.n1 { grid-template-columns: 1fr; }
+.dp-detail-content .dy-pics a { display: block; overflow: hidden; border-radius: 12px; }
+.dp-detail-content .dy-pics img { display: block; width: 100%; height: auto; }
+.dp-detail-content .dy-orig { padding: 12px; background: var(--chip); border-radius: 12px; }
+.dp-detail-content .dy-orig-by { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.dp-detail-content .dy-article { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 12px; }
+.dp-detail-content .dy-article img { width: 100%; border-radius: 8px; }

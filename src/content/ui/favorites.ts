@@ -1,4 +1,4 @@
-import { collectedFolders, createFolder, deleteFolder, folderPlayUrl, folderUrl, folderVideos, folders, removeFolderVideo, seasonVideos, type Folder } from '../api/fav';
+import { collectedFolders, createFolder, deleteFolder, folderPlayUrl, folderUrl, folderVideos, folders, removeFolderVideo, seasonVideos, transferFolderVideo, type Folder } from '../api/fav';
 import { videoCard, skeleton, cardData } from './card';
 import { h, icon, ICONS } from './dom';
 import { glassFolder, type GFFile, type GlassFolderApi } from './glass-folder';
@@ -320,7 +320,49 @@ export function createFavorites(onRender: (grid: HTMLElement) => void, direct: (
             } catch (e) { if (card.isConnected) error.textContent = `取消失败：${(e as Error).message}`; }
             finally { remove.disabled = false; }
           });
-          card.append(h('div', { class: 'fav-video-actions' }, remove, error));
+          const actions = h('div', { class: 'fav-video-actions' }, remove);
+          const transfer = (action: 'move' | 'copy') => {
+            if (actions.querySelector('form')) return;
+            const select = h('select', { class: 'fav-video-target', 'aria-label': '目标收藏夹' }, ...folderList.filter(f => !f.kind && f.id !== folder.id).map(f => h('option', { value: String(f.id) }, f.title))) as HTMLSelectElement;
+            const submit = h('button', { type: 'submit', class: 'btn small', disabled: !select.options.length }, action === 'move' ? '确认移动' : '确认复制') as HTMLButtonElement;
+            const form = h('form', { class: 'fav-video-transfer', onsubmit: async (e: Event) => {
+              e.preventDefault(); e.stopPropagation();
+              if (submit.disabled) return;
+              const target = folderList.find(f => f.id === Number(select.value));
+              if (!target) return;
+              const buttons = [...actions.querySelectorAll<HTMLButtonElement>('button')];
+              buttons.forEach(b => b.disabled = true); select.disabled = true; error.textContent = '';
+              try {
+                await transferFolderVideo(action, folder, target, v.aid!);
+                firstPage.delete(keyOf(target));
+                const preview = previews.get(keyOf(target));
+                if (preview) { preview.state = 'idle'; previewObserver.observe(preview.gf.el); }
+                if (action === 'move') {
+                  firstPage.delete(keyOf(folder)); folder.count = Math.max(0, folder.count - 1);
+                  const source = previews.get(keyOf(folder));
+                  if (source) { source.raw = source.raw.filter(item => item.bvid !== v.bvid); paintPreview(keyOf(folder)); }
+                  if (g === gen) { card.remove(); const count = crumb.querySelector('small'); if (count) count.textContent = `${folder.count} 个视频`; }
+                }
+                // Exact counts also handle copying an already-favorited video.
+                void folders().then(list => {
+                  if (!list) return;
+                  for (const entry of list) {
+                    const preview = previews.get(keyOf(entry));
+                    if (preview?.folder === folder || preview?.folder === target) {
+                      preview.folder.count = entry.count;
+                      const meta = preview.gf.el.querySelector('.gf-meta'); if (meta) meta.textContent = `${entry.count} 个视频`;
+                    }
+                  }
+                }).catch(() => {});
+                form.remove(); if (action === 'copy') error.textContent = `已复制到「${target.title}」`;
+              } catch (x) { if (card.isConnected) error.textContent = `${action === 'move' ? '移动' : '复制'}失败：${(x as Error).message}`; }
+              finally { buttons.forEach(b => b.disabled = false); select.disabled = false; }
+            } }, select, submit, h('button', { type: 'button', class: 'btn small', onclick: () => form.remove() }, '取消'));
+            form.addEventListener('click', e => e.stopPropagation());
+            actions.append(form); select.focus();
+          };
+          actions.append(h('button', { type: 'button', class: 'fav-video-remove', onclick: (e: Event) => { e.preventDefault(); e.stopPropagation(); transfer('move'); } }, '移动到…'), h('button', { type: 'button', class: 'fav-video-remove', onclick: (e: Event) => { e.preventDefault(); e.stopPropagation(); transfer('copy'); } }, '复制到…'), error);
+          card.append(actions);
         }
         card.toggleAttribute('data-margin-filtered', filter ? !filter.allows(targetOfVideo(v)) : false);
         grid.append(card);

@@ -73,6 +73,7 @@ Other Chromium browsers (Brave, Opera, Vivaldi, Arc and others) can follow the C
 | --- | --- |
 | Home and search | Personalized recommendations, popular videos, infinite scrolling, refresh, and filters for keywords, uploaders, view counts and duration. |
 | Native playback | Redesigned titles, uploader cards, episode lists and recommendations, while retaining the native player, danmaku, comments, quality and fullscreen controls. |
+| Listening mode | Open the headphones shortcut on video pages to switch between video/danmaku and cover/lyrics views, display a live spectrum or waveform, use captions or local lyrics, and share the home background settings. |
 | Danmaku airborne | Optional, off by default: danmaku that mention a time (such as "03:20" or "jump to 2:15") get an underline. Click to seek, with undo available. Parsed entirely on your device, with no network requests. |
 | Favorites and watch later | Glass folder cards, watch-later lists, viewing progress and video context menus. |
 | Activity | Year and month heatmaps, first opening time and daily usage, viewing-history backfill and data-source labels. |
@@ -82,6 +83,8 @@ Other Chromium browsers (Brave, Opera, Vivaldi, Arc and others) can follow the C
 | Local data | Settings and activity records stored locally, with JSON import and export. |
 
 Some account features require a Bilibili login. Availability also depends on Bilibili's APIs, permissions and regional restrictions.
+
+Listening mode loads on first use and starts audio analysis during playback. Lyrics can come from loaded player captions, imported LRC/text files, or the original video image. Select the return-to-playback control or press Esc to exit.
 
 ## FAQ
 
@@ -109,7 +112,7 @@ Community advertisement skipping is off by default. When enabled, it queries [Bi
 
 The developer does not operate an analytics or data-collection server. Settings, activity records and custom background images stay on your device; exported backups are yours to store.
 
-Weather requests use `ipwho.is` for an approximate city and Open-Meteo for city search and forecasts. Those services receive the IP, city or coordinates needed for their requests. Bilibili account details, favorites and viewing history are not sent to weather providers. Read the [privacy policy](PRIVACY.md).
+Weather requests use `ipwho.is` for an approximate city. Supported Chinese cities prefer observations and daily forecasts from the National Meteorological Center at `www.nmc.cn`; unavailable hourly forecasts and precipitation probabilities are omitted. Overseas cities or unavailable domestic data use Open-Meteo. Providers receive only the IP, city, station code or coordinates needed for those requests. Bilibili account details, favorites and viewing history are not sent to weather providers. Read the [privacy policy](PRIVACY.md).
 
 MARGIN is an independent open-source project, **not an official Bilibili product and not affiliated with Bilibili**.
 

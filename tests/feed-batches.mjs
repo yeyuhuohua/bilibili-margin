@@ -19,14 +19,14 @@ const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir()
 const NOW = Math.floor(Date.now() / 1000);
 let rcmdCalls = 0;
 let requestDelay = 0;
-/** 每次推荐请求返回 12 条，标题带全局序号：第 n 条 = (fresh_idx - 1) * 12 + i + 1 */
+/** 每次推荐请求返回 12 条，fresh_idx 从 0 起，标题带全局序号。 */
 const page_ = async (url) => {
   if (!url.includes('/x/web-interface/wbi/index/top/feed/rcmd')) return null;
   rcmdCalls++;
-  const round = Number(new URL(url).searchParams.get('fresh_idx') ?? 1);
+  const round = Number(new URL(url).searchParams.get('fresh_idx') ?? 0);
   if (requestDelay) await new Promise(resolve => setTimeout(resolve, requestDelay));
   return { code: 0, data: { item: Array.from({ length: 12 }, (_, i) => {
-    const n = (round - 1) * 12 + i + 1;
+    const n = round * 12 + i + 1;
     return { goto: 'av', bvid: `BV${String(n).padStart(10, '0')}`, cid: n, title: `第 ${n} 条推荐`, pic: `https://i0.hdslb.com/bfs/x${n}.jpg`,
       duration: 300, pubdate: NOW, owner: { name: '批量 UP', mid: n, face: '' }, stat: { view: 1000, danmaku: 10 } };
   }) } };

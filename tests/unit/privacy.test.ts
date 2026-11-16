@@ -76,6 +76,12 @@ describe('消息来源与授权隔离', () => {
 });
 
 describe('外部辅助请求', () => {
+  it.each(['https://www.nmc.cn/rest/anything', 'https://www.nmc.cn/rest/weather?stationid=../x', 'https://www.nmc.cn/rest/weather?stationid=sdnjf&uid=1', 'https://www.nmc.cn/rest/province?city=珠海', 'https://www.nmc.cn/rest/weather'])('国内天气只允许指定目录及站点查询 %s', async address => {
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    const { optionalFetch } = await import('../../src/shared/privacy');
+    await expect(optionalFetch('weather-cn', address)).rejects.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('未同意时零请求', async () => {
     data['margin:settings'] = {};
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);

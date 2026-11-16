@@ -92,4 +92,12 @@ export async function removeFolderVideo(folder: number, aid: number): Promise<vo
   await post('/x/v3/fav/resource/batch-del', { media_id: folder, resources: `${aid}:2` });
 }
 
+/** 复用原站移动／复制接口；由服务器校验收藏夹归属。 */
+export async function transferFolderVideo(action: 'move' | 'copy', source: Folder, target: Folder, aid: number): Promise<void> {
+  if (!Number.isSafeInteger(aid) || aid <= 0) throw new Error('视频标识缺失，请刷新收藏夹后重试');
+  const n = await nav();
+  if (!n.isLogin || !n.mid || source.kind || target.kind || source.mid !== n.mid || target.mid !== n.mid || source.id === target.id) throw new Error('请选择自己的其他收藏夹');
+  await post(`/x/v3/fav/resource/${action}`, { src_media_id: source.id, tar_media_id: target.id, mid: n.mid, resources: `${aid}:2`, platform: 'web' });
+}
+
 export const folderPlayUrl = (f: Folder) => `https://www.bilibili.com/list/ml${f.id}?sid=${f.id}`;

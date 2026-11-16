@@ -1,10 +1,12 @@
-import { followFeed, followingLive, portal, type Dyn } from '../api/dyn';
+import { followFeed, followingLive, portal, toDyn, type Dyn } from '../api/dyn';
 import { historyList } from '../api/history';
 import { folders } from '../api/fav';
 import { watchLater } from '../api/search';
 import { unread } from '../api/msg';
 import { bvidFromHref } from '../tags';
-import { h } from './dom';
+import { h, icon, ICONS } from './dom';
+import { getJSON } from '../api/http';
+import { dynCard } from './dyn';
 import type { FilterRuntime } from '../filter-runtime';
 import type { FilterTarget } from '../filter';
 import { targetOfPopRow } from '../filter-targets';
@@ -17,7 +19,7 @@ const OPEN_DELAY = 0;
 const CLOSE_DELAY = 220;
 
 /** 列表里的一行：头像或封面 + 两行文字，或一个计数 */
-export interface PopRow { href: string; face?: string; title: string; who?: string; sub?: string; cover?: string; progress?: number; count?: number; live?: boolean; laterBvid?: string }
+export interface PopRow { href: string; face?: string; title: string; who?: string; sub?: string; cover?: string; progress?: number; count?: number; live?: boolean; laterBvid?: string; dynamic?: Dyn }
 export interface PopSpec {
   title: string;
   all: { href: string; label: string };
@@ -61,7 +63,7 @@ const thumb = (src: string, w: number, hh: number) => (src ? `${src}@${w}w_${hh}
 const img = (src: string, cls: string, w: number, hh = w) =>
   h('img', { class: cls, src: thumb(src, w, hh), alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
 
-function row(r: PopRow): HTMLElement {
+function row(r: PopRow, hover: (d: Dyn, trigger: HTMLElement, entering: boolean) => void): HTMLElement {
   const cover = r.cover !== undefined
     ? h('span', { class: 'dp-cover' }, r.cover ? img(r.cover, '', 128, 72) : '', r.progress !== undefined ? h('i', { class: 'dp-prog', style: `--p:${Math.max(0, Math.min(1, r.progress))}` }) : '')
     : null;
@@ -72,7 +74,15 @@ function row(r: PopRow): HTMLElement {
       h('p', { class: 'dp-line' }, r.title)),
     r.count !== undefined ? h('em', { class: r.count ? 'dp-count' : 'dp-count zero' }, r.count > 99 ? '99+' : String(r.count)) : '',
     cover);
-  return r.laterBvid ? h('div', { class: 'dp-entry' }, link, laterButton(r.laterBvid)) : link;
+  const entry: HTMLElement = r.laterBvid ? h('div', { class: 'dp-entry' }, link, laterButton(r.laterBvid)) : link;
+  if (r.dynamic) {
+    entry.classList.add('dp-dynamic');
+    link.setAttribute('aria-expanded', 'false');
+    link.setAttribute('aria-haspopup', 'dialog');
+    entry.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') hover(r.dynamic!, link, true); });
+    entry.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') hover(r.dynamic!, link, false); });
+  }
+  return entry;
 }
 
 /**
@@ -101,6 +111,113 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   );
   let openT = 0, closeT = 0, loadedAt = 0, open = false, done = true, busy = false;
   let videosOnly = false, generation = 0;
+  const detail = h('aside', { class: 'dp-detail', role: 'dialog', 'aria-label': '动态详情', hidden: '' });
+  pop.append(detail);
+  let detailGeneration = 0, previewT = 0, detailCloseT = 0;
+  let detailRequest: AbortController | undefined;
+  let detailTrigger: HTMLElement | undefined;
+  const detailCache = new Map<string, { value: Dyn; at: number }>();
+  const closeDetail = (restoreFocus = false) => {
+    clearTimeout(previewT);
+    clearTimeout(detailCloseT);
+    detailRequest?.abort();
+    detailRequest = undefined;
+    detailGeneration++;
+    detail.hidden = true;
+    detailTrigger?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) detailTrigger?.focus({ preventScroll: true });
+    detailTrigger = undefined;
+  };
+  const renderContent = (d: Dyn): HTMLElement => {
+    const content = h('div', { class: 'dp-detail-content' },
+      h('div', { class: 'dp-meta' }, h('b', {}, d.author), h('span', {}, ago(d.ts, d.time))),
+      dynCard(d, true));
+    for (const link of content.querySelectorAll<HTMLAnchorElement>('.dy-pics a')) {
+      const card = link.closest<HTMLElement>('.dy');
+      link.href = card?.dataset.href || d.url;
+      link.setAttribute('aria-label', '打开动态详情');
+    }
+    // 媒体链接直接跳转，拦截原卡片的图片查看器；正文单击保留阅读。
+    content.addEventListener('click', (e) => {
+      const target = e.target as Element;
+      if (target.closest('button')) return;
+      if (target.closest('.dy-pics a, .dy-video')) { e.stopPropagation(); return; }
+      if (target.closest('a')) return;
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+    content.addEventListener('dblclick', (e) => {
+      if ((e.target as Element).closest('button, a')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(d.url, '_blank', 'noopener,noreferrer');
+    });
+    return content;
+  };
+  const preview = async (d: Dyn, trigger: HTMLElement) => {
+    clearTimeout(previewT);
+    clearTimeout(detailCloseT);
+    if (detailTrigger === trigger) return;
+    clearTimeout(closeT);
+    closeDetail();
+    detailTrigger = trigger;
+    trigger.setAttribute('aria-expanded', 'true');
+    const current = ++detailGeneration;
+    const openLabel = d.video ? '打开视频' : '查看原动态';
+    const source = h('a', { class: 'dp-detail-action', href: d.url, target: '_blank', rel: 'noopener', title: openLabel, 'aria-label': openLabel }, icon(ICONS.arrow));
+    const close = h('button', { type: 'button', class: 'dp-detail-action', title: '关闭详情', 'aria-label': '关闭详情' }, icon(ICONS.close));
+    close.onclick = () => closeDetail(true);
+    const body = h('div', { class: 'dp-detail-scroll', 'aria-live': 'polite', 'aria-busy': 'true' }, h('p', {}, '正在获取详情…'));
+    detail.replaceChildren(h('div', { class: 'dp-head' }, h('span', {}, d.video || d.orig?.video ? '视频摘要' : '动态详情'),
+      h('div', { class: 'dp-detail-actions' }, source, close)), body);
+    detail.hidden = false;
+    const bounds = pop.getBoundingClientRect();
+    detail.classList.toggle('dp-detail-left', bounds.right + 392 > innerWidth && bounds.left >= 392);
+    detail.classList.toggle('dp-detail-overlay', bounds.right + 392 > innerWidth && bounds.left < 392);
+    const loadDetail = async () => {
+      const cached = detailCache.get(d.id);
+      if (cached && Date.now() - cached.at < 60_000) {
+        body.replaceChildren(renderContent(cached.value));
+        body.setAttribute('aria-busy', 'false');
+        return;
+      }
+      body.setAttribute('aria-busy', 'true');
+      body.replaceChildren(h('p', {}, '正在获取详情…'));
+      const request = new AbortController();
+      detailRequest = request;
+      const timeout = window.setTimeout(() => request.abort(), 10000);
+      try {
+        const response = await getJSON<{ item: unknown }>('/x/polymer/web-dynamic/v1/detail', { id: d.id, features: 'itemOpusStyle' }, request.signal);
+        const fresh = toDyn(response.item);
+        if (!fresh) throw new Error('empty');
+        if (current === detailGeneration) {
+          detailCache.set(d.id, { value: fresh, at: Date.now() });
+          if (detailCache.size > 20) detailCache.delete(detailCache.keys().next().value!);
+          body.replaceChildren(renderContent(fresh));
+        }
+      } catch {
+        if (current !== detailGeneration) return;
+        const retry = h('button', { type: 'button', class: 'dp-detail-retry' }, '重新获取');
+        retry.onclick = () => void loadDetail();
+        body.replaceChildren(h('p', {}, '详情获取失败，可重试或打开原链接查看。'), retry);
+      } finally { clearTimeout(timeout); if (current === detailGeneration) body.setAttribute('aria-busy', 'false'); }
+    };
+    await loadDetail();
+  };
+  const delayCloseDetail = () => {
+    clearTimeout(detailCloseT);
+    detailCloseT = window.setTimeout(() => closeDetail(), CLOSE_DELAY);
+  };
+  detail.addEventListener('pointerenter', () => { clearTimeout(detailCloseT); clearTimeout(closeT); });
+  detail.addEventListener('pointerleave', delayCloseDetail);
+  const hoverPreview = (d: Dyn, trigger: HTMLElement, entering: boolean) => {
+    clearTimeout(previewT);
+    if (!entering) { delayCloseDetail(); return; }
+    clearTimeout(detailCloseT);
+    previewT = window.setTimeout(() => { if (open && trigger.isConnected) void preview(d, trigger); }, 500);
+  };
+  const renderRow = (r: PopRow) => row(r, hoverPreview);
   // 屏蔽词过滤：主列表和分页追加都走同一套判断
   const visible = (rows: PopRow[]) => filter && spec.filterRow
     ? rows.filter((r) => { const t = spec.filterRow!(r); return !t || filter.allows(t); })
@@ -130,7 +247,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
       await prepareRows(rows);
       if (current !== generation) return;
       const shown = visible(rows);
-      const nodes = shown.map(row); tail.before(...nodes);
+      const nodes = shown.map(renderRow); tail.before(...nodes);
       if (spec.canLoadMore && !spec.canLoadMore()) { done = true; if (restoreFocus) (nodes[0] ?? btn).focus({ preventScroll: true }); tail.remove(); }
       else if (spec.canLoadMore) tail.textContent = '加载更多';
       if (!shown.length) requestAnimationFrame(fill);
@@ -143,6 +260,8 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   const load = () => {
     if (Date.now() - loadedAt < 60_000 && list.querySelector('.dp-row')) return;
     loadedAt = Date.now();
+    closeDetail();
+    detailCache.clear();
     const current = ++generation;
     busy = true; done = true;
     list.replaceChildren(...Array.from({ length: spec.compact ? 5 : 4 }, () => h('div', { class: 'dp-skel' })));
@@ -152,7 +271,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
       await prepareRows(rows);
       if (current !== generation) return;
       const shown = visible(rows);
-      list.replaceChildren(...(shown.length ? shown.map(row) : [h('p', { class: 'dp-empty' }, spec.empty)]));
+      list.replaceChildren(...(shown.length ? shown.map(renderRow) : [h('p', { class: 'dp-empty' }, spec.empty)]));
       done = !spec.more || !rows.length || spec.canLoadMore?.() === false;
       requestAnimationFrame(fill);
     }).catch(() => {
@@ -227,6 +346,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   const hide = () => {
     if (!open) return;
     open = false;
+    closeDetail();
     pop.removeAttribute('data-open');
     btn.setAttribute('aria-expanded', 'false');
     setTimeout(() => { if (!open) pop.hidden = true; }, 200);
@@ -239,7 +359,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     clearTimeout(closeT);
     if (!open) { clearTimeout(openT); if (OPEN_DELAY) openT = window.setTimeout(show, OPEN_DELAY); else show(); }
   };
-  const leave = () => { clearTimeout(openT); clearTimeout(closeT); closeT = window.setTimeout(hide, CLOSE_DELAY); };
+  const leave = () => { clearTimeout(previewT); clearTimeout(openT); clearTimeout(closeT); closeT = window.setTimeout(hide, CLOSE_DELAY); };
   btn.setAttribute('aria-haspopup', 'dialog');
   btn.setAttribute('aria-expanded', 'false');
   btn.addEventListener('pointerenter', enter);
@@ -247,8 +367,9 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   btn.addEventListener('click', () => { clearTimeout(openT); hide(); });
   pop.addEventListener('pointerenter', () => clearTimeout(closeT));
   pop.addEventListener('pointerleave', leave);
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
-  addEventListener('resize', () => { if (open) place(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!detail.hidden) closeDetail(true); else hide(); } });
+  addEventListener('resize', () => { closeDetail(); if (open) place(); });
+  btn.ownerDocument.addEventListener('pointerdown', (e) => { if (open && !e.composedPath().includes(pop) && !e.composedPath().includes(btn)) hide(); });
   return {
     close: hide,
     invalidate() { loadedAt = 0; if (open) load(); },
@@ -319,7 +440,7 @@ export const POPS: Record<string, (o: { onDyn?: () => void; msgRemind?: () => bo
     const toRow = (d: Dyn): PopRow => {
       const s = dynSummary(d);
       const laterBvid = d.video?.bvid || d.orig?.video?.bvid || bvidFromHref(d.attachment?.url || d.orig?.attachment?.url);
-      return { href: d.url, face: d.face, who: d.author, sub: `${ago(d.ts, d.time)} · ${s.kind}`, title: s.line, cover: s.cover || undefined, laterBvid };
+      return { href: d.url, face: d.face, who: d.author, sub: `${ago(d.ts, d.time)} · ${s.kind}`, title: s.line, cover: s.cover || undefined, laterBvid, dynamic: d };
     };
     const page = async (first: boolean, videosOnly = false) => {
       if (first) { offset = ''; more = true; generation++; }

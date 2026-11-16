@@ -29,6 +29,9 @@ import { FilterRuntime } from '../filter-runtime';
 import { openBili } from '../navigation';
 import { ThemeWriter } from './theme-writer';
 
+// IconMCP headphones, normalized from its 16-unit grid to the shared 24-unit wrapper.
+const LISTEN_ICON = '<g data-iconmcp="headphones" transform="scale(1.5)" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 10 L2.25 8 A5.75 5.75 0 0 1 13.75 8 L13.75 10"/><rect x="2.25" y="9" width="3.25" height="4.75" rx="1"/><rect x="10.5" y="9" width="3.25" height="4.75" rx="1"/></g>';
+
 export type SkinKind = 'watch' | 'search' | 'page' | 'live';
 
 /**
@@ -50,6 +53,7 @@ export class WatchSkin {
   private wideDone = '';
   private media = matchMedia('(prefers-color-scheme: dark)');
   private themeWriter = new ThemeWriter();
+  private music: Promise<{ open: () => void }> | null = null;
 
   constructor(private settings: Settings, private kind: SkinKind = 'watch') {
     const de = document.documentElement;
@@ -82,6 +86,7 @@ export class WatchSkin {
       { id: 'w-top', title: '回到顶部', cat: '操作', icon: ICONS.top, run: () => scrollTo({ top: 0, behavior: 'smooth' }) },
       { id: 'w-comments', title: '看评论', cat: '跳转', icon: ICONS.message, keys: ['评论'], run: () => document.querySelector('#commentapp, bili-comments, .comment-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
       { id: 'w-web', title: '网页全屏', cat: '操作', icon: ICONS.image, keys: ['全屏'], run: () => clickSel('.bpx-player-ctrl-web') },
+      { id: 'w-music', title: '听歌模式', cat: '操作', icon: LISTEN_ICON, keys: ['音乐', '歌词'], run: () => { void this.openMusic(); } },
       { id: 'w-wide', title: '宽屏模式', cat: '操作', icon: ICONS.image, keys: ['宽屏'], run: () => clickSel('.bpx-player-ctrl-wide') },
       { id: 'w-later', title: '把这个视频加入稍后再看', cat: '操作', icon: ICONS.later, keys: ['稍后'], run: async () => { const bv = location.href.match(/BV\w+/)?.[0]; if (!bv) return; const r = await addWatchLater(bv); toast(this.app, r.msg, r.ok ? { label: '查看', run: () => later.open() } : undefined); } },
       { id: 'w-copy', title: '复制视频链接', cat: '操作', icon: ICONS.link, keys: ['分享'], run: () => navigator.clipboard.writeText(location.href.split('?')[0]).then(() => toast(this.app, '链接已复制')) },
@@ -105,12 +110,14 @@ export class WatchSkin {
       filter: this.filter,
       tabs: [
         ...SITE_LINKS,
+        ...(isWatch ? [{ title: '听歌', icon: LISTEN_ICON, run: () => { void this.openMusic(); } }] : []),
         'separator',
         { title: '收藏', icon: ICONS.fav, run: () => this.fav.open() },
         { title: '稍后', icon: ICONS.later, run: () => later.open() },
         { title: '原版', icon: ICONS.exit, run: () => { sessionStorage.setItem('margin:off', '1'); location.reload(); } },
       ],
     });
+    this.head.el.querySelector('[aria-label="听歌"]')?.setAttribute('data-tip', '听歌模式');
     const click = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.click();
     const quick = createFloatingMenu([
       { label: '回到顶部', en: 'Back to Top', run: () => scrollTo({ top: 0, behavior: 'smooth' }) },
@@ -156,6 +163,16 @@ export class WatchSkin {
     }
     this.head.setMsgRemind(s.msgRemind);
     this.panel.sync(s);
+  }
+
+  private async openMusic(): Promise<void> {
+    try {
+      this.music ??= import('./music-mode').then(module => module.createMusicMode(active => {
+        this.bg.cap(active ? 24 : 0);
+        this.screenSync?.();
+      }, () => { void this.toggleTheme(); }));
+      (await this.music).open();
+    } catch { this.music = null; toast(this.app, '听歌模式加载失败，请重试。'); }
   }
 
   private resolved(): 'light' | 'dark' {
@@ -218,7 +235,7 @@ export class WatchSkin {
       const hide = screen === 'web' || screen === 'full' || full || liveWeb;
       this.host.toggleAttribute('hidden', hide);
       webScroll(screen === 'web' && !full && this.settings.webScroll);
-      this.bg.hold('screen', hide);
+      this.bg.hold('screen', hide && (!document.documentElement.classList.contains('margin-listening-bg') || full));
       document.documentElement.classList.toggle('margin-webscreen', hide);
       // 小窗只移动播放器本体，文档仍沿用进入小窗前的宽屏布局。
       wide(screen === 'wide' || (screen === 'mini' && de.classList.contains('margin-wide')));

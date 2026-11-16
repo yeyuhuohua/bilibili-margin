@@ -24,6 +24,7 @@ const SERVICES = {
   ip: ['ipwho.is', '/'],
   city: ['geocoding-api.open-meteo.com', '/v1/search'],
   weather: ['api.open-meteo.com', '/v1/forecast'],
+  'weather-cn': ['www.nmc.cn', '/rest/'],
   sponsor: ['bsbsb.top', '/api/skipSegments/'],
   update: ['api.github.com', '/repos/jiuyang5354/bilibili-margin/releases/latest'],
 } as const;
@@ -35,11 +36,16 @@ let watching = false;
 export async function optionalFetch(service: Service, address: string, init: RequestInit = {}): Promise<Response> {
   const url = new URL(address);
   const [host, path] = SERVICES[service];
-  const validPath = service === 'sponsor' ? /^\/api\/skipSegments\/[a-f0-9]{4}$/.test(url.pathname) : url.pathname === path;
+  const validPath = service === 'sponsor' ? /^\/api\/skipSegments\/[a-f0-9]{4}$/.test(url.pathname)
+    : service === 'weather-cn' ? /^\/rest\/(?:province(?:\/A[A-Z]{2})?|weather)$/.test(url.pathname) : url.pathname === path;
   if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !validPath || url.hash) throw new Error('外部请求地址不受支持');
   // Firefox content-script Xrays may expose keys() without a usable Symbol.iterator.
   let badQuery = false;
   url.searchParams.forEach((_value, key) => { if (/token|cookie|auth|csrf|access_key|uid/i.test(key)) badQuery = true; });
+  if (service === 'weather-cn') {
+    url.searchParams.forEach((value, key) => { if (url.pathname !== '/rest/weather' || key !== 'stationid' || !/^[a-zA-Z0-9]{5}$/.test(value)) badQuery = true; });
+    if (url.pathname === '/rest/weather' && !url.searchParams.has('stationid')) badQuery = true;
+  }
   if ((init.method && init.method !== 'GET') || init.body || badQuery) throw new Error('外部请求包含不允许的参数');
   const headers = new Headers(init.headers);
   let badHeader = false;

@@ -40,5 +40,13 @@ try{
  await page.locator('.wx-live').getByText(/本地缓存/).waitFor();
  assert.equal(await page.locator('.wx-temp').textContent(),temp);
  checks.push('browser restart keeps last saved city and offline weather');
+ const worker2=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+ await worker2.evaluate(()=>chrome.storage.local.set({'margin:weather-location-v2':{revision:2,loc:{name:'珠海市',lat:22.2716,lon:113.5769,manual:false,at:Date.now()}}}));
+ await page.waitForTimeout(1000);
+ assert.equal(await page.locator('.wx-temp').textContent(),temp);
+ assert.equal(await page.locator('.wx-empty').count(),0);
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('margin:weather-cache')).at),at);
+ checks.push('same-city location broadcasts retain historical weather after failed reload');
+ await page.locator('.wx').screenshot({path:join(out,'same-city-cache.png')});
 }finally{await context?.close();writeFileSync(join(out,'report.json'),JSON.stringify({checks},null,2))}
 console.log(JSON.stringify({checks}));

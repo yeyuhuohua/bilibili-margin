@@ -9,6 +9,7 @@ import { dynCard } from './dyn';
 import { compileDynFilter } from '../filter';
 import { cachedTags } from '../tags';
 import { fmtCount, h, icon, ICONS } from './dom';
+import { HEADER_ICONS } from './header-icons';
 import { PageShell } from './shell';
 import { targetOfDyn } from '../filter-targets';
 import { uiReducedMotion as reducedMotion } from '../motion';
@@ -216,7 +217,7 @@ export class FeedApp {
       return b;
     };
     // v0.49：不再只取前 30 个（关注多的人翻不到，B 站评论反馈）；可在自己的关注里搜昵称；滚轮横向翻
-    const all = mk(0, '全部动态', h('span', { class: 'fd-up-all' }, icon(ICONS.moments)));
+    const all = mk(0, '全部动态', h('span', { class: 'fd-up-all' }, icon(HEADER_ICONS['动态'].replaceAll('margin-header-moments-clip0', 'margin-feed-moments-clip0'))));
     const row = h('div', { class: 'fd-ups-row' });
     const move = (direction: number) => row.scrollBy({ left: direction * row.clientWidth * .8, behavior: reducedMotion() ? 'instant' : 'smooth' });
     const prev = h('button', { class: 'fd-ups-scroll', type: 'button', 'aria-label': '向左滚动关注列表', onclick: () => move(-1) }, icon(ICONS.back));

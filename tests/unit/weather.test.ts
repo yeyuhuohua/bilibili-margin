@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleWeatherLocation } from '../../src/background/weather-location';
 import { AUTO_LOCATION_TTL, WEATHER_LOCATION_KEY, type WeatherLocationMessage } from '../../src/shared/weather-location';
+// This suite isolates shared-location/cache behavior; the real domestic provider has its own integration tests.
+vi.mock('../../src/content/api/weather-cn', () => ({ chinaWeather: vi.fn(async () => null) }));
 
 const LOC_KEY = 'margin:weather-loc', CACHE_KEY = 'margin:weather-cache';
 const zhuhai = { name: '珠海市', lat: 22.2716, lon: 113.5769, region: '广东省 · 中国' };
@@ -103,6 +105,30 @@ describe('共享位置与迁移', () => {
 });
 
 describe('定位与预报请求', () => {
+  it('并发刷新遇到预报失败时，每个调用者都收到旧天气而不是原始网络错误', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast())));
+    const cached = await api.weather(); cached.at = Date.now() - 31 * 60_000;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    const pending = deferred(), fetcher = vi.fn(() => pending.promise); vi.stubGlobal('fetch', fetcher);
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls.length;
+    const first = api.weather(); await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    const second = api.weather(); await vi.waitFor(() => expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(calls + 2));
+    const results = Promise.allSettled([first, second]); pending.resolve(response({}, 503));
+    expect((await results).map(r => r.status)).toEqual(['fulfilled', 'fulfilled']);
+  });
+  it('同城定位更新触发卡片重载时保留缓存，超时不会清空已显示天气', async () => {
+    await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast())));
+    const cached = await api.weather(); cached.at = Date.now() - 31 * 60_000;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    api.savedLoc()!.manual = false; api.savedLoc()!.at = Date.now() - AUTO_LOCATION_TTL - 1;
+    let reload: Promise<unknown> | undefined;
+    vi.stubGlobal('dispatchEvent', () => { reload = api.weather().catch(error => ({failed:String(error)})); return true; });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.includes('ipwho.is')
+      ? response({success:true,city:'Zhuhai',latitude:zhuhai.lat,longitude:zhuhai.lon}) : response({}, 503)));
+    const result = await api.weather().catch(error => ({failed:String(error)}));
+    expect(result).toMatchObject({temp:25,at:cached.at,stale:true});
+    expect(await reload).toMatchObject({temp:25,at:cached.at,stale:true});
+  });
   it('读取本地天气不请求网络，重新加载模块后仍能读取', async () => {
     await api.setLoc(zhuhai); vi.stubGlobal('fetch', vi.fn(async () => response(forecast())));
     await api.weather(); const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);

@@ -102,6 +102,8 @@ html.margin-detail .bili-tabs__content .comment-wrap,
 html.margin-detail .comment-wrap .bili-comment-container { padding-left: 0 !important; padding-right: 0 !important; }
 
 /* ── 单条动态：一张卡 ── */
+/* 原生动态深色背景从正文顶部开始，会与映间的全屏背景形成 72px 分界。 */
+html.margin-detail[data-margin-detail="dyn"] #app::after { content: none !important; }
 html[data-margin-detail="dyn"] #app .content .card {
   border-radius: 24px !important; background: color-mix(in srgb, var(--m-surface) 94%, transparent) !important;
   box-shadow: var(--ring), var(--sh-sm) !important; border: 0 !important;

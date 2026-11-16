@@ -41,6 +41,8 @@ jobs:
         run: |
           node tests/issues-20261110.mjs
           node tests/watch-edges.mjs
+          node tests/favorite-transfer.mjs
+          node tests/watch-native-overlays.mjs
       - name: Space drawer regressions
         run: pnpm run test:drawers
       - name: Space articles, audio and public favorites
@@ -55,8 +57,16 @@ jobs:
         run: node tests/issues-20261111-next.mjs
         env:
           SMOKE_OUT: smoke-artifacts/issues-20261111-next
+      - name: Flat surface keeps the upload accent button readable
+        run: node tests/issues-20261113.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/issues-20261113
       - name: Native charging-video filter, sorting and search
         run: node tests/space-charging.mjs
+      - name: Listening views, live audio analysis and cover recovery
+        run: |
+          SMOKE_OUT=smoke-artifacts/music-mode node tests/music-mode.mjs
+          SMOKE_OUT=smoke-artifacts/music-cover node tests/music-cover.mjs
       - name: Application window navigation
         run: pnpm run test:app-window
       - name: Native comment locations and both search styles
@@ -67,6 +77,14 @@ jobs:
         run: node tests/feed-batches.mjs
         env:
           SMOKE_OUT: smoke-artifacts/feed-batches
+      - name: Recommendation request scenes and exposure feedback
+        run: node tests/recommendation-feedback.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/recommendation-feedback
+      - name: Header dynamic detail preview
+        run: node tests/dynamic-hover-preview.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/dynamic-hover-preview
       - name: Native controls follow the selected accent
         run: node tests/accent-controls.mjs
         env:
@@ -110,7 +128,9 @@ jobs:
         env:
           SMOKE_OUT: smoke-artifacts/message-sync
       - name: Transparent header over high-contrast backgrounds
-        run: pnpm run test:header-surface
+        run: |
+          pnpm run test:header-surface
+          SMOKE_OUT=smoke-artifacts/native-header node tests/native-header.mjs
         env:
           SMOKE_OUT: smoke-artifacts/header-surface
       - name: Smoke test (offline mocked bilibili)
@@ -126,6 +146,7 @@ jobs:
         run: |
           node tests/weather-system.mjs
           node tests/weather-offline.mjs
+          SMOKE_OUT=smoke-artifacts/weather-domestic node tests/weather-domestic.mjs
         env:
           SMOKE_OUT: smoke-artifacts/weather-system
       - name: Transparent dynamic glass and undistorted content
@@ -223,7 +244,9 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium firefox
       - run: pnpm run build
       - name: Rich message draft editing in Chromium and Firefox
-        run: node tests/message-editor.mjs
+        run: |
+          node tests/message-editor.mjs
+          node tests/firefox-message-extension.mjs
         env:
           SMOKE_OUT: privacy-performance/message-editor
       - name: Native recommendation username rendering

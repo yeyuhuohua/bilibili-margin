@@ -12,8 +12,12 @@
 .top .upload[data-material] { border-radius: 999px; background: var(--margin-primary, var(--nav-glass)); color: var(--margin-primary-fg, var(--nav-ink)); }
 .top .upload[data-material]:hover { transform: translateY(-1px); }
 .top .upload[data-material]:active { transform: scale(.97); }
-.app[data-glass="flat"] .top [data-material] { background: var(--surface); backdrop-filter: none !important; }
+.app[data-glass="flat"] .top [data-material]:not(.upload) { background: var(--surface); backdrop-filter: none !important; }
+/* 投稿是强调色主操作：平面模式下也要保留强调底色。否则 --surface 底 + --margin-primary-fg(#fff)
+   会白字白底，选哔哩蓝/粉时图标和文字都看不见（GitHub #176） */
+.app[data-glass="flat"] .top .upload[data-material] { background: var(--margin-primary, var(--surface)); color: var(--margin-primary-fg, var(--nav-ink)); backdrop-filter: none !important; }
 @media(prefers-reduced-transparency:reduce) {
-  .app .top [data-material] { background: var(--surface); backdrop-filter: none !important; }
+  .app .top [data-material]:not(.upload) { background: var(--surface); backdrop-filter: none !important; }
+  .app .top .upload[data-material] { background: var(--margin-primary, var(--surface)); color: var(--margin-primary-fg, var(--nav-ink)); backdrop-filter: none !important; }
   .gf-front-rim { filter: none !important; }
 }
