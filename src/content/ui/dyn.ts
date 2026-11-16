@@ -1,4 +1,4 @@
-import { dynCommentTarget, dynLike, dynReplies, dynReply, dynRepost, dynReserve, dynSubReplies, type Dyn, type DynText, type Reply } from '../api/dyn';
+import { dynCommentTarget, dynLike, dynPreview, dynReplies, dynReply, dynRepost, dynReserve, dynSubReplies, type Dyn, type DynText, type Reply } from '../api/dyn';
 import { fmtAgo, fmtCount, h, icon, ICONS, safeUrl } from './dom';
 import { laterButton } from './later-btn';
 import { openLightbox } from './lightbox';
@@ -57,8 +57,50 @@ function richText(text: string, parts?: DynText[]): (Node | string)[] {
   }) : [text];
 }
 
+function dynamicCopy(d: Dyn): HTMLElement[] {
+  const long = !!d.text && (d.text.length > 240 || d.text.split('\n').length > 8);
+  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, ...(d.richText ? richText(d.text, d.richText) : replyText(d.text, d.emotes))) : null;
+  const more = long ? h('button', { type: 'button', class: 'dy-more', 'aria-expanded': 'false', onclick: (e: Event) => {
+    e.stopPropagation();
+    const on = text!.classList.toggle('fold');
+    more!.textContent = on ? '展开全文' : '收起';
+    more!.setAttribute('aria-expanded', String(!on));
+  } }, '展开全文') : null;
+  const copy: HTMLElement[] = [];
+  if (d.title) copy.push(h('h3', { class: 'dy-title' }, d.title));
+  if (text) copy.push(text);
+  if (more) copy.push(more);
+  return copy;
+}
+
+let previewObserver: IntersectionObserver | undefined;
+const previewLoaders = new WeakMap<Element, () => void>();
+function observePreview(card: HTMLElement, d: Dyn, update: () => void): void {
+  if (!d.blocked || d.text) return;
+  previewObserver ??= new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting && entry.target.isConnected) continue;
+      previewObserver!.unobserve(entry.target);
+      if (entry.target.isConnected) previewLoaders.get(entry.target)?.();
+      previewLoaders.delete(entry.target);
+    }
+  }, { rootMargin: '200px 0px' });
+  previewLoaders.set(card, () => {
+    void dynPreview(d).then(() => {
+      if (!card.isConnected) return;
+      update();
+    });
+  });
+  previewObserver.observe(card);
+}
+
+function kindBadge(d: Dyn): HTMLElement {
+  return h('span', { class: d.charging ? 'dy-kind dy-charge' : 'dy-kind' },
+    d.charging ? icon(ICONS.coin) : null, kindLabel(d));
+}
+
 /** 动态卡：杂志式单栏。日期眉标 + 正文 + 媒体（视频横卡 / 图片网格 / 专栏）+ 等宽统计 */
-export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement {
+export function dynCard(d: Dyn, nested = false, withAuthor = false, onPreview?: () => void): HTMLElement {
   const media: (Node | null)[] = [];
   if (d.video) {
     media.push(h('a', { class: 'dy-video', href: `https://www.bilibili.com/video/${d.video.bvid}`, ...ext },
@@ -98,41 +140,49 @@ export function dynCard(d: Dyn, nested = false, withAuthor = false): HTMLElement
       h('span', {}, h('b', {}, link.title), h('span', {}, [link.kind, link.desc].filter(Boolean).join(' · ')))));
   }
   if (d.reserve) media.push(reserveCard(d));
+  if (d.blocked) {
+    const blocked = d.blocked;
+    media.push(h('section', { class: 'dy-blocked', 'aria-label': d.charging ? '充电专属动态' : '受限动态' },
+      blocked.background ? h('img', { class: 'dy-blocked-bg', src: blocked.background, alt: '', loading: 'lazy', 'aria-hidden': 'true' }) : null,
+      h('div', { class: 'dy-blocked-body' },
+        blocked.icon ? h('img', { class: 'dy-blocked-icon', src: blocked.icon, alt: '', loading: 'lazy' }) : icon(d.charging ? ICONS.coin : ICONS.block),
+        h('strong', {}, blocked.title || (d.charging ? '充电专属动态' : '暂不可查看')),
+        h('p', {}, blocked.message),
+        h('a', { class: 'dy-blocked-action', href: blocked.url, ...ext }, blocked.button))));
+  }
   if (d.orig) {
-    const original = h('div', { class: 'dy-orig' }, h('div', { class: 'dy-orig-by' }, `@${d.orig.author}`), dynCard(d.orig, true));
+    const original = h('div', { class: 'dy-orig' }, h('div', { class: 'dy-orig-by' }, `@${d.orig.author}`), dynCard(d.orig, true, false, onPreview));
     observeDynamicGlass(original); media.push(original);
   }
 
-  // 长文折叠（GitHub #8）：按字数 / 行数判断，不读布局
-  const long = !!d.text && (d.text.length > 240 || d.text.split('\n').length > 8);
-  const text = d.text ? h('p', { class: long ? 'dy-text fold' : 'dy-text' }, ...(d.richText ? richText(d.text, d.richText) : replyText(d.text, d.emotes))) : null;
-  const more = long ? h('button', { type: 'button', class: 'dy-more', 'aria-expanded': 'false', onclick: (e: Event) => {
-    e.stopPropagation();
-    const on = text!.classList.toggle('fold');
-    more!.textContent = on ? '展开全文' : '收起';
-    more!.setAttribute('aria-expanded', String(!on));
-  } }, '展开全文') : null;
-  const body = h('div', { class: 'dy-body' },
-    d.title ? h('h3', { class: 'dy-title' }, d.title) : null,
-    text, more,
-    ...media);
-  if (nested) return clickable(h('div', { class: 'dy nested' }, body), d.url);
+  let copy = dynamicCopy(d);
+  const body = h('div', { class: 'dy-body' }, ...copy, ...media);
+  const updatePreview = () => {
+    copy.forEach(node => node.remove());
+    copy = dynamicCopy(d); body.prepend(...copy); onPreview?.();
+  };
+  if (nested) {
+    const card = clickable(h('div', { class: 'dy nested' }, d.charging ? kindBadge(d) : null, body), d.url);
+    observePreview(card, d, updatePreview);
+    return card;
+  }
   const open = () => h('a', { class: 'dy-open', href: d.url, ...ext, title: '查看详情' }, icon(ICONS.arrow));
   // 动态首页：21st SocialPostCard 的作者行（头像 · 名字 · 时间/类型），空间页作者固定所以只留眉标
   const by = withAuthor ? h('div', { class: 'dy-by' },
     h('a', { class: 'dy-by-face', href: `https://space.bilibili.com/${d.mid}`, 'aria-label': `${d.author} 的个人空间`, ...ext }, h('img', { src: d.face ? `${d.face}@80w_80h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })),
     h('div', { class: 'dy-by-b' },
       h('a', { class: 'dy-by-name', href: `https://space.bilibili.com/${d.mid}`, ...ext }, d.author),
-      h('div', { class: 'dy-eyebrow' }, h('span', {}, d.ts ? fmtAgo(d.ts) : d.time), h('span', { class: 'dy-kind' }, kindLabel(d)))),
+      h('div', { class: 'dy-eyebrow' }, h('span', {}, d.ts ? fmtAgo(d.ts) : d.time), kindBadge(d))),
     open()) : null;
-  const el = clickable(h('article', { class: withAuthor ? 'dy with-by' : 'dy' },
+  const el = clickable(h('article', { class: `dy${withAuthor ? ' with-by' : ''}${d.charging ? ' dy-charging' : ''}` },
     by ?? h('div', { class: 'dy-eyebrow' },
       h('span', {}, d.ts ? fmtAgo(d.ts) : d.time),
-      h('span', { class: 'dy-kind' }, kindLabel(d)),
+      kindBadge(d),
       h('a', { class: 'dy-open', href: d.url, ...ext, title: '查看详情' }, icon(ICONS.arrow))),
     body,
     actions(d)), d.url);
   dynData.set(el, d);
+  observePreview(el, d, updatePreview);
   return el;
 }
 
@@ -210,6 +260,8 @@ function clickable(el: HTMLElement, url: string): HTMLElement {
 
 function kindLabel(d: Dyn): string {
   if (d.orig) return 'REPOST';
+  if (d.charging) return '充电专属';
+  if (d.blocked) return '受限动态';
   if (d.live) return 'LIVE';
   if (d.video) return 'VIDEO';
   if (d.article) return 'ARTICLE';

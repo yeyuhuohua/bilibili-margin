@@ -26,6 +26,8 @@ export interface Dyn {
   link?: { title: string; cover: string; desc: string; url: string; kind: string };
   attachment?: Dyn['link'];
   reserve?: DynReserve;
+  charging?: boolean;
+  blocked?: { title?: string; message: string; background: string; icon: string; url: string; button: string };
   orig?: Dyn | null;
   stat: { comment: number; forward: number; like: number };
   url: string;
@@ -35,17 +37,28 @@ export interface Dyn {
 
 const https = (u: unknown) => String(u ?? '').replace(/^\/\//, 'https://').replace(/^http:/, 'https:');
 const reserveUrl = (u: unknown) => /^https:\/\//.test(https(u)) ? https(u) : '';
+const dynamicFeatures = 'itemOpusStyle,listOnlyfans,onlyfansVote,onlyfansAssetsV2';
+const textValue = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+const nodeText = (node: any): string => String(node.text ?? node.orig_text ?? node.emoji?.text ?? '');
+const descText = (desc: any): string => textValue(desc?.text) || (desc?.rich_text_nodes ?? []).map(nodeText).join('').trim();
 
 export function toDyn(it: any): Dyn | null {
   if (!it?.modules) return null;
-  const m = it.modules, a = m.module_author ?? {}, d = m.module_dynamic ?? {}, s = m.module_stat ?? {};
+  const m = Array.isArray(it.modules) ? Object.assign({}, ...it.modules) : it.modules;
+  const a = m.module_author ?? {}, d = m.module_dynamic ?? {}, s = m.module_stat ?? {};
   const major = d.major ?? {};
   const opus = major.opus;
-  const desc = opus?.summary?.text != null ? opus.summary : d.desc;
-  const text = (desc?.text ?? '').trim();
+  // 图文详情用独立的标题 / 正文模块；受限列表常常不带这些公开文字。
+  const paragraphs = (m.module_content?.paragraphs ?? []).filter((p: any) => p.text?.nodes);
+  const content = { rich_text_nodes: paragraphs.flatMap((p: any, i: number) => [
+    ...(i ? [{ text: '\n' }] : []),
+    ...p.text.nodes.map((n: any) => n.rich ?? { text: n.word?.words ?? n.formula?.latex_content ?? '' }),
+  ]) };
+  const desc = [opus?.summary, d.desc, content].find(value => descText(value));
+  const text = descText(desc);
   const nodes: DynText[] = (desc?.rich_text_nodes ?? []).map((n: any) => {
     const emoji = https(n.emoji?.icon_url);
-    return { text: String(n.text ?? n.orig_text ?? n.emoji?.text ?? ''),
+    return { text: nodeText(n),
       ...(n.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && /^https:\/\//.test(emoji) ? { emoji } : {}) };
   });
   const emotes = Object.fromEntries((desc?.rich_text_nodes ?? []).filter((n: any) => n?.emoji?.icon_url)
@@ -53,11 +66,24 @@ export function toDyn(it: any): Dyn | null {
   const out: Dyn = {
     id: it.id_str, type: it.type, author: a.name ?? '', face: https(a.face), mid: a.mid ?? 0, ts: a.pub_ts ?? 0, time: a.pub_time ?? '',
     text, emotes, richText: nodes.length && nodes.map((n) => n.text).join('').trim() === text ? nodes : undefined,
-    title: opus?.title || undefined, pics: [],
+    title: textValue(opus?.title) || textValue(m.module_title?.text) || textValue(it.basic?.title) || undefined, pics: [],
     stat: { comment: s.comment?.count ?? 0, forward: s.forward?.count ?? 0, like: s.like?.count ?? 0 },
     url: `https://www.bilibili.com/opus/${it.id_str}`,
     liked: s.like?.status === true, cmtType: Number(it.basic?.comment_type) || undefined, cmtOid: it.basic?.comment_id_str || undefined,
   };
+  const blocked = major.blocked ?? m.module_blocked;
+  out.charging = it.basic?.is_only_fans === true || it.basic?.is_only_fans === 1
+    || blocked?.blocked_type === 1 || /充电/.test(String(blocked?.hint_message ?? '')) || undefined;
+  if (blocked || major.type === 'MAJOR_TYPE_BLOCKED') {
+    out.blocked = {
+      title: textValue(blocked?.title) || undefined,
+      message: String(blocked?.hint_message ?? '').trim() || (out.charging ? '为 TA 充电后查看专属动态' : '该动态暂不可查看，请前往详情页'),
+      background: reserveUrl(blocked?.bg_img?.img_src || blocked?.bg_img?.img_dark || blocked?.bg_img?.img_day),
+      icon: reserveUrl(blocked?.icon?.img_src || blocked?.icon?.img_dark || blocked?.icon?.img_day),
+      url: reserveUrl(blocked?.button?.jump_url) || reserveUrl(blocked?.jump_url) || out.url,
+      button: String(blocked?.button?.text ?? '').trim() || '查看详情',
+    };
+  }
   if (major.archive) {
     const v = major.archive;
     const ad = v.is_ad === true || Boolean(v.ad_info) || Boolean(v.business_info) || undefined;
@@ -106,6 +132,41 @@ export function toDyn(it: any): Dyn | null {
   return out;
 }
 
+const previewCache = new Map<string, { expires: number; task: Promise<Dyn | null> }>();
+const previewQueue: (() => void)[] = [];
+let previewActive = 0;
+
+/** 仅为受限卡片补公开文字；并发、缓存和超时避免影响正常动态加载。 */
+export async function dynPreview(d: Dyn): Promise<void> {
+  if (!d.blocked || d.text || !/^\d+$/.test(d.id)) return;
+  let cached = previewCache.get(d.id);
+  if (!cached || cached.expires <= Date.now()) {
+    const task = (async () => {
+      if (previewActive >= 3) await new Promise<void>(resolve => previewQueue.push(resolve));
+      else previewActive++;
+      try {
+        const detail = await getJSON<any>('/x/polymer/web-dynamic/v1/opus/detail', {
+          id: d.id, timezone_offset: -480, features: 'onlyfansVote,onlyfansAssetsV2',
+        }, AbortSignal.timeout(5000));
+        return detail.item?.id_str === d.id ? toDyn(detail.item) : null;
+      } catch { return null; }
+      finally {
+        const next = previewQueue.shift();
+        if (next) next(); else previewActive--;
+      }
+    })();
+    cached = { expires: Date.now() + 60_000, task };
+    previewCache.set(d.id, cached);
+    if (previewCache.size > 100) previewCache.delete(previewCache.keys().next().value!);
+  }
+  const preview = await cached.task;
+  if (!preview) return;
+  if (!d.title && preview.title) d.title = preview.title;
+  if (!d.text && preview.text) {
+    d.text = preview.text; d.richText = preview.richText; d.emotes = preview.emotes;
+  }
+}
+
 /** 与原生预约卡使用同一接口，状态和人数以服务器返回值为准。 */
 export async function dynReserve(id: string, reserve: DynReserve): Promise<string> {
   const result = await postJSON<{ final_btn_status: number; desc_update?: string; reserve_update?: number; toast?: string }>(
@@ -119,14 +180,14 @@ export async function dynReserve(id: string, reserve: DynReserve): Promise<strin
 }
 
 export async function spaceDynamics(mid: number, offset: string): Promise<{ list: Dyn[]; offset: string; more: boolean }> {
-  const d = await getJSON<any>('/x/polymer/web-dynamic/v1/feed/space', { host_mid: mid, offset, timezone_offset: -480, features: 'itemOpusStyle' });
+  const d = await getJSON<any>('/x/polymer/web-dynamic/v1/feed/space', { host_mid: mid, offset, timezone_offset: -480, features: dynamicFeatures });
   return { list: (d.items ?? []).map(toDyn).filter(Boolean) as Dyn[], offset: d.offset ?? '', more: !!d.has_more };
 }
 
 export type FeedType = 'all' | 'video' | 'pgc' | 'article';
 /** 关注动态流；hostMid 只看某个 UP */
 export async function followFeed(type: FeedType, offset: string, hostMid = 0): Promise<{ list: Dyn[]; offset: string; more: boolean; baseline: string }> {
-  const p: Record<string, string | number> = { type, offset, timezone_offset: -480, features: 'itemOpusStyle' };
+  const p: Record<string, string | number> = { type, offset, timezone_offset: -480, features: dynamicFeatures };
   if (hostMid) p.host_mid = hostMid;
   const d = await getJSON<any>('/x/polymer/web-dynamic/v1/feed/all', p);
   return { list: (d.items ?? []).map(toDyn).filter(Boolean) as Dyn[], offset: d.offset ?? '', more: !!d.has_more, baseline: d.update_baseline ?? '' };

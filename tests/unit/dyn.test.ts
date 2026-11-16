@@ -1,13 +1,134 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/content/api/http', () => ({ getJSON: vi.fn(), postForm: vi.fn(), postJSON: vi.fn() }));
 import { getJSON, postJSON } from '../../src/content/api/http';
-import { dynCommentTarget, dynReplies, dynReserve, dynSubReplies, toDyn, type DynReserve } from '../../src/content/api/dyn';
+import { dynCommentTarget, dynPreview, dynReplies, dynReserve, dynSubReplies, followFeed, spaceDynamics, toDyn, type DynReserve } from '../../src/content/api/dyn';
 
 const get = vi.mocked(getJSON);
 const item = (dynamic: object = {}, basic?: object) => ({ id_str: '900001234567890123', type: 'DYNAMIC_TYPE_WORD', basic,
   modules: { module_author: { mid: 1 }, module_dynamic: dynamic } });
 const emoji = { type: 'RICH_TEXT_NODE_TYPE_EMOJI', text: '[开心]', emoji: { icon_url: '//i0.hdslb.com/happy.gif' } };
 beforeEach(() => vi.resetAllMocks());
+
+describe('充电专属动态', () => {
+  it('关注列表和空间列表均请求充电动态数据', async () => {
+    get.mockResolvedValue({ items: [] });
+    await followFeed('all', ''); await spaceDynamics(1, '');
+    for (const [, params] of get.mock.calls) {
+      expect(String(params?.features).split(',')).toEqual(expect.arrayContaining(['itemOpusStyle', 'listOnlyfans', 'onlyfansAssetsV2']));
+    }
+  });
+
+  it('空摘要不能盖掉已有的预览正文和表情', () => {
+    const d = toDyn(item({ major: { opus: { title: '被催图片后怒发一张', summary: { text: '  ' } },
+      blocked: { blocked_type: 1 } }, desc: { text: '预览[开心]', rich_text_nodes: [{ text: '预览' }, emoji] } }))!;
+    expect(d.title).toBe('被催图片后怒发一张'); expect(d.text).toBe('预览[开心]');
+    expect(d.richText?.[1].emoji).toContain('happy.gif');
+  });
+
+  it('图文详情读取公开标题与多段正文，不把解锁说明当作原文', () => {
+    const d = toDyn({ id_str: '90001', modules: [
+      { module_title: { text: '被催图片后怒发一张' } },
+      { module_content: { paragraphs: [
+        { text: { nodes: [{ word: { words: '第一段' } }, { rich: emoji }] } },
+        { text: { nodes: [{ word: { words: '第二段' } }] } },
+      ] } },
+      { module_blocked: { blocked_type: 1, title: '充电专属动态', hint_message: '加入包月充电即可解锁观看',
+        icon: { img_dark: '//i0.hdslb.com/lock.png' }, bg_img: { img_day: '//i0.hdslb.com/bg.png' } } },
+    ] })!;
+    expect(d.title).toBe('被催图片后怒发一张'); expect(d.text).toBe('第一段[开心]\n第二段');
+    expect(d.richText?.[1].emoji).toContain('happy.gif'); expect(d.charging).toBe(true);
+    expect(d.blocked?.title).toBe('充电专属动态');
+    expect(d.blocked?.icon).toBe('https://i0.hdslb.com/lock.png');
+    expect(d.blocked?.background).toBe('https://i0.hdslb.com/bg.png');
+    const locked = toDyn({ id_str: '90001', modules: [{ module_title: { text: '公开标题' } },
+      { module_blocked: { blocked_type: 1, hint_message: '请充电' } }] })!;
+    expect(locked.title).toBe('公开标题'); expect(locked.text).toBe('');
+  });
+
+  it('列表没给文字时按需补详情，并复用同一条动态的并发请求', async () => {
+    const raw = { ...item({ major: { blocked: { blocked_type: 1 } } }), id_str: '90002' };
+    const a = toDyn(raw)!, b = toDyn(raw)!;
+    get.mockResolvedValue({ item: { id_str: a.id, modules: [
+      { module_title: { text: '公开标题' } },
+      { module_content: { paragraphs: [{ text: { nodes: [{ word: { words: '公开预览' } }] } }] } },
+    ] } });
+    await Promise.all([dynPreview(a), dynPreview(b)]);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith('/x/polymer/web-dynamic/v1/opus/detail', expect.objectContaining({ id: a.id }), expect.any(AbortSignal));
+    for (const d of [a, b]) {
+      expect(d.title).toBe('公开标题'); expect(d.text).toBe('公开预览'); expect(d.blocked).toBeDefined();
+    }
+  });
+
+  it('详情失败保留解锁卡，普通动态和已有正文不预取', async () => {
+    const d = toDyn({ ...item({ major: { blocked: { blocked_type: 1 } } }), id_str: '90003' })!;
+    get.mockRejectedValue(new Error('HTTP 412'));
+    await expect(dynPreview(d)).resolves.toBeUndefined();
+    expect(d.text).toBe(''); expect(d.blocked).toBeDefined();
+    await dynPreview(d);
+    await dynPreview(toDyn(item({ desc: { text: '普通动态' } }))!);
+    await dynPreview(toDyn(item({ desc: { text: '已有预览' }, major: { blocked: { blocked_type: 1 } } }))!);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('并发补详情不超过三个，忽略不匹配的返回 ID', async () => {
+    const releases: (() => void)[] = [];
+    get.mockImplementation(() => new Promise(resolve => releases.push(() => resolve({ item: { ...item(), id_str: 'wrong' } }))));
+    const cards = ['90004', '90005', '90006', '90007'].map(id => toDyn({
+      ...item({ major: { blocked: { blocked_type: 1 } } }), id_str: id,
+    })!);
+    const tasks = cards.map(dynPreview);
+    expect(get).toHaveBeenCalledTimes(3);
+    releases.shift()!();
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(4));
+    releases.splice(0).forEach(release => release());
+    await Promise.all(tasks);
+    expect(cards.every(d => !d.title && !d.text && d.blocked)).toBe(true);
+  });
+
+  it('保留受限卡片的解锁说明、图片和充电入口', () => {
+    const d = toDyn(item({ major: { type: 'MAJOR_TYPE_BLOCKED', blocked: {
+      blocked_type: 1, hint_message: '为 TA 充电专属动态\n加入 6 元档包月充电即可解锁观看',
+      bg_img: { img_src: '//i0.hdslb.com/charging-bg.png' }, icon: { img_src: '//i0.hdslb.com/charging-icon.png' },
+      jump_url: '//www.bilibili.com/opus/900001234567890123', button: { text: '6元充电', jump_url: '//space.bilibili.com/1' },
+    } } }, { is_only_fans: true }))!;
+    expect(d.charging).toBe(true);
+    expect(d.blocked).toEqual({
+      message: '为 TA 充电专属动态\n加入 6 元档包月充电即可解锁观看',
+      background: 'https://i0.hdslb.com/charging-bg.png', icon: 'https://i0.hdslb.com/charging-icon.png',
+      url: 'https://space.bilibili.com/1', button: '6元充电',
+    });
+    expect(d.pics).toEqual([]);
+  });
+
+  it('已解锁的充电动态保留标题、正文和图片', () => {
+    const d = toDyn(item({ major: { type: 'MAJOR_TYPE_OPUS', opus: {
+      title: '充电专属标题', summary: { text: '可查看的正文' }, pics: [{ url: '//i0.hdslb.com/unlocked.jpg' }],
+    } } }, { is_only_fans: true }))!;
+    expect(d.charging).toBe(true); expect(d.blocked).toBeUndefined();
+    expect(d.title).toBe('充电专属标题'); expect(d.text).toBe('可查看的正文');
+    expect(d.pics).toEqual(['https://i0.hdslb.com/unlocked.jpg']);
+  });
+
+  it('缺少受限卡片详情时显示兜底提示，不把普通受限动态标为充电', () => {
+    const d = toDyn(item({ major: { type: 'MAJOR_TYPE_BLOCKED' } }))!;
+    expect(d.charging).toBeUndefined();
+    expect(d.blocked?.message).toBe('该动态暂不可查看，请前往详情页');
+    expect(d.blocked?.url).toBe(d.url); expect(d.blocked?.button).toBe('查看详情');
+    const charging = toDyn(item({ major: { blocked: { blocked_type: 1 } } }))!;
+    expect(charging.blocked?.message).toBe('为 TA 充电后查看专属动态');
+  });
+
+  it('转发保留原动态的受限状态，不使用可执行的图片和入口地址', () => {
+    const d = toDyn({ ...item(), orig: item({ major: { blocked: {
+      blocked_type: 1, bg_img: { img_src: 'javascript:alert(1)' }, icon: { img_src: 'data:text/html,invalid' },
+      jump_url: 'javascript:alert(1)', button: { jump_url: 'javascript:alert(1)' },
+    } } }) })!;
+    expect(d.orig?.charging).toBe(true); expect(d.orig?.blocked?.background).toBe('');
+    expect(d.orig?.blocked?.icon).toBe(''); expect(d.orig?.blocked?.url).toBe(d.orig?.url);
+    expect(get).not.toHaveBeenCalled();
+  });
+});
 
 describe('直播预约操作', () => {
   it('按服务器状态更新预约按钮、说明和人数，保留字符串 ID', async () => {

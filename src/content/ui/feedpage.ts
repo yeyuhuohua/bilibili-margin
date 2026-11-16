@@ -311,7 +311,9 @@ export class FeedApp {
       sk.forEach((n) => n.remove());
       const keep = compileDynFilter(this.shell.settings.filters, cachedTags);
       r.list.filter(keep).forEach((d) => {
-        const card = dynCard(d, false, true);
+        const card = dynCard(d, false, true, () => {
+          card.toggleAttribute('data-margin-filtered', !keep(d) || !this.shell.filter.allows(targetOfDyn(d)));
+        });
         card.toggleAttribute('data-margin-filtered', !this.shell.filter.allows(targetOfDyn(d)));
         this.list.append(card);
       });
