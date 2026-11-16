@@ -87,6 +87,73 @@ try {
     await page.waitForTimeout(300);
     assert(await scrollTop() > before, 'page scrolling stays locked after closing');
   });
+  await check('zoom-and-pan', async result => {
+    await open();
+    const img = viewer.locator('.lb-img');
+    const zoomValue = viewer.locator('.lb-zoom-val');
+    const zoomIn = viewer.getByRole('button', { name: '放大', exact: true });
+    const zoomOut = viewer.getByRole('button', { name: '缩小', exact: true });
+    await page.waitForFunction(() => document.getElementById('margin-root').shadowRoot.querySelector('.lb-img')?.complete);
+    const box100 = await img.boundingBox();
+    assert.equal(await zoomValue.textContent(), '100%');
+
+    await zoomIn.click();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '125%');
+    const box125 = await img.boundingBox();
+    assert(box125.width > box100.width * 1.15, JSON.stringify({ box100, box125 }));
+
+    await zoomOut.click();
+    await zoomOut.click();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '75%');
+    const box75 = await img.boundingBox();
+    assert(box75.width < box100.width * 0.85, JSON.stringify({ box100, box75 }));
+
+    await zoomValue.click();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '100%');
+
+    await page.keyboard.press('Equal');
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '125%');
+    await page.keyboard.press('Control+Digit0');
+    assert.equal(await zoomValue.textContent(), '125%');
+    await page.keyboard.press('Digit0');
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '100%');
+
+    await img.dblclick();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '200%');
+    // Mock placeholder SVGs are 320x200; zoom to 500% (1600x1000) so both axes overflow the 1280x800 stage.
+    for (let k = 0; k < 4; k++) await zoomIn.click();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '500%');
+    const box500 = await img.boundingBox();
+    await page.mouse.move(box500.x + box500.width / 2, box500.y + box500.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box500.x + box500.width / 2 + 60, box500.y + box500.height / 2 + 40, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    assert.equal(await viewer.isVisible(), true);
+    const panned = await img.boundingBox();
+    assert(Math.abs(panned.x - box500.x) > 10 && Math.abs(panned.y - box500.y) > 10, JSON.stringify({ box500, panned }));
+    await page.screenshot({ path: join(out, 'zoomed.png') });
+
+    await img.dblclick();
+    await page.waitForTimeout(220);
+    assert.equal(await zoomValue.textContent(), '100%');
+
+    await page.mouse.move(640, 380);
+    await page.mouse.wheel(0, -180);
+    await page.waitForTimeout(100);
+    assert.notEqual(await zoomValue.textContent(), '100%');
+
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await zoomValue.textContent(), '100%');
+    result.finalPercent = await zoomValue.textContent();
+  });
 } finally {
   writeFileSync(join(out, 'results.json'), JSON.stringify({ results, errors }, null, 2));
   await context.close();

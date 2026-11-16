@@ -550,14 +550,25 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 /* v0.47.2：图组查看器（GitHub #8） */
 .lb { position: fixed; inset: 0; z-index: 2147483000; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: rgb(10 10 11 / .94); color: #fff; opacity: 0; transition: opacity .2s var(--ease-out); }
 .lb[data-open] { opacity: 1; }
-.lb-top { display: flex; align-items: center; gap: 8px; padding: 16px 20px; }
+.lb-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 20px; }
 .lb-sp { flex: 1; }
 .lb-count { font: 500 13px/1 var(--mono); color: rgb(255 255 255 / .72); }
+.lb-zoom { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 99em; background: rgb(255 255 255 / .1); }
+.lb-zoom-btn { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 99em; background: none; color: #fff; cursor: pointer; transition: background .15s, opacity .15s; }
+.lb-zoom-btn svg { width: 15px; height: 15px; }
+.lb-zoom-val { min-width: 48px; height: 28px; padding: 0 8px; border: 0; border-radius: 99em; background: none; color: rgb(255 255 255 / .88); font: 500 12px/28px var(--mono); font-variant-numeric: tabular-nums; text-align: center; cursor: pointer; transition: background .15s, color .15s; }
+.lb-zoom-btn:hover:not([aria-disabled="true"]), .lb-zoom-val:hover { background: rgb(255 255 255 / .14); color: #fff; }
+.lb-zoom-btn[aria-disabled="true"] { opacity: .38; cursor: default; }
 .lb-btn { height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: rgb(255 255 255 / .1); color: #fff; font: 500 13px/32px var(--sans); text-decoration: none; cursor: pointer; transition: background .15s; }
 .lb-btn:hover { background: rgb(255 255 255 / .18); }
-.lb-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0 72px; }
-.lb-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgb(0 0 0 / .5); }
-.lb-nav { position: absolute; top: 50%; translate: 0 -50%; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(255 255 255 / .1); color: #fff; font: 300 28px/40px var(--sans); cursor: pointer; transition: background .15s; }
+.lb-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0 72px; overflow: hidden; touch-action: none; }
+.lb-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgb(0 0 0 / .5); transform-origin: center center; user-select: none; -webkit-user-drag: none; touch-action: none; cursor: zoom-in; }
+.lb-img[data-zoomed] { will-change: transform; }
+.lb-img[data-zoom-max] { cursor: zoom-out; }
+.lb-img[data-pan] { cursor: grab; }
+.lb-img[data-panning] { cursor: grabbing; }
+.lb-img[data-anim] { transition: transform .16s var(--ease-out); }
+.lb-nav { position: absolute; z-index: 2; top: 50%; translate: 0 -50%; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(255 255 255 / .1); color: #fff; font: 300 28px/40px var(--sans); cursor: pointer; transition: background .15s; }
 .lb-nav:hover { background: rgb(255 255 255 / .2); }
 .lb-nav svg { display: block; margin: auto; }
 .lb-nav.prev { left: 16px; } .lb-nav.next { right: 16px; }
@@ -566,6 +577,8 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 .lb-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lb-th:hover { opacity: .8; }
 .lb-th[data-on] { opacity: 1; box-shadow: 0 0 0 2px #fff; }
+@media (prefers-reduced-motion: reduce) { .lb, .lb-img[data-anim] { transition: none; } }
+.app.margin-reduce .lb-img[data-anim], .app.margin-ui-still .lb-img[data-anim] { transition: none; }
 /* v0.47.2：长动态折叠 + 整卡可点 */
 .dy-text.fold { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 8; overflow: hidden; }
 .dy-more { display: block; justify-self: start; align-self: flex-start; width: fit-content; margin: 4px 0 0; padding: 0; border: 0; background: none; color: var(--accent-text); font: 500 14px/24px var(--sans); cursor: pointer; }
