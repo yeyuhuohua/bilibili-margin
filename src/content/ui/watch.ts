@@ -20,6 +20,7 @@ import { skinComments } from './comment-skin';
 import css from '../styles/index';
 import { mountUpdateNotice } from './update-notice';
 import { mountSearchControls } from './search-controls';
+import { mountSearchHistorySync } from './search-history-sync';
 import { attachNavigationGlass } from './navigation-glass';
 import { BackgroundLayer } from '../bg/background';
 import { startTriple } from './triple';
@@ -133,7 +134,7 @@ export class WatchSkin {
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     root.append(this.app);
     mountUpdateNotice(this.app);
-    if (kind === 'search') mountSearchControls();
+    if (kind === 'search') { mountSearchControls(); mountSearchHistorySync(); }
     if (isWatch) { skinComments(); alignAuthorCard(); }
     const lg = filtersIn(root);
     attachNavigationGlass(this.head, lg);

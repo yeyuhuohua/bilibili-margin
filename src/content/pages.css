@@ -278,6 +278,11 @@ html.margin-search .search-panel .suggestions, html.margin-search .search-panel 
 html.margin-search .search-panel .suggest-item { border-radius: 10px; padding: 0 12px !important; color: var(--m-ink) !important; }
 html.margin-search .search-panel .suggest-item:hover, html.margin-search .search-panel .suggest-item.is-focus { background: var(--m-chip) !important; }
 html.margin-search .search-panel .suggest_high_light, html.margin-search .search-panel em { color: var(--m-accent) !important; font-style: normal; }
+html.margin-search :is(.search-panel, .search-panel-popover) .history-fold-wrap { width: fit-content !important; min-width: 64px; white-space: nowrap !important; gap: 4px; }
+html.margin-search :is(.search-panel, .search-panel-popover) .history-fold-wrap .fold-text { width: auto !important; height: auto !important; flex: none; white-space: nowrap !important; }
+html.margin-search :is(.search-panel, .search-panel-popover) .history-fold-wrap .fold-icon { flex: none; margin-left: 0 !important; }
+html.margin-search[data-margin-search-history="on"] :is(.search-panel, .search-panel-popover) .history:not(.margin-search-history) { display: none !important; }
+html.margin-search :is(.search-panel, .search-panel-popover) .margin-search-history[hidden] { display: none !important; }
 /* B 站滚动后冒出的吸顶搜索条会和映间顶栏叠在一起：隐藏它，顶栏里的搜索（/ 或 Ctrl+K）代替 */
 html.margin-search .search-fixed-header, html.margin-search .search-sticky-header { display: none !important; }
 

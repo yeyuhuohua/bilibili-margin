@@ -73,7 +73,7 @@ export function createCommandPalette(commands: Command[]): Palette {
     const q = input.value.trim();
     const out: [string, Row[]][] = [];
     if (!q) {
-      const hist = searchHistory().slice(0, 5).map((s) => searchRow(s, 'history'));
+      const hist = searchHistory().slice(0, 8).map((s) => searchRow(s, 'history'));
       if (hist.length) out.push(['最近搜索', hist]);
       if (hot.length) out.push(['bilibili 热搜', hot]);
     } else {
@@ -309,6 +309,7 @@ export function createCommandPalette(commands: Command[]): Palette {
   }
 
   let cmdK = true;
+  searchHistory();
   loadSettings().then((st) => { cmdK = st.cmdK; animK = 100 / st.paletteSpeed; }).catch(() => {});
   onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
   addEventListener('keydown', (e) => {
