@@ -62,9 +62,23 @@ try {
     assert.equal(await card.locator('.dy-rlist > .dy-r').count(), 2);
     const first = card.locator('.dy-rlist > .dy-r').first();
     assert.equal(await first.locator('.dy-r-up').count(), 1); assert.equal(await first.locator('.dy-r-top').count(), 1);
+    const headerRow = await first.evaluate(el => {
+      const name = el.querySelector('.dy-r-name').getBoundingClientRect();
+      const up = el.querySelector('.dy-r-up').getBoundingClientRect();
+      const top = el.querySelector('.dy-r-top').getBoundingClientRect();
+      return { name: name.toJSON(), up: up.toJSON(), top: top.toJSON() };
+    });
+    assert(headerRow.up.top < headerRow.name.bottom && headerRow.name.top < headerRow.up.bottom && headerRow.up.left >= headerRow.name.right, JSON.stringify(headerRow));
+    assert(headerRow.top.top < headerRow.name.bottom && headerRow.name.top < headerRow.top.bottom && headerRow.top.left >= headerRow.up.right, JSON.stringify(headerRow));
     assert.equal(await card.locator('.dy-r').filter({ hasText: '同名普通评论' }).locator('.dy-r-up').count(), 0);
     await first.locator('.dy-replies-toggle').click(); await card.getByText('作者楼中楼', { exact: true }).waitFor();
     assert.equal(await first.locator('.dy-sublist .dy-r-up').count(), 1); assert.equal(await first.locator('.dy-sublist .dy-r-top').count(), 0);
+    const subRow = await first.locator('.dy-sublist .dy-r').first().evaluate(el => {
+      const name = el.querySelector('.dy-r-name').getBoundingClientRect();
+      const up = el.querySelector('.dy-r-up').getBoundingClientRect();
+      return { name: name.toJSON(), up: up.toJSON() };
+    });
+    assert(subRow.up.top < subRow.name.bottom && subRow.name.top < subRow.up.bottom && subRow.up.left >= subRow.name.right, JSON.stringify(subRow));
   });
   await check('直播入口及侧栏默认各 8 条，未请求完整开播列表', async () => {
     await page.locator('.fd-live-row').nth(7).waitFor(); assert.equal(await page.locator('.fd-live-row').count(), 8);

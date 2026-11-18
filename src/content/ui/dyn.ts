@@ -27,7 +27,7 @@ function replyText(text: string, emotes: Record<string, string> = {}): (Node | s
   return out;
 }
 
-function replyUser(r: Reply): HTMLElement {
+function replyUser(r: Reply, ownerMid = 0): HTMLElement {
   const m = r.medal;
   const medalStyle = m ? [
     m.color && `--medal-bg:${m.color}`, m.endColor && `--medal-end:${m.endColor}`,
@@ -35,12 +35,14 @@ function replyUser(r: Reply): HTMLElement {
   ].filter(Boolean).join(';') : '';
   return h('div', { class: 'dy-r-user' },
     h('a', { class: 'dy-r-name', href: `https://space.bilibili.com/${r.mid}`, ...ext }, r.name),
+    ownerMid > 0 && r.mid === ownerMid ? h('span', { class: 'dy-r-tag dy-r-up', 'aria-label': '动态作者' }, 'UP') : null,
     r.level ? h('img', { class: 'dy-r-level', src: `https://i0.hdslb.com/bfs/seed/jinkela/short/webui/user-profile/img/level_${r.senior ? 'h' : r.level}.svg`, alt: r.senior ? '硬核会员' : `Lv${r.level}`, title: r.senior ? '硬核会员' : `用户等级 Lv${r.level}`, width: '30', height: '30', loading: 'lazy' }) : null,
     m ? h('span', { class: `dy-r-medal${m.firstIcon || m.secondIcon ? ' has-icon' : ''}`, title: `${m.name} ${m.level} 级粉丝勋章`, style: medalStyle },
       m.firstIcon ? h('img', { class: 'dy-r-medal-first', src: m.firstIcon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
       m.secondIcon ? h('img', { class: 'dy-r-medal-second', src: m.secondIcon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
       h('span', { class: 'dy-r-medal-text' }, h('span', { class: 'dy-r-medal-name' }, m.name), h('b', { class: 'dy-r-medal-level' }, String(m.level)))) : null,
-    r.nameplate ? h('img', { class: 'dy-r-nameplate', src: r.nameplate.image, alt: r.nameplate.name, title: r.nameplate.name, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null);
+    r.nameplate ? h('img', { class: 'dy-r-nameplate', src: r.nameplate.image, alt: r.nameplate.name, title: r.nameplate.name, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null,
+    r.top ? h('span', { class: 'dy-r-tag dy-r-top' }, '置顶') : null);
 }
 
 /** 动态卡 → 原始数据；屏蔽词变化时重新判断用 */
@@ -286,9 +288,7 @@ function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement
       h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
       r.pendant ? h('img', { class: 'dy-r-pendant', src: r.pendant, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : null),
     h('div', { class: 'dy-r-b' },
-      replyUser(r),
-      ownerMid > 0 && r.mid === ownerMid ? h('span', { class: 'dy-r-tag dy-r-up', 'aria-label': '动态作者' }, 'UP') : null,
-      r.top ? h('span', { class: 'dy-r-tag dy-r-top' }, '置顶') : null,
+      replyUser(r, ownerMid),
       h('p', {}, ...(r.richText ? richText(r.text, r.richText) : replyText(r.text, r.emotes))),
       pictures,
       h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.location, r.like ? `赞 ${fmtCount(r.like)}` : ''].filter(Boolean).join(' · '),

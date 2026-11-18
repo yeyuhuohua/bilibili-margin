@@ -622,13 +622,14 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 .dy-send[disabled] { opacity: .4; pointer-events: none; }
 .dy-rlist { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .dy-r { display: flex; gap: 12px; }
-.dy-r-face { position: relative; display: block; flex: 0 0 28px; width: 28px; height: 28px; }
-.dy-r-face img { width: 28px; height: 28px; border-radius: 50%; display: block; background: var(--chip); }
+.dy-r-face { position: relative; display: block; flex: 0 0 28px; width: 28px; height: 28px; margin-top: 1px; }
+.dy-r-face .dy-r-avatar { width: 100%; height: 100%; border-radius: 50%; display: block; background: var(--chip); object-fit: cover; }
 .dy-r-face.has-pendant .dy-r-avatar { width: 78.7%; height: 78.7%; margin: 10.65%; }
-.dy-r-face .dy-r-pendant { position: absolute; left: -18.75%; top: -18.75%; width: 137.5%; height: 137.5%; border-radius: 0; background: transparent; object-fit: contain; pointer-events: none; }
+.dy-r-face .dy-r-pendant { position: absolute; left: -18.75%; top: -18.75%; width: 137.5%; height: 137.5%; border-radius: 0; background: transparent; display: block; object-fit: contain; pointer-events: none; }
 .dy-r-b { min-width: 0; flex: 1; }
-.dy-r-user { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 30px; }
+.dy-r-user { display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; min-width: 0; min-height: 30px; }
 .dy-r-name, .dy-r b { font: 500 12px/1.4 var(--sans); color: var(--muted); text-decoration: none; }
+.dy-r-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dy-r-level { display: block; flex: none; width: 30px; height: 30px; object-fit: contain; }
 .dy-r-medal { display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: fit-content; height: 14px; padding: 0 4px; border-radius: 7px; background: linear-gradient(90deg, var(--medal-bg, #f8ebf0), var(--medal-end, var(--medal-bg, #f8ebf0))); user-select: none; }
 .dy-r-medal.has-icon { border: .5px solid var(--medal-border, #efe3c7); }
@@ -639,7 +640,7 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 @font-face { font-family: fansmedal-num; font-style: normal; font-weight: 400; font-display: swap; src: url('https://s1.hdslb.com/bfs/static/jinkela/long/fonts/fansmedal-num.ttf') format('truetype'); }
 .dy-r-medal-level { margin-left: 2px; transform: translateY(1px); color: var(--medal-level, #d9a0b6); font: 400 9px/1 fansmedal-num, var(--mono); letter-spacing: -.3px; }
 .dy-r-nameplate { flex: none; width: auto; max-width: 100px; height: 16px; object-fit: contain; }
-.dy-r-tag { display: inline-block; margin-left: 6px; padding: 1px 4px; border-radius: 4px; font: 600 10px/1.3 var(--sans); vertical-align: baseline; }
+.dy-r-tag { display: inline-flex; align-items: center; flex: none; white-space: nowrap; padding: 1px 4px; border-radius: 4px; font: 600 10px/1.3 var(--sans); }
 .dy-r-up { color: #fff; background: #fb7299; }
 .dy-r-top { color: var(--accent-text); background: var(--chip); }
 .dy-r p { margin: 4px 0 0; font: 400 14px/1.6 var(--sans); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -666,7 +667,7 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 .dy-sublist { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 0 2px; padding-left: 14px; border-left: 1px solid var(--line); }
 .dy-sublist[hidden], .dy-sublist > .dy-rempty:empty { display: none; }
 .dy-sublist .dy-r { gap: 8px; }
-.dy-sublist .dy-r-face img { width: 24px; height: 24px; }
+.dy-sublist .dy-r-face { flex: 0 0 24px; width: 24px; height: 24px; margin-top: 3px; }
 .dy-rempty { font: 400 13px/1.6 var(--sans); color: var(--muted); }
 .dy-cbox[hidden] { display: none; }
 .wh-recall { margin-left: 10px; color: var(--muted); font-size: 12px; opacity: 0; }

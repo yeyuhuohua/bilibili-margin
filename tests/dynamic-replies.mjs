@@ -15,7 +15,8 @@ const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir()
 });
 const rootId = '900001234567890123';
 const reply = (i, root = false) => ({ rpid: Number(rootId) + i, rpid_str: root ? rootId : `9100012345678901${String(i).padStart(2, '0')}`,
-  member: { mid: i + 1, uname: root ? '根评论作者' : `回复作者 ${i}`, avatar: `https://i0.hdslb.com/face-${i}.jpg` }, rcount: root ? 12 : 0,
+  member: { mid: i + 1, uname: root ? '根评论作者' : `回复作者 ${i}`, avatar: `https://i0.hdslb.com/face-${i}.jpg`,
+    ...(root || i === 1 ? { pendant: { image: 'https://i0.hdslb.com/pendant.png' } } : {}) }, rcount: root ? 12 : 0,
   content: { message: root ? '可以展开的评论' : `楼中楼 ${i}[开心]`, emote: { '[开心]': { url: 'https://i0.hdslb.com/happy.gif' } },
     pictures: root ? [{ img_src: '//i0.hdslb.com/comment-main.jpg' }]
       : i === 1 ? [{ img_src: 'https://i0.hdslb.com/comment-child.jpg' }, { img_src: 'https://i0.hdslb.com/comment-child.gif' }] : [] } });
@@ -56,6 +57,23 @@ try {
     assert.equal(calls.at(-1).oid, '900001');
     assert.equal(await card.locator('.dy-sublist .dy-emoji').count(), 10);
     assert.equal(await card.locator('.dy-sublist .dy-r-name').first().getAttribute('href'), 'https://space.bilibili.com/2');
+    const pendants = await card.evaluate(el => {
+      const measure = row => {
+        const face = row.querySelector('.dy-r-face').getBoundingClientRect();
+        const avatar = row.querySelector('.dy-r-avatar').getBoundingClientRect();
+        const pendant = row.querySelector('.dy-r-pendant').getBoundingClientRect();
+        return {
+          face: face.toJSON(), avatar: avatar.toJSON(), pendant: pendant.toJSON(),
+          dx: Math.abs((pendant.left + pendant.width / 2) - (avatar.left + avatar.width / 2)),
+          dy: Math.abs((pendant.top + pendant.height / 2) - (avatar.top + avatar.height / 2)),
+        };
+      };
+      return { root: measure(el.querySelector('.dy-rlist > .dy-r')), sub: measure(el.querySelector('.dy-sublist > .dy-r')) };
+    });
+    assert(Math.abs(pendants.root.face.width - 28) < .5 && Math.abs(pendants.root.pendant.width - 28 * 1.375) < .5, JSON.stringify(pendants.root));
+    assert(pendants.root.dx < .5 && pendants.root.dy < .5, JSON.stringify(pendants.root));
+    assert(Math.abs(pendants.sub.face.width - 24) < .5 && Math.abs(pendants.sub.avatar.width - 24 * .787) < .5 && Math.abs(pendants.sub.pendant.width - 24 * 1.375) < .5, JSON.stringify(pendants.sub));
+    assert(pendants.sub.dx < .5 && pendants.sub.dy < .5, JSON.stringify(pendants.sub));
     assert.equal(context.pages().length, tabs);
     const rootPictures = card.locator('.dy-rlist > .dy-r > .dy-r-b > .dy-r-pics');
     const childPictures = card.locator('.dy-sublist > .dy-r').first().locator('.dy-r-pics');
