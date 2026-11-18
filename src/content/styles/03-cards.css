@@ -52,8 +52,10 @@
 .update-actions { display: flex; justify-content: flex-end; margin-top: 24px; }
 .sheet-body { scrollbar-width: thin; scrollbar-color: var(--line) transparent; flex: 1; overflow-y: auto; padding: 8px 24px 28px; overscroll-behavior: contain; }
 .fav-body { min-height: 0; }
-.fav-footer { flex: none; display: flex; justify-content: flex-end; padding: 10px 24px; border-top: 1px solid var(--line); }
-.fav-to-top { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--chip); color: var(--ink); font-size: 13px; }
+.fav-footer { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 24px; border-top: 1px solid var(--line); }
+.fav-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; margin-right: auto; color: var(--muted); font-size: 13px; }
+.fav-retry, .fav-to-top { display: inline-flex; flex-shrink: 0; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--chip); color: var(--ink); font-size: 13px; }
+.fav-retry:disabled { opacity: .5; cursor: wait; }
 .fav-to-top svg { width: 15px; height: 15px; transition: transform .15s var(--ease-out); }
 .fav-to-top:hover svg { transform: translateY(-2px); }
 .fav-video-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

@@ -1,5 +1,5 @@
 import type { BgMode, HomeBit, HomeSection, Settings, ShaderId, Theme } from '../../shared/settings';
-import { BG_IMAGE_KEY, clampPaletteSpeed, cleanFont, DEFAULTS, HOME_BITS, HOME_SECTION_NAMES, normalizeHomeOrder, replaceSettings, sanitizeSettings, saveSettings } from '../../shared/settings';
+import { BG_IMAGE_KEY, clampPaletteSpeed, cleanFont, DEFAULTS, HOME_BITS, HOME_SECTION_NAMES, REDESIGN_PAGES, REDESIGN_LABELS, normalizeHomeOrder, replaceSettings, sanitizeSettings, saveSettings } from '../../shared/settings';
 import { ACTIVITY_KEY, sanitizeActivity } from '../../shared/activity';
 import { importActivity } from '../footprint/store';
 import { compressImage } from '../bg/background';
@@ -14,17 +14,27 @@ import { appPoll, appQr, appRemember, appRevoke, appState } from '../api/appfeed
 import { clearLoc, loadLoc, savedLoc, setLoc as setLocWithName } from '../api/weather';
 import { createCityPicker } from './city-picker';
 import { forgetSearch } from '../api/search-history';
+import { checkRelease, newerRelease } from '../../shared/releases';
 
 export interface SettingsPanel { sheet: SettingsPage; sync(s: Settings): void }
 
-/** 设置内容第一次打开时才建（约 220 个节点、几十个控件），页面加载时只放一个空的整页容器 */
+/** 设置内容第一次打开时才建；关闭期间的变更等再次打开时统一同步。 */
 export function createSettingsPanel(get: () => Settings, currentShader: () => ShaderId | null): SettingsPanel {
   let inner: SettingsPanel | null = null;
+  let synced = '';
+  const key = (s: Settings) => JSON.stringify([s, currentShader()]);
+  const sync = (s: Settings) => {
+    if (!inner || !sheet.isOpen()) return;
+    const next = key(s);
+    if (next === synced) return;
+    inner.sync(s);
+    synced = next;
+  };
   const sheet: SettingsPage = createSettingsPage({ title: '设置', eyebrow: 'Preferences', onOpen: () => {
-    if (!inner) inner = buildSettingsPanel(sheet, get, currentShader);
-    else inner.sync(get());
+    if (!inner) { inner = buildSettingsPanel(sheet, get, currentShader); synced = key(get()); }
+    else sync(get());
   } });
-  return { sheet, sync(s) { inner?.sync(s); } };
+  return { sheet, sync };
 }
 
 function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentShader: () => ShaderId | null): SettingsPanel {
@@ -33,6 +43,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   const s0 = get();
   const version = chrome.runtime.getManifest().version_name || chrome.runtime.getManifest().version;
   const enabledT = toggle(s0.enabled, '启用 MARGIN', (value) => save({ enabled: value }));
+  const pages = pillToggles(REDESIGN_PAGES.map(p => [p, REDESIGN_LABELS[p]]), REDESIGN_PAGES.filter(p => !s0.pageOff.includes(p)), on => save({ pageOff: REDESIGN_PAGES.filter(p => !on.includes(p)) }));
   const externalT = toggle(s0.privacyExternal, '允许外部辅助服务', (value) => save({ privacyExternal: value }));
   const historyT = toggle(s0.searchHistory, '保存最近搜索', (value) => save({ searchHistory: value }));
   const clearHistory = h('button', { type: 'button', class: 'ghost small', onclick: async () => {
@@ -151,6 +162,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
   void loadLoc().then(paintCity, () => say('天气位置读取失败，请重试'));
   const cityBox = cityPicker.el;
   const cols = segmented<string>([['0', '自动'], ['4', '4 个'], ['5', '5 个'], ['6', '6 个']], String(s0.cols), (v) => save({ cols: Number(v) as 0 | 4 | 5 | 6 }));
+  const homeWidth = segmented<Settings['homeWidth']>([['current', '当前宽度'], ['compact', '居中收窄'], ['fluid', '自适应铺开']], s0.homeWidth, (v) => save({ homeWidth: v }));
   const fontS = segmented<'serif' | 'sans'>([['serif', '衬线'], ['sans', '无衬线']], s0.titleFont, (v) => save({ titleFont: v }));
   const monoT = toggle(s0.monoNum, '数字用等宽字体', (v) => save({ monoNum: v }));
   const fontIn = h('input', { type: 'text', class: 'city-in font-in', value: s0.bodyFont, placeholder: '比如 微软雅黑、HarmonyOS Sans SC', 'aria-label': '自定义字体', spellcheck: 'false' }) as HTMLInputElement;
@@ -582,9 +594,31 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
     replaceSettings(next).then(() => say('已恢复默认设置')).catch(() => say('恢复失败，请重试'));
   };
 
+  const updateStatus = h('small', { role: 'status', 'aria-live': 'polite', style: 'display:block;max-width:240px;margin-top:6px;white-space:normal;overflow-wrap:anywhere;line-height:1.5' });
+  const checkUpdate = h('button', { type: 'button', class: 'ghost small', onclick: async () => {
+    if (checkUpdate.disabled) return;
+    checkUpdate.disabled = true; updateStatus.textContent = '正在检查更新…';
+    try {
+      const release = await checkRelease(true);
+      if (newerRelease(release.tag, chrome.runtime.getManifest().version)) {
+        updateStatus.replaceChildren(h('a', { href: release.url, target: '_blank', rel: 'noopener noreferrer' }, `${release.name || `v${release.tag}`} · 查看新版`));
+      } else updateStatus.textContent = newerRelease(chrome.runtime.getManifest().version, release.tag) ? '当前版本高于最新正式版' : '当前已是最新正式版';
+    } catch (error) {
+      updateStatus.textContent = (error as Error).name === 'PrivacyBlocked'
+        ? '外部服务已关闭，可在隐私分类开启，或通过更新日志查看。'
+        : '检查失败，请稍后重试或查看更新日志。';
+    } finally {
+      checkUpdate.disabled = false;
+      if (sheet.isOpen()) {
+        const bottom = updateStatus.getBoundingClientRect().bottom, edge = sheet.body.getBoundingClientRect().bottom;
+        if (bottom > edge) sheet.body.scrollTop += bottom - edge + 8;
+      }
+    }
+  } }, '检查更新') as HTMLButtonElement;
   sheet.section('overview', '总览', '常用的开关都在这里；左侧可以按类别找到全部设置。',
     row('启用 MARGIN', '关闭后本页立即恢复 B 站原版；也可以在扩展弹窗里重新打开', enabledT),
     row('其他页面重设计', '播放页、搜索页、空间、动态等，只换外观不改功能', watch),
+    block('按页面重设计', '选中使用映间外观，取消后恢复原站。除首页外还需开启上方总开关；也可在浏览器扩展弹窗重新开启', pages),
     block('明暗', '跟随系统时随浏览器的深浅色自动切换', theme),
     row('消息提醒', '关闭后顶栏不再显示消息未读数，动态角标不受影响', msgT),
     h('div', { class: 'row' },
@@ -594,6 +628,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       h('div', { class: 'stg-links' },
         h('a', { href: 'https://github.com/jiuyang5354/bilibili-margin', target: '_blank', rel: 'noopener noreferrer' }, 'GitHub'),
         h('a', { href: 'https://github.com/jiuyang5354/bilibili-margin/releases', target: '_blank', rel: 'noopener noreferrer' }, '更新日志'))),
+    row('版本更新', '商店版由浏览器自动更新；解压安装版下载后覆盖原文件夹并重新加载。', h('div', { style: 'max-width:240px;min-width:0;text-align:right' }, checkUpdate, updateStatus)),
     h('div', { class: 'row' },
       h('div', { class: 'row-label' },
         h('span', {}, '恢复默认设置'),
@@ -642,6 +677,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       block('天气城市', '选中候选固定城市；点击「自动」恢复 IP 定位', cityBox),
       block('卡片信息', '首页视频卡片下面显示哪些，点一下开关', cardBits)),
     block('每行视频', '自动按窗口宽度排 6–8 个；也可以固定 4 / 5 / 6 个，卡片更大', cols),
+    block('内容宽度', '当前保持 2024px 上限；收窄到 1600px 居中；自适应利用大屏宽度。小窗口沿用原布局', homeWidth),
     block('版块顺序', '上移 / 下移调整首页版块；修改后立即生效', orderBox),
     row('批次导航', '每次「换一批」只加载一页，底部左右箭头切换批次；开启后推荐页不再随滚动自动补页', batchNavT),
     batchOpts,
@@ -722,6 +758,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       jumpT.setAttribute('aria-checked', String(s.danmakuJump));
       airT.setAttribute('aria-checked', String(s.danmakuAirborne));
       watch.setAttribute('aria-checked', String(s.watch));
+      pages.set(REDESIGN_PAGES.filter(p => !s.pageOff.includes(p)));
       foot.setAttribute('aria-checked', String(s.footprint));
       wxT.setAttribute('aria-checked', String(s.weather));
       searchT.setAttribute('aria-checked', String(!s.homeHide.includes('search')));
@@ -747,6 +784,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
       msgT.setAttribute('aria-checked', String(s.msgRemind));
       adsT.setAttribute('aria-checked', String(s.hideAds));
       cols.set(String(s.cols));
+      homeWidth.set(s.homeWidth);
       fontS.set(s.titleFont);
       monoT.setAttribute('aria-checked', String(s.monoNum));
       zoomS.set(String(s.zoom));

@@ -19,7 +19,7 @@ function runMotion(hz: number, duration: number) {
 }
 
 describe('account card high-refresh motion', () => {
-  it.each([100, 120, 144, 240])('keeps physical time and easing unchanged at %i Hz', hz => {
+  it.each([100, 120, 144, 240, 260])('keeps physical time and easing unchanged at %i Hz', hz => {
     const baseline = runMotion(60, 250);
     const motion = runMotion(hz, 250);
     expect(motion.steps).toBe(15);

@@ -59,15 +59,16 @@ function svg(cls: string, w: number, hh: number, d: string, stroke?: string, def
 }
 
 /** 生成纹理画布：先占位模糊，画好后淡入（全页共用一个分帧绘制队列） */
-function artCanvas(art: ArtPreset, seed: number, w: number, hh: number, density: number, priority: number, cls: string, onReady?: () => void): HTMLCanvasElement {
+function artCanvas(art: ArtPreset, seed: number, w: number, hh: number, density: number, priority: number, cls: string, pending: Map<HTMLCanvasElement, () => void>, onReady: () => void): HTMLCanvasElement {
   const c = h('canvas', { class: cls, 'aria-hidden': 'true', style: `width:${w}px;height:${hh}px;max-width:none` }) as HTMLCanvasElement;
-  paint(recipeOf(art), seed, Math.round(w * density), Math.round(hh * density), priority).then((src) => {
+  pending.set(c, () => void paint(recipeOf(art), seed, Math.round(w * density), Math.round(hh * density), priority).then((src) => {
+    if (!c.isConnected) return;
     c.width = src.width;
     c.height = src.height;
     c.getContext('2d')?.drawImage(src, 0, 0);
     c.dataset.ready = '';
-    onReady?.();
-  });
+    onReady();
+  }));
   return c;
 }
 
@@ -79,6 +80,8 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   let open = false;
   let menuOpen = false;
   let disposed = false;
+  let inView = false;
+  const pendingArt = new Map<HTMLCanvasElement, () => void>();
   let files: GFFile[] = [];
 
   const root = h('div', { class: 'gf-root', 'data-place': 'bottom-left', style: `width:${width}px;height:${(H + HEADROOM) * k}px;--gf-water:url(#${uid}-water)` });
@@ -87,8 +90,8 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
 
   // 后板与封面
   const back = h('div', { class: 'gf-back', style: `clip-path:path('${BACK_PATH}')`, 'aria-hidden': 'true' });
-  if (o.image) back.append(h('img', { class: 'gf-art', src: o.image, alt: '', width: W + 24, height: H + 24, draggable: 'false', referrerpolicy: 'no-referrer' }));
-  else if (o.art && o.art !== 'none') back.append(artCanvas(o.art, o.seed ?? 3, W + 24, H + 24, density, 0, 'gf-art', () => syncFrost()));
+  if (o.image) back.append(h('img', { class: 'gf-art', src: o.image, alt: '', width: W + 24, height: H + 24, draggable: 'false', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }));
+  else if (o.art && o.art !== 'none') back.append(artCanvas(o.art, o.seed ?? 3, W + 24, H + 24, density, 0, 'gf-art', pendingArt, () => syncFrost()));
   back.append(h('div', { class: 'gf-back-sheen' }));
 
   // 毛玻璃前板（底边铰链）
@@ -133,10 +136,20 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
   // Pointer parallax moves the real cover only; keep its blurred copy cacheable.
   const arts = [...back.querySelectorAll<HTMLElement>('.gf-art')];
   let frostRaf = 0;
+  let frostDirty = false;
+  function paintVisibleArt() {
+    for (const [canvas, start] of pendingArt) {
+      if (!root.contains(canvas)) pendingArt.delete(canvas);
+      else if (inView) { pendingArt.delete(canvas); start(); }
+    }
+  }
   function syncFrost() {
-    if (disposed || frostRaf) return;
+    frostDirty = true;
+    if (disposed || !inView || frostRaf) return;
     frostRaf = requestAnimationFrame(() => {
       frostRaf = 0;
+      if (disposed || !inView) return;
+      frostDirty = false;
       const b = back.cloneNode(true) as HTMLElement;
       const f = filesEl.cloneNode(true) as HTMLElement;
       f.removeAttribute('role');
@@ -206,7 +219,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
         file.image
           ? h('img', { class: 'gf-sheet-art', src: file.image, alt: '', width: SHEET_W, height: SHEET_H, draggable: 'false', loading: 'lazy', referrerpolicy: 'no-referrer' })
           : file.art
-            ? artCanvas(file.art, hashString(file.name) % 997, SHEET_W, SHEET_H, Math.min(density, 1.25), 1, 'gf-sheet-art', () => syncFrost())
+            ? artCanvas(file.art, hashString(file.name) % 997, SHEET_W, SHEET_H, Math.min(density, 1.25), 1, 'gf-sheet-art', pendingArt, () => syncFrost())
             : h('span', { class: 'gf-lines', 'aria-hidden': 'true' }, ...[86, 92, 64, 88, 42].map((w) => h('i', { style: `width:${w}%` }))),
         h('span', { class: 'gf-sheet-head' }, h('span', { class: 'gf-sheet-name' }, file.name), file.meta ? h('span', { class: 'gf-sheet-meta' }, file.meta) : null),
       ];
@@ -221,6 +234,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
     }));
     if (!o.meta) setMeta(`${files.length} 项`);
     label();
+    paintVisibleArt();
     syncFrost();
   }
 
@@ -314,12 +328,15 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
     document[m]('pointerdown', onDown as EventListener);
   }
 
-  // 首次进入视口时组装
+  // 进入视口后才生成纹理与毛玻璃副本，离屏内容更新只标记待绘制。
   let enterTimer = 0;
-  const io = new IntersectionObserver((es) => {
-    if (!es.some((e) => e.isIntersecting)) return;
-    io.disconnect();
-    enterTimer = window.setTimeout(() => root.toggleAttribute('data-entered', true), o.appearDelay ?? 0);
+  const io = new IntersectionObserver((entries) => {
+    const entry = entries[entries.length - 1];
+    inView = entry.isIntersecting;
+    if (!inView) return;
+    if (!enterTimer) enterTimer = window.setTimeout(() => root.toggleAttribute('data-entered', true), o.appearDelay ?? 0);
+    paintVisibleArt();
+    if (frostDirty) syncFrost();
   }, { threshold: 0.25 });
   io.observe(root);
   let measuredWidth = width;
@@ -337,6 +354,7 @@ export function glassFolder(o: GFOptions): GlassFolderApi {
     disposed = true; open = false; menuOpen = false; listen();
     io.disconnect(); ro.disconnect(); clearTimeout(enterTimer);
     cancelAnimationFrame(raf); cancelAnimationFrame(frostRaf);
+    pendingArt.clear();
     pointerScope?.removeEventListener('scroll', invalidatePointer, true);
     pointerScope = null;
     removeEventListener('scroll', invalidatePointer, true);

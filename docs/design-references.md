@@ -6,6 +6,10 @@
 
 以下记录项目迭代中采用的参考与移植来源；历史实现描述不代表当前版本仍使用同一种技术。第三方代码、字体与素材遵循各自许可。
 
+## 项目缘起与相关开源项目
+
+最初的需求讨论从 [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) 的 B 站页面重设计方向开始。[BewlyCat](https://github.com/keleus/BewlyCat) 是基于 BewlyBewly 持续演进的相关扩展，也是核对功能取舍的同类项目。感谢这些项目及其贡献者提供可对照的开源实现与讨论。下面按模块记录具体采用的设计参考与移植来源。
+
 - 私信图片 / 表情：参考 21st [Emoji Picker（liveblocks）](https://21st.dev/@liveblocks/components/emoji-picker) 的搜索、分类与弹出面板，以及 [File Attachment（serafimcloud）](https://21st.dev/@serafimcloud/components/file-attachment) 的缩略图 / 移除交互，按现有 TypeScript 与 CSS 变量独立实现，不增加 React 依赖。表情目录、上传与消息格式对照 B 站原生消息页脚本，不在运行时请求 21st。
 - 首页与播放页沿用原有昼夜开关；小主题按钮预览方案已按用户要求撤回。
 - 稍后再看图标：对齐 [B 站原生搜索页](https://search.bilibili.com/all?keyword=bilibili) 卡片的圆环播放图形；路径坐标保留三位小数并从 20 缩放到 24 viewBox。

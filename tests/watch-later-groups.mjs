@@ -47,7 +47,7 @@ try {
   await seed({ intro: false, reduceMotion: true, theme: 'dark', bg: { mode: 'off' } });
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
-  const drawer = page.getByRole('dialog', { name: '稍后再看', exact: true });
+  const drawer = page.locator('.dw-panel[role="dialog"][aria-label="稍后再看"]');
   const select = drawer.getByRole('combobox', { name: '按 UP 主筛选' });
   const group = drawer.getByRole('checkbox', { name: '按 UP 主分组' });
   const close = () => drawer.getByRole('button', { name: '关闭', exact: true }).click();

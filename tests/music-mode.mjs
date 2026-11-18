@@ -60,8 +60,10 @@ try {
   const ordinaryBefore = await shaderTime('#margin-bg'); await page.waitForTimeout(180); const ordinaryAfter = await shaderTime('#margin-bg');
   await entry.click();
   const panel = page.locator('#margin-music');
+  const activeGlassFilters = () => panel.locator('filter').evaluateAll(filters => filters.filter(filter => /^lg-\d+$/.test(filter.id)).length);
   await panel.getByRole('tab', { name: '视频视图', exact: true }).waitFor({ timeout: 3000 });
   await panel.getByRole('tab', { name: '聆听视图', exact: true }).waitFor();
+  assert.equal(await activeGlassFilters(), 2, 'dock and view indicator each own one glass filter');
   assert.equal(await panel.locator('.mm-grid').count(), 0);
   assert(requests.some(u => u.endsWith('/pages/' + chunk)));
   results.push('the installed entry loads the new dual-view module, not the old cover/lyrics layout');
@@ -69,6 +71,38 @@ try {
   const canvas = panel.locator('canvas[aria-label="实时音频频谱"]'), first = await canvas.evaluate(el => el.toDataURL());
   await page.waitForTimeout(180); assert.notEqual(await canvas.evaluate(el => el.toDataURL()), first);
   results.push('playing native media automatically enables real spectrum without an enable click');
+  assert.equal(await panel.getByRole('tab', { name: '点阵样式', exact: true }).getAttribute('aria-selected'), 'true');
+  const shapeNames = ['频谱样式', '环形样式', '点阵样式', '声波样式', '圆点样式'];
+  const shapeFrames = new Set();
+  for (const name of shapeNames) {
+    await panel.getByRole('tab', { name, exact: true }).click();
+    await page.waitForTimeout(180);
+    assert.equal(await panel.getByRole('tab', { name, exact: true }).getAttribute('aria-selected'), 'true');
+    assert.equal(await panel.locator('.lv-wave-tab[aria-selected="true"]').count(), 1);
+    shapeFrames.add(await canvas.evaluate(el => el.toDataURL()));
+  }
+  assert.equal(shapeFrames.size, 5);
+  assert(await page.evaluate(() => document.querySelectorAll('video').length === 1 && document.querySelector('video') === nativeVideo));
+  results.push('five distinct spectrum forms use the same native video with grid selected initially');
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await panel.getByRole('tab', { name: '频谱样式', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await panel.getByRole('tab', { name: '圆点样式', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('Home');
+  assert.equal(await panel.getByRole('tab', { name: '频谱样式', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await panel.locator('.lv-wave-tab[tabindex="0"]').count(), 1);
+  results.push('spectrum keyboard controls wrap through five forms with one tab stop');
+  await page.evaluate(() => nativeVideo.pause());
+  await panel.getByRole('button', { name: '播放', exact: true }).waitFor();
+  for (const name of shapeNames) {
+    await panel.getByRole('tab', { name, exact: true }).click();
+    const still = await canvas.evaluate(el => el.toDataURL());
+    await page.waitForTimeout(100);
+    assert.equal(await canvas.evaluate(el => el.toDataURL()), still);
+  }
+  await panel.getByRole('button', { name: '播放', exact: true }).click();
+  results.push('all five spectrum forms stop animating when native playback is paused');
   await panel.getByRole('tab', { name: '声波样式', exact: true }).click();
   assert.equal(await panel.getByRole('tab', { name: '声波样式', exact: true }).getAttribute('aria-selected'), 'true');
   assert.equal(await panel.locator('.fv-ambient').count(), 0);
@@ -120,13 +154,33 @@ try {
   await page.evaluate(() => { nativeVideo.currentTime = 12; nativeVideo.volume = .4; nativeVideo.playbackRate = 1.25; });
   const media = () => page.evaluate(() => ({ time: nativeVideo.currentTime, paused: nativeVideo.paused, volume: nativeVideo.volume, rate: nativeVideo.playbackRate }));
   const before = await media();
-  for (const name of ['视频视图', '聆听视图']) { await panel.getByRole('tab', { name, exact: true }).click(); assert.deepEqual(await media(), before); assert.deepEqual(await identity(), original); }
+  for (const name of Array(4).fill(['视频视图', '聆听视图']).flat()) { await panel.getByRole('tab', { name, exact: true }).click(); assert.deepEqual(await media(), before); assert.deepEqual(await identity(), original); }
   results.push('view switches preserve the same player, video, parent, danmaku, time, pause, volume and rate');
   await panel.getByLabel('本地歌词文件').setInputFiles({ name: 'local.lrc', mimeType: 'text/plain', buffer: Buffer.from('[00:00]第一句\n[00:12]当前句\n[00:24]跳转目标') });
   await panel.locator('button.lv-line').filter({ hasText: '跳转目标' }).click();
   assert.equal(await page.evaluate(() => nativeVideo.currentTime), 24);
   await page.waitForFunction(()=>document.querySelector('#margin-music').shadowRoot.querySelector('.lv-line[aria-current=true]')?.textContent==='跳转目标');
   results.push('local LRC remains editable and seeks the original timeline');
+  const lyricMenu = panel.locator('.lv-options');
+  await lyricMenu.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  assert(await lyricMenu.evaluate(el => el.open));
+  await panel.getByLabel('歌词延后秒数').waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  assert.equal(await lyricMenu.evaluate(el => el.open), false);
+  assert(await panel.isVisible());
+  assert(await lyricMenu.locator('summary').evaluate(el => el.getRootNode().activeElement === el));
+  results.push('lyric options expose timing controls and restore keyboard focus when dismissed');
+  await panel.getByLabel('歌词来源', { exact: true }).selectOption('original');
+  await lyricMenu.locator('summary').click();
+  await page.waitForTimeout(250);
+  assert(await panel.locator('.lv-options-panel').evaluate(menu => {
+    const bounds = menu.getBoundingClientRect();
+    return menu.contains(menu.getRootNode().elementFromPoint(bounds.left + 12, bounds.bottom - 6));
+  }), 'the native original-picture player must not cover lyric options');
+  await page.keyboard.press('Escape');
+  await panel.getByLabel('歌词来源', { exact: true }).selectOption('import');
+  results.push('lyric options stay clickable above the native original-picture window');
   await panel.getByRole('tab', { name: '视频视图', exact: true }).click();
   await page.addStyleTag({ content: '.left-container.late-sticky{position:sticky!important;top:0}' });
   await page.evaluate(() => nativeParent.classList.add('late-sticky'));
@@ -150,12 +204,14 @@ try {
   results.push('desktop and narrow desktop windows retain accessible return and glass playback controls');
   await panel.getByRole('button', { name: '返回普通播放', exact: true }).click();
   assert(await panel.isHidden()); assert.deepEqual(await identity(), original);
+  assert.equal(await activeGlassFilters(), 0, 'closing disposes listening glass filters');
   assert.equal(await page.locator('#margin-bg').evaluate(el=>getComputedStyle(el).zIndex),'-1');
   assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('margin-listening-bg')),false);
   const resumed = await shaderTime('#margin-bg'); await page.waitForTimeout(180);
   if (ordinaryBefore !== null && ordinaryAfter > ordinaryBefore) assert((await shaderTime('#margin-bg')) > resumed);
   assert.notEqual(await page.locator('.bpx-player-container').evaluate(el => getComputedStyle(el).position), 'fixed');
   await entry.click(); assert(await page.evaluate(() => nativeVideo.paused));
+  assert.equal(await activeGlassFilters(), 2, 'reopening does not accumulate glass filters');
   await panel.getByRole('button', { name: '播放', exact: true }).click();
   await panel.getByText('原生视频与弹幕 · 实时音频频谱', { exact: true }).waitFor();
   await page.keyboard.press('Escape'); assert(await panel.isHidden());

@@ -1,5 +1,16 @@
 import { h, icon, ICONS } from './dom';
 
+// 多个分段控件同时出现时，先统一读几何，再写滑块，避免每个控件各触发一次布局。
+const segmentMeasures = new WeakMap<Element, () => (() => void) | undefined>();
+const placeSegments = (entries: { target: Element }[]) => {
+  const writes = entries.map(({ target }) => segmentMeasures.get(target)?.());
+  for (const write of writes) write?.();
+};
+const segmentResize = new ResizeObserver(placeSegments);
+const segmentVisibility = new IntersectionObserver(entries => placeSegments(entries.filter(e => e.isIntersecting)));
+const pendingSegments = new Set<Element>();
+let segmentFrame = 0;
+
 /** 滑动滑块的分段选择器（参考 21st「Segmented Control」，原生重写） */
 export function segmented<T extends string>(options: [T, string][], value: T, onChange: (v: T) => void): HTMLElement & { set(v: T): void } {
   const thumb = h('span', { class: 'seg-thumb', 'aria-hidden': 'true' });
@@ -10,25 +21,36 @@ export function segmented<T extends string>(options: [T, string][], value: T, on
     wrap.append(b);
     return b;
   });
-  const place = () => {
+  const measure = () => {
+    if (wrap.checkVisibility && !wrap.checkVisibility({ visibilityProperty: true })) return;
     const on = btns.find((b) => b.getAttribute('aria-checked') === 'true');
-    if (!on || !on.offsetWidth) return;
-    thumb.style.width = `${on.offsetWidth}px`;
-    thumb.style.transform = `translateX(${on.offsetLeft - 3}px)`;
+    const width = on?.offsetWidth;
+    if (!width) return;
+    const nextWidth = `${width}px`, nextTransform = `translateX(${on!.offsetLeft - 3}px)`;
+    return () => {
+      if (thumb.style.width !== nextWidth) thumb.style.width = nextWidth;
+      if (thumb.style.transform !== nextTransform) thumb.style.transform = nextTransform;
+    };
   };
   // ResizeObserver / IntersectionObserver 都在布局完成后回调，这时读 offsetWidth 不会强制重排；
   // 只有用户切换选项时才在下一帧量一次（v0.44：页面加载时在 rAF 里量会把整页排版提前，空间页约 500ms）
-  let queued = 0, ready = false;
-  const visible = () => wrap.checkVisibility?.({ visibilityProperty: true }) ?? true;
-  const now = () => { if (visible()) place(); };
+  let ready = false;
   wrap.set = (v: T) => {
     const cur = btns.find((b) => b.getAttribute('aria-checked') === 'true')?.dataset.v;
     if (cur === v) return;
     btns.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === v)));
-    if (ready && cur !== v && !queued) queued = requestAnimationFrame(() => { queued = 0; now(); });
+    if (ready) {
+      pendingSegments.add(wrap);
+      if (!segmentFrame) segmentFrame = requestAnimationFrame(() => {
+        segmentFrame = 0;
+        placeSegments([...pendingSegments].map(target => ({ target })));
+        pendingSegments.clear();
+      });
+    }
   };
-  new ResizeObserver(now).observe(wrap);
-  new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) now(); }).observe(wrap);
+  segmentMeasures.set(wrap, measure);
+  segmentResize.observe(wrap);
+  segmentVisibility.observe(wrap);
   wrap.set(value);
   ready = true;
   return wrap;

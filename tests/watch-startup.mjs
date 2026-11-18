@@ -109,7 +109,7 @@ try {
   let modules = 0;
   disabled.on('request', request => { if (request.url().endsWith('/pages/watch.js')) modules++; });
   await disabled.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
-  await disabled.waitForFunction(() => localStorage.getItem('margin:skin') === '0');
+  await disabled.waitForFunction(() => localStorage.getItem('margin:skin:watch') === '0');
   assert.equal(await disabled.locator('#margin-watch-css').count(), 0, 'disabled redesign keeps provisional styles');
   assert.equal(modules, 0, 'disabled redesign downloads the watch UI module');
   await disabled.reload();

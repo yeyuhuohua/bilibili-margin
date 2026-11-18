@@ -48,14 +48,27 @@ export function videoCard(v: Video, index: number, opts: CardOpts = {}): HTMLEle
     ),
   );
   cardData.set(el, v);
+  if (!opts.compact) refreshCardFollow(el);
   return el;
 }
 
-/** 发布时间：单独一行，精确到秒；不跟标题 / 信息行混排 */
+/** 缓存卡片重新挂回列表时，仍从现有关系缓存更新关注状态。 */
+export function refreshCardFollow(card: HTMLElement): void {
+  const video = cardData.get(card), author = card.querySelector<HTMLElement>('.author');
+  if (!video || !author) return;
+  void followStatus(video.mid).then(on => {
+    if (on === undefined) return;
+    const badge = author.querySelector('.card-followed');
+    if (on && !badge) author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
+    if (!on) badge?.remove();
+  });
+}
+
+/** 发布时间独占一行，有时间戳时显示日期时间，否则沿用接口的原生日期文字。 */
 function pubTime(v: Video, opts: CardOpts): HTMLElement | null {
-  if (!v.pubdate || opts.compact || opts.hide?.has('ago')) return null;
-  const text = fmtDateTime(v.pubdate);
-  return text ? h('time', { class: 'pubtime', datetime: new Date(v.pubdate * 1000).toISOString() }, text) : null;
+  if (opts.compact || opts.hide?.has('ago')) return null;
+  const text = v.pubdate ? fmtDateTime(v.pubdate) : v.publishText;
+  return text ? h('time', { class: 'pubtime', datetime: v.pubdate ? new Date(v.pubdate * 1000).toISOString() : undefined }, text) : null;
 }
 
 /** 卡片信息行：只放没关掉的项，分隔点跟在前一项后面，不会出现打头的「·」 */
@@ -64,13 +77,7 @@ function metaRow(v: Video, opts: CardOpts): HTMLElement {
   const parts: HTMLElement[] = [];
   if (!off('author')) {
     const author = h('a', { class: 'author', title: v.author, href: `https://space.bilibili.com/${v.mid}`, target: '_blank', rel: 'noopener' }, icon(ICONS.user), h('span', { class: 'author-name' }, v.author));
-    const mark = (on: boolean) => {
-      const badge = author.querySelector('.card-followed');
-      if (on && !badge) author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
-      if (!on) badge?.remove();
-    };
-    mark(v.reason === '已关注');
-    if (!opts.compact) void followStatus(v.mid).then(on => { if (author.isConnected && on !== undefined) mark(on); });
+    if (v.reason === '已关注') author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
     parts.push(author);
   }
   if (!off('views')) {

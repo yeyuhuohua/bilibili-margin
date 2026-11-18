@@ -45,7 +45,12 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
   let active = '';
   let preSearch = '';
   let indicatorAnimation: Animation | null = null;
-  const alignIndicator = (animate = false) => {
+  let indicatorFrame = 0, animateIndicator = false;
+  const placeIndicator = () => {
+    indicatorFrame = 0;
+    const animate = animateIndicator;
+    animateIndicator = false;
+    if (el.dataset.open !== 'true') return;
     const button = sections.find(s => s.id === active)?.btn;
     if (!button || !button.isConnected || !button.offsetWidth) return;
     const previous = indicator.getBoundingClientRect();
@@ -57,6 +62,10 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
       { transform: 'none' },
     ], { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)' });
   };
+  const alignIndicator = (animate = false) => {
+    animateIndicator ||= animate;
+    if (!indicatorFrame) indicatorFrame = requestAnimationFrame(placeIndicator);
+  };
   new ResizeObserver(() => {
     nav.setAttribute('aria-orientation', getComputedStyle(nav).flexDirection === 'row' ? 'horizontal' : 'vertical');
     alignIndicator();
@@ -65,13 +74,19 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
   const activate = (id: string, focus = false) => {
     const target = sections.find((s) => s.id === id) ?? sections[0];
     if (!target) return;
-    active = target.id;
-    for (const s of sections) {
-      const on = s === target;
-      s.el.hidden = !on;
-      s.btn.setAttribute('aria-selected', String(on));
-      s.btn.tabIndex = on ? 0 : -1;
-      s.btn.toggleAttribute('aria-current', on);
+    if (active !== target.id) {
+      const previous = sections.find(s => s.id === active);
+      if (previous) {
+        previous.el.hidden = true;
+        previous.btn.setAttribute('aria-selected', 'false');
+        previous.btn.tabIndex = -1;
+        previous.btn.removeAttribute('aria-current');
+      }
+      target.el.hidden = false;
+      target.btn.setAttribute('aria-selected', 'true');
+      target.btn.tabIndex = 0;
+      target.btn.setAttribute('aria-current', '');
+      active = target.id;
     }
     if (focus) target.btn.focus({ preventScroll: true });
     alignIndicator(true);
@@ -112,6 +127,7 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
   const applyFilter = (value: string) => {
     const q = value.trim().toLowerCase();
     const wasSearching = el.hasAttribute('data-searching');
+    if (!q && !wasSearching) return;
     if (q && !wasSearching) preSearch = active;
     el.toggleAttribute('data-searching', !!q);
     // 上一轮搜索自动展开的折叠块先收回，避免换关键词后残留
@@ -215,6 +231,7 @@ export function createSettingsPage(opts: { title: string; eyebrow: string; onOpe
       if (!api.isOpen()) return;
       el.dataset.open = 'false';
       el.inert = true;
+      cancelAnimationFrame(indicatorFrame); indicatorFrame = 0; animateIndicator = false;
       clearSearch();
       el.dispatchEvent(new CustomEvent('margin:sheet', { bubbles: true }));
       releaseFocus?.(); releaseFocus = null;

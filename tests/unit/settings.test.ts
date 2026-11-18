@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   loadSettings, saveSettings, sanitizeSettings, normalizeHomeOrder,
-  cleanFont, cleanHost, DEFAULTS, clampPaletteSpeed,
+  cleanFont, cleanHost, DEFAULTS, clampPaletteSpeed, redesignEnabled,
 } from '../../src/shared/settings';
 
 /** chrome.storage.local 的最小模拟：loadSettings / saveSettings 只用到 get(KEY) / set */
@@ -19,6 +19,31 @@ const setChromeMock = () => {
 };
 
 describe('settings 迁移（merge / loadSettings）', () => {
+  it('按页面重设计默认保持现状，保存和导入仅接受已知页面', async () => {
+    expect((await loadSettings()).pageOff).toEqual([]);
+    await saveSettings({ pageOff: ['home', 'feed'] });
+    const settings = await loadSettings();
+    expect(settings.pageOff).toEqual(['home', 'feed']);
+    expect(redesignEnabled(settings, 'home')).toBe(false);
+    expect(redesignEnabled(settings, 'feed')).toBe(false);
+    expect(redesignEnabled(settings, 'live')).toBe(true);
+    expect(redesignEnabled(settings, 'watch')).toBe(true);
+    expect(sanitizeSettings({ pageOff: ['home', 'feed', 'home', '<script>'] })?.pageOff).toEqual(['home', 'feed']);
+    expect(sanitizeSettings({ pageOff: 'home' })?.pageOff).toEqual([]);
+    expect(redesignEnabled({ ...DEFAULTS, watch: false }, 'home')).toBe(true);
+    expect(redesignEnabled({ ...DEFAULTS, watch: false }, 'watch')).toBe(false);
+    expect(redesignEnabled({ ...DEFAULTS, enabled: false }, 'home')).toBe(false);
+  });
+  it('旧设置保留当前内容宽度，三档可保存和导入且非法值回落', async () => {
+    expect((await loadSettings()).homeWidth).toBe('current');
+    for (const homeWidth of ['current', 'compact', 'fluid'] as const) {
+      await saveSettings({ homeWidth });
+      expect((await loadSettings()).homeWidth).toBe(homeWidth);
+      expect(sanitizeSettings({ homeWidth })?.homeWidth).toBe(homeWidth);
+    }
+    expect(sanitizeSettings({ homeWidth: '<style>' })?.homeWidth).toBe('current');
+    expect(sanitizeSettings({ homeWidth: 1600 })?.homeWidth).toBe('current');
+  });
   it('动态左侧关注列表默认显示，开关可保存与导入', async () => {
     expect((await loadSettings()).feedFollowList).toBe(true);
     expect((await saveSettings({ feedFollowList: false })).feedFollowList).toBe(false);

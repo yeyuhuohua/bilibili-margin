@@ -9,7 +9,7 @@ import { BATCH_QUEUE_MAX, batchCount, batchIndexOf, batchStartOf, newContentStar
 import { BackgroundLayer } from '../bg/background';
 import { FilterRuntime } from '../filter-runtime';
 import { targetOfVideo } from '../filter-targets';
-import { videoCard, skeleton } from './card';
+import { videoCard, skeleton, refreshCardFollow } from './card';
 import { toast } from './controls';
 import { h, icon, ICONS, guardTyping } from './dom';
 import { createFavorites } from './favorites';
@@ -51,7 +51,9 @@ export class MarginApp {
   private bg = new BackgroundLayer();
   private panel!: SettingsPanel;
   private fav!: Sheet;
-  private foot!: HTMLElement;
+  private foot: HTMLElement | null = null;
+  private cardCache = new Map<Video, HTMLElement>();
+  private stopPreview: () => void = () => {};
   private dash!: HTMLElement;
   private wx: HTMLElement | null = null;
   private tab: Tab = 'rcmd';
@@ -114,7 +116,8 @@ export class MarginApp {
     if ((prev.appFeed !== s.appFeed || prev.rerank !== s.rerank) && this.tab === 'rcmd') this.reload();
     if (prev.footprint !== s.footprint || prev.weather !== s.weather) this.syncDash();
     this.app.dataset.cols = String(s.cols || "auto");
-    if (prev.homeHide.join() !== s.homeHide.join()) { this.syncHide(); this.repaint(); }
+    this.app.dataset.homeWidth = s.homeWidth;
+    if (prev.homeHide.join() !== s.homeHide.join()) { this.cardCache.clear(); this.syncHide(); this.repaint(); }
     const order = normalizeHomeOrder(s.homeOrder);
     if (order.join('|') !== this.orderKey) this.applyOrder(order);
     if (prev.reduceMotion !== s.reduceMotion || prev.theme !== s.theme || prev.palette !== s.palette || JSON.stringify(prev.bg) !== JSON.stringify(s.bg)) this.applyTheme();
@@ -134,6 +137,7 @@ export class MarginApp {
     this.app.dataset.palette = this.settings.palette;
     this.app.dataset.bg = this.settings.bg.mode;
     this.app.dataset.cols = String(this.settings.cols || 'auto');
+    this.app.dataset.homeWidth = this.settings.homeWidth;
     this.app.classList.toggle('margin-reduce', this.settings.reduceMotion);
     this.app.classList.toggle('margin-ui-still', !this.settings.uiEffects);
     this.sunMoon.set(t, !reducedMotion());
@@ -143,7 +147,10 @@ export class MarginApp {
   /** 首页顶部的足迹 / 天气：按设置显示；天气卡第一次打开时才创建（关着就不请求天气） */
   private syncDash(): void {
     const s = this.settings;
-    if (s.footprint) { if (!this.foot.isConnected) this.dash.prepend(this.foot); } else this.foot.remove();
+    if (s.footprint) {
+      this.foot ??= createFootprintCard();
+      if (!this.foot.isConnected) this.dash.prepend(this.foot);
+    } else this.foot?.remove();
     if (s.weather) {
       this.wx ??= createWeather(() => {
         this.panel.sheet.open();
@@ -161,8 +168,21 @@ export class MarginApp {
 
   private cardOpts() { return { onBlock: (x: Video) => this.blockUp(x), onDislike: (x: Video, el: HTMLElement) => this.nope(x, el), hide: new Set<string>(this.settings.homeHide) }; }
 
+  /** 复用最近两轮常见长度的列表，限制引用数，长时间翻页时可以回收旧节点。 */
+  private cardFor(v: Video, index: number): HTMLElement {
+    let card = this.cardCache.get(v);
+    // 完成后的操作按钮按原来的重画语义恢复，避免在其他页面移除稍后再看后不能重新加入。
+    if (card?.querySelector('.card-later[data-state="ok"]')) card = undefined;
+    if (card) { this.cardCache.delete(v); refreshCardFollow(card); }
+    else card = videoCard(v, index, this.cardOpts());
+    this.cardCache.set(v, card);
+    if (this.cardCache.size > 240) this.cardCache.delete(this.cardCache.keys().next().value!);
+    return card;
+  }
+
   /** 不感兴趣（v0.46）：先从网格里淡出，再把反馈发给 B 站推荐；撤销会一并取消反馈 */
   private async nope(v: Video, el: HTMLElement): Promise<void> {
+    this.cardCache.delete(v);
     const batch = this.batchOn();
     const at = this.items.indexOf(v);
     if (batch) this.gone.add(v.bvid);
@@ -210,13 +230,12 @@ export class MarginApp {
   private showFoot(): void {
     if (!this.settings.footprint) { toast(this.app, '足迹热力图已关闭', { label: '打开', run: () => saveSettings({ footprint: true }) }); return; }
     this.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
-    if (!reducedMotion()) this.foot.animate([{ boxShadow: '0 0 0 2px var(--accent)' }, { boxShadow: '0 0 0 0 transparent' }], { duration: 1200, easing: 'ease-out' });
+    if (!reducedMotion()) this.foot?.animate([{ boxShadow: '0 0 0 2px var(--accent)' }, { boxShadow: '0 0 0 0 transparent' }], { duration: 1200, easing: 'ease-out' });
   }
 
   private render(): void {
     this.panel = createSettingsPanel(() => this.settings, () => this.bg.shader);
     this.fav = createFavorites((g) => attachPreview(g, () => this.settings.hoverPreview), () => this.settings.favDirect, this.filter);
-    this.foot = createFootprintCard();
     this.dash = h('div', { class: 'dash' });
     this.syncDash();
     // v0.20：足迹卡片改用 21st Glass Calendar 的 CSS 玻璃，不再走 GL 折射透镜
@@ -283,7 +302,7 @@ export class MarginApp {
     this.grid = h('section', { class: 'grid home-grid', 'aria-live': 'polite' });
     this.status = h('div', { class: 'status' });
     this.sentinel = h('div', { class: 'sentinel' });
-    attachPreview(this.grid, () => this.settings.hoverPreview);
+    this.stopPreview = attachPreview(this.grid, () => this.settings.hoverPreview);
     attachRecommendationFeedback(this.grid, this.app, this.recommendations, () => this.tab === 'rcmd' && !this.settings.appFeed);
 
     const footer = h('footer', { class: 'foot' }, h('span', {}, '映间 MARGIN · 非 B 站官方'));
@@ -312,7 +331,19 @@ export class MarginApp {
       quick.el,
     );
     // 标记抽屉状态；大面板使用实底，可见背景保持动态。
-    this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
+    const resumeFeed = () => {
+      if (!this.feedActive()) return;
+      if (this.batchOn()) {
+        if (!this.items.length) void this.loadFirstBatch();
+        else this.maybePreload();
+      } else this.fillIfShort();
+    };
+    this.app.addEventListener('margin:sheet', () => {
+      const on = !!this.app.querySelector('.sheet-layer[data-open="true"]');
+      this.app.classList.toggle('sheeted', on);
+      if (!on) resumeFeed();
+    });
+    document.addEventListener('visibilitychange', resumeFeed);
     this.root.append(this.app);
     this.applyOrder(this.settings.homeOrder);
     // 汇流背景的点线汇向首页搜索栏（搜索框隐藏时汇向屏幕中心）
@@ -389,6 +420,7 @@ export class MarginApp {
   private switchTab(id: Tab, tabs: HTMLElement): void {
     // 设置里打开「点击分类标签刷新列表」后，点当前分类标签等于换一批，保留「上一批」可回退（PR #33）
     if (id === this.tab) { if (this.settings.tabRefresh) this.reload(true); return; }
+    this.stopPreview();
     // 每个 tab 记住自己的列表和滚动位置（v0.50，B 站评论建议）：切回来接着看，不回到顶部
     if (this.items.length) this.tabMem.set(this.tab, { s: this.snapshot()!, top: this.app.scrollTop, back: this.snap });
     this.batchBusy = false;
@@ -586,9 +618,11 @@ export class MarginApp {
         clearTimeout(this.anchorTimer);
         this.app.style.overflowAnchor = 'none';
       }
-      this.grid.replaceChildren(...shown.map((v, i) => videoCard(v, i, this.cardOpts())));
+      this.stopPreview();
+      const cards = shown.map((v, i) => this.cardFor(v, i));
+      cards.forEach(c => c.classList.add('still'));
+      this.grid.replaceChildren(...cards);
       this.grid.style.minHeight = '';
-      this.grid.querySelectorAll('.card').forEach((c) => c.classList.add('still'));
       if (top !== undefined) {
         this.app.scrollTo({ top, behavior: 'instant' });
         this.anchorTimer = window.setTimeout(() => { this.app.style.overflowAnchor = ''; }, 600);
@@ -608,10 +642,12 @@ export class MarginApp {
     toast(this.app, `已屏蔽「${v.author}」`, { label: '撤销', run: () => saveSettings({ filters: { ...this.settings.filters, ups: this.settings.filters.ups.filter((u) => u !== v.author) } }) });
   }
 
+  private feedActive(): boolean { return !document.hidden && !this.app.classList.contains('sheeted'); }
+
   /** IntersectionObserver 只在「进入 / 离开」时触发：加载完哨兵还停在可视范围里、或被过滤掉一整批时不会再响，
    *  所以加载结束和滚动停下后都按滚动容器的剩余高度再查一次（用户反馈：滚到底有概率不再刷新） */
   private fillIfShort(): void {
-    if (this.batchOn() || this.done || this.loading || !this.sentinel.isConnected) return;
+    if (!this.feedActive() || this.fillRetry || this.batchOn() || this.done || this.loading || !this.sentinel.isConnected) return;
     const a = this.app;
     const left = a.scrollHeight - a.scrollTop - a.clientHeight;
     const r = this.sentinel.getBoundingClientRect();
@@ -681,9 +717,11 @@ export class MarginApp {
       // 换批时关掉滚动锚定：旧卡片被整体换掉会让浏览器重新选锚点，把 scrollTop 挪走
       clearTimeout(this.anchorTimer);
       this.app.style.overflowAnchor = 'none';
-      this.grid.replaceChildren(...shown.map((v, i) => videoCard(v, i, this.cardOpts())));
+      this.stopPreview();
+      const cards = shown.map((v, i) => this.cardFor(v, i));
+      cards.forEach(c => c.classList.add('still'));
+      this.grid.replaceChildren(...cards);
       this.padBatch();
-      this.grid.querySelectorAll('.card').forEach((n) => n.classList.add('still'));
       this.status.replaceChildren();
       if (top !== undefined) this.app.scrollTo({ top, behavior: 'instant' });
       this.anchorTimer = window.setTimeout(() => { this.app.style.overflowAnchor = ''; }, 600);
@@ -746,7 +784,7 @@ export class MarginApp {
 
   /** 批次模式下的一页：只为窗口取数据，不随滚动继续加载 */
   private async loadFirstBatch(attempt = 0): Promise<void> {
-    if (this.loading) return;
+    if (!this.feedActive() || this.loading) return;
     this.loading = true;
     const gen = this.gen;
     const sk = skeleton(12);
@@ -824,7 +862,7 @@ export class MarginApp {
 
   /** 预载一轮：加载、换一批或翻到预载内容时，前方不足一轮就继续补，始终留住一轮预载 */
   private maybePreload(): void {
-    if (!this.batchOn() || this.batchBusy || this.loading || !this.settings.batchPrefetch || this.prefetching) return;
+    if (!this.feedActive() || !this.batchOn() || this.batchBusy || this.loading || !this.settings.batchPrefetch || this.prefetching) return;
     const ahead = this.items.length - (this.batchStart + this.batchSize);
     if (ahead >= this.pageSize) return;
     const task = this.runPrefetch();
@@ -954,13 +992,14 @@ export class MarginApp {
       ctx.seen.add(v.bvid);
       ctx.items.push(v);
       if (!this.filter.allows(targetOfVideo(v))) continue;
-      into.append(videoCard(v, ctx.items.length - 1, this.cardOpts()));
+      into.append(this.cardFor(v, ctx.items.length - 1));
       added++;
     }
     return added;
   }
 
   private async load(attempt = 0): Promise<void> {
+    if (!this.feedActive()) return;
     if (this.batchOn()) return this.loadFirstBatch(attempt);
     if (this.loading || this.done || this.fillRetry) return;
     this.loading = true;
@@ -969,7 +1008,7 @@ export class MarginApp {
     const skNodes = [...sk.childNodes];
     this.grid.append(sk);
     this.status.replaceChildren();
-    let added = 0;
+    let added = 0, newItems = 0;
     try {
       const list = await this.fetchBatch();
       if (gen !== this.gen) return;
@@ -977,7 +1016,9 @@ export class MarginApp {
       await this.filter.prepare(list.map((v) => v.bvid));
       if (gen !== this.gen) return;
       skNodes.forEach((n) => (n as Element).remove());
+      const before = this.items.length;
       added = this.appendCards(list, { items: this.items, seen: this.seen }, this.grid);
+      newItems = this.items.length - before;
       this.grid.style.minHeight = '';
       if (this.done) this.status.replaceChildren(h('span', {}, '没有更多了'));
     } catch (err) {
@@ -991,8 +1032,8 @@ export class MarginApp {
     } finally {
       if (gen === this.gen) this.loading = false;
     }
-    // 被过滤掉太多时自动补一批
-    if (gen === this.gen && added < 6 && attempt < 4) this.load(attempt + 1);
+    // 有新条目但被过滤掉太多时继续补；重复批次交给下方的间隔重试。
+    if (gen === this.gen && newItems > 0 && added < 6 && attempt < 4) this.load(attempt + 1);
     else if (gen === this.gen) {
       // 连续几批都被过滤或重复：稍等再补，不让列表停在底部
       if (added === 0) this.fillRetry = window.setTimeout(() => {

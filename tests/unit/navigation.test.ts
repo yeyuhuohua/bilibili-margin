@@ -55,6 +55,14 @@ describe('应用窗口站内导航', () => {
     click(event(a)); a.download = false; click(event(a, { defaultPrevented: true }));
     expect(assign).not.toHaveBeenCalled();
   });
+  it.each(['click', 'auxclick'])('%s 不抢占视频链接内部的操作按钮', type => {
+    app = true; nav.installAppNavigation(true);
+    const anchor = new Anchor('https://www.bilibili.com/video/BVtest');
+    const button = { matches: (selector: string) => selector.includes('button') };
+    const e = event(anchor, { button: type === 'auxclick' ? 1 : 0, composedPath: () => [button, anchor] });
+    (type === 'auxclick' ? auxclick : click)(e);
+    expect(assign).not.toHaveBeenCalled(); expect(e.preventDefault).not.toHaveBeenCalled();
+  });
   it('应用里的动态卡片中键通过 openBili 留在当前窗口', () => {
     app = true; nav.openBili('/opus/123', '_blank', 'noopener', event(new Anchor(''), { button: 1 }));
     expect(assign).toHaveBeenCalledWith('https://www.bilibili.com/opus/123');

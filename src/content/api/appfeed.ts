@@ -32,6 +32,7 @@ export async function appPoll(code: string): Promise<{ ok: boolean; state?: 'wai
 const toVideo = (a: AppItem): Video => ({
   bvid: a.bvid, cid: a.cid, title: a.title, cover: a.cover, duration: a.duration,
   author: a.author, mid: a.mid, face: '', views: parseCount(a.views), danmaku: parseCount(a.danmaku), pubdate: 0,
+  publishText: a.publishText,
   reason: a.reason, aid: a.aid, goto: 'app', trackId: 'app',
 });
 

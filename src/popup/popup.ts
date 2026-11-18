@@ -1,11 +1,12 @@
-import { loadSettings, saveSettings, type Settings, type Theme } from '../shared/settings';
-import { optionalFetch } from '../shared/privacy';
+import { loadSettings, saveSettings, REDESIGN_PAGES, REDESIGN_LABELS, type Settings, type Theme } from '../shared/settings';
+import { checkRelease, newerRelease } from '../shared/releases';
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
 
 function paint(s: Settings): void {
   $('#enabled').setAttribute('aria-checked', String(s.enabled));
   $('#watch').setAttribute('aria-checked', String(s.watch));
+  document.querySelectorAll<HTMLButtonElement>('[data-page]').forEach(b => b.setAttribute('aria-checked', String(!s.pageOff.includes(b.dataset.page as typeof REDESIGN_PAGES[number]))));
   document.querySelectorAll<HTMLButtonElement>('#theme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === s.theme)));
 }
 
@@ -13,9 +14,35 @@ function paint(s: Settings): void {
   const manifest = chrome.runtime.getManifest();
   $('#ver').textContent = manifest.version_name || manifest.version;
   let s = await loadSettings();
+  for (const page of REDESIGN_PAGES) {
+    const row = document.createElement('div'); row.className = 'row';
+    const label = document.createElement('span'); label.textContent = REDESIGN_LABELS[page];
+    const button = document.createElement('button'); button.className = 'sw'; button.dataset.page = page;
+    button.setAttribute('role', 'switch'); button.setAttribute('aria-label', `${REDESIGN_LABELS[page]}重设计`);
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        s = await loadSettings();
+        s = await saveSettings({ pageOff: s.pageOff.includes(page) ? s.pageOff.filter(p => p !== page) : [...s.pageOff, page] });
+        paint(s);
+      } finally { button.disabled = false; }
+    };
+    row.append(label, button); $('#pages').append(row);
+  }
   paint(s);
-  $('#enabled').addEventListener('click', async () => { s = await saveSettings({ enabled: !s.enabled }); paint(s); });
-  $('#watch').addEventListener('click', async () => { s = await saveSettings({ watch: !s.watch }); paint(s); });
+  let saving = false;
+  const changeSwitch = async (key: 'enabled' | 'watch') => {
+    if (saving) return;
+    saving = true;
+    const button = $<HTMLButtonElement>(`#${key}`); button.disabled = true;
+    try {
+      s = await loadSettings();
+      s = await saveSettings({ [key]: !s[key] }); paint(s);
+    } catch (error) { console.error('[MARGIN] 保存开关失败', error); }
+    finally { saving = false; button.disabled = false; }
+  };
+  $('#enabled').addEventListener('click', () => { void changeSwitch('enabled'); });
+  $('#watch').addEventListener('click', () => { void changeSwitch('watch'); });
   $('#theme').addEventListener('click', async (e) => {
     const v = (e.target as HTMLElement).closest('button')?.dataset.v as Theme | undefined;
     if (!v) return;
@@ -29,24 +56,9 @@ function paint(s: Settings): void {
 void (async () => {
   const mf = chrome.runtime.getManifest() as chrome.runtime.Manifest & { update_url?: string };
   if (mf.update_url || !(await loadSettings()).privacyExternal) return;
-  const KEY = 'margin:update-check';
-  const cmp = (a: string, b: string) => {
-    const x = a.split('.').map(Number), y = b.split('.').map(Number);
-    for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
-    return 0;
-  };
-  let info = (await chrome.storage.local.get(KEY))[KEY] as { at: number; tag: string; name?: string; url: string } | undefined;
-  if (!info || Date.now() - info.at > 6 * 3600e3) {
-    try {
-      const r = await optionalFetch('update', 'https://api.github.com/repos/jiuyang5354/bilibili-margin/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
-      if (r.ok) {
-        const j = await r.json();
-        info = { at: Date.now(), tag: String(j.tag_name || '').replace(/^v/, ''), name: j.name, url: j.html_url };
-        await chrome.storage.local.set({ [KEY]: info });
-      }
-    } catch { /* 离线时静默 */ }
-  }
-  if (info?.tag && cmp(info.tag, mf.version) > 0) {
+  let info;
+  try { info = await checkRelease(); } catch { return; }
+  if (newerRelease(info.tag, mf.version)) {
     const a = document.getElementById('upd') as HTMLAnchorElement;
     if (!/^https:\/\/github\.com\/jiuyang5354\/bilibili-margin\/releases\//.test(info.url)) return;
     a.href = info.url;

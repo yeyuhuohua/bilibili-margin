@@ -32,6 +32,20 @@ html.margin-skin #app, html.margin-skin #__next, html.margin-skin .popular-conta
 html.margin-skin .search-layout, html.margin-skin .search-content { background: transparent !important; }
 html.margin-skin .bili-footer, html.margin-skin #biliMainFooter { background: transparent !important; }
 
+/* 原生 H5 投票独立使用白色 #bp-app 和 button reset，不能只替换文字变量。 */
+html.margin-vote #bp-app, html.margin-vote #bp-app #app {
+  background: var(--m-surface) !important; color: var(--m-ink) !important;
+}
+html.margin-vote #bp-app { --m-vote-accent: var(--text_link); }
+html.margin-vote #bp-app .is-upower { --m-vote-accent: var(--brand_pink, #fb7299); }
+html.margin-vote #bp-app :is(.vote-title, .option-text, .vote-percentage) { color: var(--m-ink) !important; }
+html.margin-vote #bp-app :is(.vote-info, .desc-title, .desc) { color: var(--m-muted) !important; }
+html.margin-vote #bp-app .option-li { background: var(--m-chip) !important; border-color: var(--m-line) !important; }
+html.margin-vote #bp-app .percentage-bar { background: color-mix(in srgb, var(--m-ink) 12%, transparent) !important; }
+html.margin-vote #bp-app .percentage-bar.is-max { background: color-mix(in srgb, var(--m-vote-accent) 22%, transparent) !important; }
+html.margin-vote #bp-app .option-li.is-max { border-color: color-mix(in srgb, var(--m-vote-accent) 38%, var(--m-line)) !important; }
+html.margin-vote #bp-app .is-max :is(.option-text, .vote-percentage) { color: var(--m-vote-accent) !important; }
+
 /* ── 搜索页：编辑式排版，和首页同一套语言 ── */
 /* 壁纸亮暗不固定，文字所在的控件区保留足够底色，不再直接叠在图片上。 */
 html.margin-search { --m-search-surface: color-mix(in srgb, var(--m-surface) 96%, transparent); --ms-glass: rgb(250 250 248 / .8); --ms-ink: #242831; --ms-muted: #343b46; --ms-pill: var(--margin-primary, #ffffffd9); --ms-selected: var(--margin-primary-fg, #171d28); --ms-rim: #ffffff90; }

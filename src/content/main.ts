@@ -3,7 +3,7 @@
  * 先藏原版 / 拦原版脚本。各页面的界面代码按路由从 dist/pages/*.js 动态 import（和 flux.js 同一套做法），
  * 不再把整站代码塞进一个 447KB 的 content.js。
  */
-import { loadSettings, onSettingsChange, type Settings } from '../shared/settings';
+import { loadSettings, onSettingsChange, redesignEnabled, type RedesignPage, type Settings } from '../shared/settings';
 import { startTracking } from './footprint/beat';
 import { injectFonts } from './fonts';
 import { muteNative, setGuard, guardEnabled } from './native-guard';
@@ -49,6 +49,7 @@ type Pages = {
 /** 按需加载页面模块；content script 不能是 ES module，但可以动态 import 扩展里的 ES 模块 */
 const load = <K extends keyof Pages>(name: K): Promise<Pages[K]> => import(/* @vite-ignore */ chrome.runtime.getURL(`pages/${name}.js`));
 let bootSettings: Promise<Settings> | null = null;
+let settingsReload = false;
 const startupSettings = (): Promise<Settings> => bootSettings ??= loadSettings();
 
 const HIDE_CSS = 'html{background:#111!important;overflow:hidden!important}body{display:none!important}@media (prefers-color-scheme: light){html{background:#f5f4f1!important}}';
@@ -71,7 +72,7 @@ let airborneGeneration = 0;
 /** 设置开关映射到文档级 class；HTML 只负责命中 CSS，具体逻辑在各自组件里 */
 function applyGlobalUi(s: Settings): void {
   const active = s.enabled && !sessionStorage.getItem('margin:off') && !offByUrl();
-  applyAppearance(s,active);
+  applyAppearance(s,active && redesignOn(s));
   installAppNavigation(active);
   setSponsorSkip(active && s.sponsorSkip);
   const jumpEnabled = active && s.danmakuJump;
@@ -136,17 +137,26 @@ function detailKind(): DetailKind | null {
 }
 const offByUrl = () => new URLSearchParams(location.search).get('margin') === 'off';
 
+function redesignPage(): RedesignPage | undefined {
+  if (isHome()) return 'home';
+  if (isWatch() || detailKind() === 'bangumi') return 'watch';
+  if (isLive() || isLiveHome()) return 'live';
+  if (isFeed() || detailKind() === 'dyn' || detailKind() === 'opus') return 'feed';
+}
+const redesignOn = (s: Settings) => redesignEnabled(s, redesignPage());
+
 /**
  * 播放页 / 搜索页等换皮页面的全局样式。入口脚本里同步挂上（用 localStorage 里上次设置的镜像判断开没开），
  * 不等页面模块加载，避免先闪一下原版。
  */
-const SKIN_KEY = 'margin:skin';
+const SKIN_KEY = `margin:skin:${redesignPage() ?? 'other'}`;
 function skinMirror(): string | null { try { return localStorage.getItem(SKIN_KEY); } catch { return null; } }
 function setSkinMirror(v: string): void { try { if (skinMirror() !== v) localStorage.setItem(SKIN_KEY, v); } catch { /* 隐私模式 */ } }
 function skinStyle(kind: SkinKind | 'live-home', theme: string): HTMLStyleElement {
   const de = document.documentElement;
   de.classList.add('margin-skin', `margin-${kind}`);
   de.classList.toggle('margin-compose', isFeed() && new URLSearchParams(location.search).get('compose') === '1');
+  de.classList.toggle('margin-vote', kind === 'page' && /^\/vote\/h5\/(?:index\/?)?$/.test(location.pathname));
   const dk = kind === 'page' ? detailKind() : null;
   if (dk) { de.classList.add('margin-detail'); de.dataset.marginDetail = dk; }
   de.dataset.marginTheme = theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
@@ -162,7 +172,7 @@ function skinStyle(kind: SkinKind | 'live-home', theme: string): HTMLStyleElemen
 function unskin(kind: SkinKind | 'live-home'): void {
   const de = document.documentElement;
   document.getElementById('margin-watch-css')?.remove();
-  de.classList.remove('margin-skin', `margin-${kind}`, 'margin-has-bg', 'margin-detail', 'margin-detail-narrow', 'margin-compose');
+  de.classList.remove('margin-skin', `margin-${kind}`, 'margin-has-bg', 'margin-detail', 'margin-detail-narrow', 'margin-compose', 'margin-vote');
   delete de.dataset.marginTheme;
   delete de.dataset.marginDetail;
 }
@@ -175,7 +185,7 @@ async function startLiveHome(): Promise<void> {
   let settings = await startupSettings().catch(error => { unskin('live-home'); throw error; });
   const apply = (next: Settings) => {
     settings = next;
-    const on = settings.enabled && settings.watch;
+    const on = redesignOn(settings);
     setSkinMirror(on ? settings.theme : '0');
     if (on) skinStyle('live-home', settings.theme);
     else unskin('live-home');
@@ -193,16 +203,17 @@ async function startWatch(kind: SkinKind = 'watch'): Promise<void> {
   // 首次访问还没有镜像，先按默认主题挂上圆角；读到关闭设置后立即撤回。
   if (mirror !== '0') skinStyle(kind, mirror || 'auto');
   const settings = await startupSettings().catch(error => { unskin(kind); throw error; });
+  if (settingsReload) return;
   // 屏蔽词在原生页面独立生效；即使关闭了「其他页面重设计」，只开过滤也能用
   if (settings.enabled && kind !== 'live') startNativeFilter(kind, settings);
   if (settings.enabled && kind === 'search') {
     load('search-exact').then(m => m.mountSearchExact()).catch(e => console.error('[MARGIN] 搜索试用加载失败', e));
   }
-  const on = settings.enabled && settings.watch;
+  const on = redesignOn(settings);
   setSkinMirror(on ? settings.theme : '0');
   if (!on) { unskin(kind); return; }
   skinStyle(kind, settings.theme);
-  const skin = await guarded('watch', () => load('watch').then((m) => new m.WatchSkin(settings, kind)), () => unskin(kind));
+  const skin = await guarded('watch', () => load('watch').then((m) => settingsReload ? null : new m.WatchSkin(settings, kind)), () => unskin(kind));
   if (!skin) return;
   // 详情页：右侧作者栏 / 目录 / 操作区按需加载；出错只影响侧栏，换皮照常
   const dk = kind === 'page' ? detailKind() : null;
@@ -218,8 +229,7 @@ async function startWatch(kind: SkinKind = 'watch'): Promise<void> {
     load('channel-carousel').then(m => m.mountChannelCarousel()).catch(e => console.error('[MARGIN] 分区轮播加载失败', e));
   }
   onSettingsChange((next, prev) => {
-    if (next.enabled !== prev.enabled || next.watch !== prev.watch) location.reload();
-    else skin.update(next);
+    if (redesignOn(next) === redesignOn(prev)) skin.update(next);
   });
 }
 
@@ -311,10 +321,13 @@ async function start(): Promise<void> {
   mod.catch(() => {});
 
   const settings = await startupSettings();
-  if (!settings.enabled) { hide.remove(); unmute(); return disabledAfterMute(); }
+  if (settingsReload) return;
+  setSkinMirror(redesignOn(settings) ? settings.theme : '0');
+  if (!redesignOn(settings)) { hide.remove(); unmute(); return disabledAfterMute(); }
   setGuard(true);
 
   const app = await guarded('home', () => mod.then((m) => {
+    if (settingsReload) return null;
     const a = new m.MarginApp(settings);
     document.documentElement.append(a.host);
     return a;
@@ -322,8 +335,7 @@ async function start(): Promise<void> {
   if (!app) return;
 
   onSettingsChange((next, prev) => {
-    if (next.enabled !== prev.enabled) location.reload();
-    else app.update(next);
+    if (redesignOn(next) === redesignOn(prev)) app.update(next);
   });
 }
 
@@ -334,18 +346,20 @@ async function takeover<M>(mod: Promise<M>, make: (m: M, s: Settings) => { shell
   const hide = hideOriginal();
   const unmute = mute ? muteNative() : () => {};
   const settings = await startupSettings();
-  if (!settings.enabled || !settings.watch) { hide.remove(); unmute(); return mute ? disabledAfterMute() : undefined; }
+  if (settingsReload) return;
+  setSkinMirror(redesignOn(settings) ? settings.theme : '0');
+  if (!redesignOn(settings)) { hide.remove(); unmute(); return mute ? disabledAfterMute() : undefined; }
   if (mute) setGuard(true);
   const name = location.hostname.split('.')[0] + location.pathname;
   const page = await guarded(name, () => mod.then((m) => {
+    if (settingsReload) return null;
     const p = make(m, settings);
     document.documentElement.append(p.shell.host);
     return p;
   }), () => restoreNative(hide, mute && guardEnabled()));
   if (!page) return;
   onSettingsChange((next, prev) => {
-    if (next.enabled !== prev.enabled || next.watch !== prev.watch) location.reload();
-    else page.update(next);
+    if (redesignOn(next) === redesignOn(prev)) page.update(next);
   });
 }
 
@@ -393,7 +407,7 @@ function disabledAfterMute(): void {
 const SANS = '"Geist", "Margin Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
 function applyFont(s: Settings): void {
   const de = document.documentElement;
-  const on = s.enabled;
+  const on = redesignOn(s);
   const custom = on && s.bodyFont ? `"${s.bodyFont}", ` : '';
   const sans = custom + SANS;
   const set = (k: string, v: string | null) => { if (v) de.style.setProperty(k, v); else de.style.removeProperty(k); };
@@ -401,7 +415,7 @@ function applyFont(s: Settings): void {
   set('--margin-title', on && s.titleFont === 'sans' ? sans : null);
   set('--margin-mono', on && !s.monoNum ? sans : null);
   // 视频 CDN 节点：页面主环境的 cdn.js 同步读 localStorage（v0.47.2）
-  try { if (on && s.cdn) localStorage.setItem('margin:cdn', s.cdn); else localStorage.removeItem('margin:cdn'); } catch { /* 隐私模式 */ }
+  try { if (s.enabled && s.cdn) localStorage.setItem('margin:cdn', s.cdn); else localStorage.removeItem('margin:cdn'); } catch { /* 隐私模式 */ }
   set('--margin-zoom', on && s.zoom !== 100 ? String(s.zoom / 100) : null);
   set('--margin-rk', on && s.radius !== 100 ? String(s.radius / 100) : null);
   set('--margin-player-rk', on && !s.playerCorners ? '0' : null);
@@ -409,7 +423,15 @@ function applyFont(s: Settings): void {
 }
 if (!offByUrl() && !sessionStorage.getItem('margin:off')) {
   startupSettings().then((s) => { applyFont(s); applyGlobalUi(s); }).catch(() => {});
-  onSettingsChange((n) => { applyFont(n); applyGlobalUi(n); });
+  onSettingsChange((n, p) => {
+    bootSettings = Promise.resolve(n);
+    if (redesignOn(n) !== redesignOn(p)) {
+      setSkinMirror(redesignOn(n) ? n.theme : '0'); setGuard(redesignOn(n));
+      if (!settingsReload) { settingsReload = true; location.reload(); }
+      return;
+    }
+    applyFont(n); applyGlobalUi(n);
+  });
 }
 
 /**

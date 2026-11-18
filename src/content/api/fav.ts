@@ -5,14 +5,22 @@ export interface Folder { id: number; title: string; count: number; cover: strin
 
 /** 其他人的空间只列公开收藏夹；登录者自己的空间也保留私密夹。 */
 export async function publicFolders(mid: number, page: number): Promise<{ list: Folder[]; more: boolean }> {
-  const data = await getJSON<{ list?: { id: number; title: string; media_count: number; cover?: string; attr: number }[]; count?: number; has_more?: boolean } | null>(
+  type Entry = { id: number; title: string; media_count: number; cover?: string; attr?: number };
+  const own = await nav().then(n => n.isLogin && n.mid === mid, () => false);
+  const data = await getJSON<{ list?: Entry[]; count?: number; has_more?: boolean } | null>(
     '/x/v3/fav/folder/created/list', { up_mid: mid, pn: page, ps: 20 });
-  const own = data?.list?.some(f => f.attr & 1) ? await nav().then(n => n.isLogin && n.mid === mid, () => false) : false;
+  let list = data?.list || [], more = data?.has_more ?? page * 20 < (data?.count || 0);
+  // 空间公开列表受隐私开关影响；完整列表只用于已核对身份的本人。
+  if (own && (!data?.list || (page === 1 && !list.length))) {
+    const all = await getJSON<{ list?: Entry[] } | null>('/x/v3/fav/folder/created/list-all', { up_mid: mid });
+    list = (all?.list || []).slice((page - 1) * 20, page * 20);
+    more = page * 20 < (all?.list?.length || 0);
+  }
   return {
-    list: (data?.list || []).filter(f => Number.isInteger(f.attr) && ((f.attr & 1) === 0 || own)).map(f => ({
-      id: f.id, title: f.title, count: f.media_count, cover: https(f.cover), mid, isDefault: (f.attr & 2) === 0, isPrivate: (f.attr & 1) === 1,
+    list: list.filter(f => own || (Number.isInteger(f.attr) && ((f.attr! & 1) === 0))).map(f => ({
+      id: f.id, title: f.title, count: f.media_count, cover: https(f.cover), mid, isDefault: ((f.attr ?? 0) & 2) === 0, isPrivate: ((f.attr ?? 0) & 1) === 1,
     })),
-    more: data?.has_more ?? page * 20 < (data?.count || 0),
+    more,
   };
 }
 
@@ -27,10 +35,10 @@ export async function publicFolder(mid: number, id: number): Promise<Folder> {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export async function folders(refreshLogin = false): Promise<Folder[] | null> {
+export async function folders(refreshLogin = false, page = 1): Promise<Folder[] | null> {
   const n = await nav(refreshLogin);
   if (!n?.isLogin || !n.mid) return null;
-  const data = await getJSON<{ list: any[] | null }>('/x/v3/fav/folder/created/list', { up_mid: n.mid, pn: 1, ps: 50 });
+  const data = await getJSON<{ list: any[] | null }>('/x/v3/fav/folder/created/list', { up_mid: n.mid, pn: page, ps: 50 });
   return (data.list ?? []).map((f) => ({ id: f.id, title: f.title, count: f.media_count, cover: String(f.cover || '').replace(/^http:/, 'https:'), mid: n.mid!, isDefault: (f.attr & 2) === 0, isPrivate: (f.attr & 1) === 1 }));
 }
 
@@ -55,12 +63,12 @@ const mediaVideo = (m: any, upper = m.upper): Video => ({
 
 /** 原站的订阅合集接口一次返回完整 medias，由收藏抽屉缓存并分批展示。 */
 export async function seasonVideos(id: number): Promise<Video[]> {
-  const data = await getJSON<{ medias: any[] | null; info?: { upper?: any } }>('/x/space/fav/season/list', { season_id: id });
+  const data = await getJSON<{ medias: any[] | null; info?: { upper?: any } }>('/x/space/fav/season/list', { season_id: id }, AbortSignal.timeout(12_000));
   return (data.medias ?? []).filter((m) => m.bvid && (m.attr == null || m.attr === 0)).map((m) => mediaVideo(m, m.upper ?? data.info?.upper));
 }
 
 export async function folderVideos(id: number, page: number): Promise<{ list: Video[]; more: boolean }> {
-  const data = await getJSON<{ medias: any[] | null; has_more: boolean }>('/x/v3/fav/resource/list', { media_id: id, pn: page, ps: 20, platform: 'web' });
+  const data = await getJSON<{ medias: any[] | null; has_more: boolean }>('/x/v3/fav/resource/list', { media_id: id, pn: page, ps: 20, platform: 'web' }, AbortSignal.timeout(12_000));
   const list = (data.medias ?? [])
     .filter((m) => m.type === 2 && m.bvid && m.attr === 0)
     .map((m) => mediaVideo(m));

@@ -6,6 +6,10 @@
 
 These notes retain references and adaptations from the project history. Historical implementation descriptions do not necessarily describe the current renderer. Third-party code, fonts and assets retain their respective licenses.
 
+## Project origins and related open-source projects
+
+The initial requirements discussion started from the Bilibili redesign direction of [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly). [BewlyCat](https://github.com/keleus/BewlyCat) is a related extension developed from BewlyBewly and a useful comparison for feature decisions. Thanks to these projects and contributors for their open implementations and discussions. The entries below record the specific design references and ports used by each module.
+
 - Private-message media follows the search, categories and popover pattern of 21st [Emoji Picker by liveblocks](https://21st.dev/@liveblocks/components/emoji-picker) and the thumbnail/removal pattern of [File Attachment by serafimcloud](https://21st.dev/@serafimcloud/components/file-attachment). Independently implemented in the existing TypeScript/CSS stack without React. Bilibili's native message-page scripts inform the catalog, upload and payload protocol; no runtime requests are made to 21st.
 - Home and watch retain the original day/night switch; the compact watch theme-button proposal was withdrawn at the user's request.
 - Watch later icon: matches the circular play icon on [native Bilibili search cards](https://search.bilibili.com/all?keyword=bilibili); path coordinates use three decimal places and scale from a 20 to a 24 viewBox.

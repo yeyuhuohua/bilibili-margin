@@ -59,7 +59,7 @@ export function createCommandPalette(commands: Command[]): Palette {
   let lastFocus: Element | null = null;
   addEventListener('margin:search-history', () => { if (el.dataset.open === 'true') render(); });
 
-  const go = (q: string) => { rememberSearch(q); openBili(searchUrl(q)); close(); };
+  const go = (q: string) => { rememberSearch(q); close(true); openBili(searchUrl(q)); };
   const searchRow = (q: string, kind: 'history' | 'hot' | 'sugg', html?: string, n?: number): Row => ({
     id: `${kind}:${q}`, title: q, titleHtml: html, cat: '搜索',
     icon: kind === 'history' ? ICONS.history : ICONS.search,
@@ -276,7 +276,16 @@ export function createCommandPalette(commands: Command[]): Palette {
     if (q) input.dispatchEvent(new Event('input'));
     hotSearch().then((list2) => { hot = list2.map((x, n) => ({ ...searchRow(x.keyword, 'hot', esc(x.name), n + 1) })); if (el.dataset.open === 'true' && !input.value.trim()) render(); });
   }
-  function close(): void {
+  function close(immediate = false): void {
+    if (immediate) {
+      el.dataset.open = 'false';
+      el.hidden = true;
+      ctrl?.abort();
+      clearTimeout(timer);
+      cleanupMorph();
+      input.blur();
+      return;
+    }
     if (el.dataset.open !== 'true') return;
     cancelAnimationFrame(openFrame);
     // 展开途中也要能反向：从外壳当前所在的位置收回，而不是跳回全尺寸再淡出
@@ -307,6 +316,10 @@ export function createCommandPalette(commands: Command[]): Palette {
     }
     (lastFocus as HTMLElement | null)?.blur?.();
   }
+
+  addEventListener('pagehide', () => close(true));
+  addEventListener('pageshow', (e) => { if (e.persisted) close(true); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) close(true); });
 
   let cmdK = true;
   searchHistory();

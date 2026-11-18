@@ -1,6 +1,6 @@
 {
   "name": "margin",
-  "version": "0.60.63",
+  "version": "0.60.75",
   "private": true,
   "description": "映间 MARGIN — 一个重新设计的 B 站首页浏览器扩展",
   "type": "module",
@@ -23,6 +23,9 @@
     "test:message-media": "node tests/message-media.mjs",
     "test:message-loading": "node tests/message-loading.mjs",
     "test:header-surface": "node tests/header-surface.mjs",
+    "test:vote-theme": "node tests/vote-theme.mjs",
+    "test:home-width": "node tests/home-width.mjs",
+    "test:account-motion": "node tests/account-motion.mjs",
     "test:reported-issues": "node tests/reported-issues.mjs",
     "test:watch-share": "node tests/watch-share.mjs",
     "test:watch-startup": "node tests/watch-startup.mjs && node tests/watch-card-startup.mjs",

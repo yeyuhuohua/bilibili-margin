@@ -4,7 +4,7 @@ export function lensData(w: number, h: number, radius: number, bevel: number): U
   const r = Math.min(radius, w / 2, h / 2), band = Math.max(1, Math.min(bevel, h / 2, w / 2));
   const distance = (x: number, y: number) => {
     const qx = Math.abs(x) - w / 2 + r, qy = Math.abs(y) - h / 2 + r;
-    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+    return (qx > 0 && qy > 0 ? Math.hypot(qx, qy) : Math.max(qx, qy)) - r;
   };
   const phi = new Float32Array(Math.ceil(band) + 1);
   for (let i = 1; i < phi.length; i++) {
@@ -13,20 +13,25 @@ export function lensData(w: number, h: number, radius: number, bevel: number): U
     phi[i] = phi[i - 1] + Math.sin(angle - Math.asin(Math.sin(angle) / 1.5));
   }
   const field = new Float32Array(w * h), data = new Uint8ClampedArray(w * h * 4);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const depth = Math.max(0, Math.min(phi.length - 1, -distance(x - w / 2 + .5, y - h / 2 + .5)));
+  // The height field and clipping mask are symmetric on both axes.
+  for (let y = 0; y < Math.ceil(h / 2); y++) for (let x = 0; x < Math.ceil(w / 2); x++) {
+    const signedDistance = distance(x - w / 2 + .5, y - h / 2 + .5);
+    const depth = Math.max(0, Math.min(phi.length - 1, -signedDistance));
     const low = Math.floor(depth), high = Math.min(low + 1, phi.length - 1);
-    field[y * w + x] = phi[low] + (phi[high] - phi[low]) * (depth - low);
+    const topLeft = y * w + x, topRight = y * w + w - 1 - x;
+    const bottomLeft = (h - 1 - y) * w + x, bottomRight = (h - 1 - y) * w + w - 1 - x;
+    field[topLeft] = field[topRight] = field[bottomLeft] = field[bottomRight] = phi[low] + (phi[high] - phi[low]) * (depth - low);
+    data[topLeft * 4 + 3] = data[topRight * 4 + 3] = data[bottomLeft * 4 + 3] = data[bottomRight * 4 + 3] = signedDistance > 0 ? 0 : 255;
   }
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 4;
     data[i] = data[i + 1] = data[i + 2] = 128;
-    if (distance(x - w / 2 + .5, y - h / 2 + .5) > 0) continue;
+    if (!data[i + 3]) continue;
     const x0 = Math.max(0, x - 1), x1 = Math.min(w - 1, x + 1), y0 = Math.max(0, y - 1), y1 = Math.min(h - 1, y + 1);
     const dx = (field[y * w + x1] - field[y * w + x0]) / (x1 - x0 || 1);
     const dy = (field[y1 * w + x] - field[y0 * w + x]) / (y1 - y0 || 1);
     data[i] = 128 + Math.max(-1, Math.min(1, dx * 1.35)) * 127;
-    data[i + 1] = 128 + Math.max(-1, Math.min(1, dy * 1.35)) * 127; data[i + 3] = 255;
+    data[i + 1] = 128 + Math.max(-1, Math.min(1, dy * 1.35)) * 127;
   }
   return data;
 }

@@ -6,13 +6,13 @@
  * 在它执行前拦下（外链脚本要先下载，观察者回调一定比执行早）。
  * 设置里关掉映间时（异步读到），用 localStorage 镜像标记下次不拦，再刷新一次回到原版。
  */
-const FLAG = 'margin:native-guard';
+const flag = () => `margin:native-guard:${location.origin}${location.pathname}`;
 
 export function guardEnabled(): boolean {
-  try { return localStorage.getItem(FLAG) !== '0'; } catch { return true; }
+  try { return localStorage.getItem(flag()) !== '0'; } catch { return true; }
 }
 export function setGuard(on: boolean): void {
-  try { localStorage.setItem(FLAG, on ? '1' : '0'); } catch { /* 隐私模式 */ }
+  try { localStorage.setItem(flag(), on ? '1' : '0'); } catch { /* 隐私模式 */ }
 }
 
 const kill = (n: Node) => {

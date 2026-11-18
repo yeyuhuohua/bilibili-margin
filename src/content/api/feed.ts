@@ -12,6 +12,8 @@ export interface Video {
   views: number;
   danmaku: number;
   pubdate: number;
+  /** Native App feed date label when the response provides no timestamp. */
+  publishText?: string;
   reason?: string;
   /** 推荐接口才有（v0.46「不感兴趣」用） */
   aid?: number;

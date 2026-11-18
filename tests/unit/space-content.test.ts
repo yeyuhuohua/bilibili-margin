@@ -6,6 +6,20 @@ vi.mock('../../src/content/api/http', () => ({ getJSON: vi.fn(), nav: vi.fn() })
 beforeEach(() => { vi.mocked(getJSON).mockReset(); vi.mocked(nav).mockReset(); vi.mocked(nav).mockResolvedValue({ isLogin: false, wbi_img: { img_url: '', sub_url: '' } }); });
 
 describe('空间图文、音频与公开收藏夹', () => {
+  it('仅自己可见的空间列表为空时，本人使用完整收藏夹列表并保持分页', async () => {
+    vi.mocked(nav).mockResolvedValue({ isLogin: true, mid: 2, wbi_img: { img_url: '', sub_url: '' } });
+    vi.mocked(getJSON).mockResolvedValueOnce(null).mockResolvedValueOnce({ list: Array.from({ length: 23 }, (_, i) => ({ id: i + 1, title: `自己的 ${i}`, media_count: 1 })) });
+    const r = await publicFolders(2, 2);
+    expect(r.list.map(f => f.id)).toEqual([21, 22, 23]);
+    expect(r.more).toBe(false);
+    expect(getJSON).toHaveBeenLastCalledWith('/x/v3/fav/folder/created/list-all', { up_mid: 2 });
+  });
+  it('其他空间列表不可见时不尝试完整收藏夹接口', async () => {
+    vi.mocked(nav).mockResolvedValue({ isLogin: true, mid: 1, wbi_img: { img_url: '', sub_url: '' } });
+    vi.mocked(getJSON).mockResolvedValue(null);
+    expect(await publicFolders(2, 1)).toEqual({ list: [], more: false });
+    expect(getJSON).toHaveBeenCalledTimes(1);
+  });
   it('图文保留长 ID、无封面条目和游标分页', async () => {
     vi.mocked(getJSON).mockResolvedValue({ items: [{ opus_id: '1234567890123456789', content: '文字', jump_url: '//www.bilibili.com/opus/1234567890123456789', cover: null, stat: { like: '1.2万' } }], offset: 'next', has_more: true });
     const r = await spaceArticles(2, 'prev');

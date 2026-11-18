@@ -27,6 +27,7 @@ export type AppMessage =
 export interface AppItem {
   aid: number; bvid: string; cid: number; title: string; cover: string;
   mid: number; author: string; views: string; danmaku: string; duration: number; idx: number; reason?: string;
+  publishText?: string;
 }
 
 export function appSign(params: Record<string, string | number>): string {
@@ -48,6 +49,11 @@ export function toAppItem(it: any): AppItem | null {
   if (!it || it.goto !== 'av' || it.card_goto !== 'av' || !it.bvid) return null; // 广告是 ad_av / cm_v1，横幅、直播、番剧都不要
   const aid = Number(it.player_args?.aid ?? it.args?.aid ?? it.param) || 0;
   if (!aid) return null;
+  const author = String(it.args?.up_name || '');
+  const prefix = `${author} · `;
+  const desc = String(it.desc || '');
+  const time = author && desc.startsWith(prefix) ? desc.slice(prefix.length).trim() : '';
+  const publishText = /^(?:刚刚|\d+(?:分钟|小时|天|个月|年)前|(?:今天|昨天|前天) \d{1,2}:\d{2}|(?:\d{4}年)?\d{1,2}月\d{1,2}日)$/.test(time) ? time : undefined;
   return {
     aid,
     bvid: String(it.bvid),
@@ -55,7 +61,8 @@ export function toAppItem(it: any): AppItem | null {
     title: String(it.title || ''),
     cover: String(it.cover || '').replace(/^http:/, 'https:'),
     mid: Number(it.args?.up_id) || 0,
-    author: String(it.args?.up_name || ''),
+    author,
+    publishText,
     views: String(it.cover_left_text_1 || ''),
     danmaku: String(it.cover_left_text_2 || ''),
     duration: Number(it.player_args?.duration) || 0,

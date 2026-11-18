@@ -45,14 +45,14 @@ describe('订阅合集和收藏夹', () => {
       { id: 2, bvid: '', title: '失效视频' },
     ] });
     expect(await seasonVideos(7)).toMatchObject([{ bvid: 'BVsample', title: '合集视频', cover: 'https://i0.hdslb.com/v.jpg', author: '作者', mid: 9, duration: 65, pubdate: 123, views: 100 }]);
-    expect(getJSON).toHaveBeenCalledWith('/x/space/fav/season/list', { season_id: 7 });
+    expect(getJSON).toHaveBeenCalledWith('/x/space/fav/season/list', { season_id: 7 }, expect.any(AbortSignal));
   });
   it('他人的收藏夹沿用资源列表和有效视频过滤', async () => {
     vi.mocked(getJSON).mockResolvedValue({ medias: [
       { type: 2, attr: 0, bvid: 'BVvalid', title: '视频' }, { type: 2, attr: 9, bvid: 'BVinvalid' }, { type: 12, attr: 0, bvid: 'BVother' },
     ], has_more: true });
     expect(await folderVideos(7, 2)).toMatchObject({ list: [{ bvid: 'BVvalid' }], more: true });
-    expect(getJSON).toHaveBeenCalledWith('/x/v3/fav/resource/list', { media_id: 7, pn: 2, ps: 20, platform: 'web' });
+    expect(getJSON).toHaveBeenCalledWith('/x/v3/fav/resource/list', { media_id: 7, pn: 2, ps: 20, platform: 'web' }, expect.any(AbortSignal));
   });
   it.each([['season', '21'], ['collected', '11']] as const)('%s 跳转回原站对应的订阅项', (kind, ctype) => {
     const url = new URL(folderUrl({ id: 7, mid: 42, kind, title: '', count: 0, cover: '', isDefault: false, isPrivate: false }));

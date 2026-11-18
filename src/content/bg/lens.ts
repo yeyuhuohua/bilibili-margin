@@ -72,6 +72,7 @@ export class GlassLens {
   private w = 0;
   private h = 0;
   private loc: Record<string, WebGLUniformLocation | null> = {};
+  private position: number;
 
   constructor(private gl: WebGLRenderingContext) {
     const sh = (type: number, src: string) => { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn('[MARGIN] lens', gl.getShaderInfoLog(s)); return s; };
@@ -79,6 +80,7 @@ export class GlassLens {
     gl.attachShader(this.prog, sh(gl.VERTEX_SHADER, VERT));
     gl.attachShader(this.prog, sh(gl.FRAGMENT_SHADER, FRAG));
     gl.linkProgram(this.prog);
+    this.position = gl.getAttribLocation(this.prog, 'p');
     for (const n of ['u_tex', 'u_res', 'u_rect', 'u_rad', 'u_span', 'u_bend', 'u_blur', 'u_tint', 'u_sheen', 'u_canvas', 'u_o']) this.loc[n] = gl.getUniformLocation(this.prog, n);
     this.tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
@@ -109,7 +111,7 @@ export class GlassLens {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
     gl.useProgram(this.prog);
-    const a = gl.getAttribLocation(this.prog, 'p');
+    const a = this.position;
     gl.enableVertexAttribArray(a);
     gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
     gl.activeTexture(gl.TEXTURE0);

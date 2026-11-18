@@ -19,6 +19,8 @@ import type { FilterTarget } from '../filter';
 import { openBili } from '../navigation';
 import { spaceArticles, spaceAudio, type SpaceContent } from '../api/space-content';
 import { publicFolders, publicFolder, folderVideos, type Folder } from '../api/fav';
+import { nav } from '../api/http';
+import { favoriteActions } from './favorite-actions';
 
 type Tab = 'video' | 'dynamic' | 'coin' | 'like' | 'collections' | 'article' | 'audio' | 'favorites';
 type Layout = 'grid' | 'list';
@@ -50,6 +52,7 @@ export class SpaceApp {
   private offset = '';
   private done = false;
   private loading = false;
+  private pageFailed = false;
   private gen = 0;
   private list!: HTMLElement;
   private status!: HTMLElement;
@@ -57,6 +60,8 @@ export class SpaceApp {
   private sort!: HTMLElement;
   private layoutSeg!: HTMLElement;
   private collection: SpaceCollection | null = null;
+  private collectionReverse = false;
+  private collectionSort!: HTMLElement & { set(v: 'default' | 'reverse'): void };
   private collectionHead!: HTMLElement;
   /** 搜索结果上方的合集入口（搜索命中合集名时出现，GitHub #113） */
   private hitBox!: HTMLElement;
@@ -70,6 +75,7 @@ export class SpaceApp {
   private searchController: AbortController | null = null;
   private searchCards = new Map<string, HTMLElement>();
   private folder: Folder | null = null;
+  private folderTargets: Promise<Folder[]> | null = null;
   private contentSeen = new Set<string>();
   /** 最近投币 / 点赞：进页面时各请求一次，对方公开了才出标签 */
   private recent: Partial<Record<'coin' | 'like', Video[]>> = {};
@@ -102,6 +108,13 @@ export class SpaceApp {
     this.qInput = input;
     this.sort = segmented<VideoOrder>([['pubdate', '最新发布'], ['click', '最多播放']], this.order, (v) => { this.order = v; this.reload(); });
     this.sort.classList.add('sp-sort');
+    this.collectionSort = segmented<'default' | 'reverse'>([['default', '默认排序'], ['reverse', '倒序排序']], 'default', value => {
+      const reverse = value === 'reverse';
+      if (reverse === this.collectionReverse) return;
+      this.collectionReverse = reverse; this.reload();
+    });
+    this.collectionSort.classList.add('sp-sort');
+    this.collectionSort.setAttribute('aria-label', '合集视频排序');
     this.kindSeg = segmented<VideoKind>([['all', '全部'], ['charging', '充电视频']], this.kind, (v) => {
       if (v === this.kind) return;
       this.kind = v; this.reload();
@@ -110,7 +123,7 @@ export class SpaceApp {
     this.kindSeg.hidden = true;
     this.layoutSeg = segmented<Layout>([['grid', '网格'], ['list', '列表']], this.layout, (v) => { this.layout = v; localStorage.setItem(LAYOUT_KEY, v); this.reload(); });
     this.layoutSeg.classList.add('sp-sort', 'sp-layout');
-    const bar = h('div', { class: 'bar sp-bar' }, h('div', { class: 'bar-row' }, tabs, h('div', { class: 'sp-tools' }, this.searchBox, this.kindSeg, this.sort, this.layoutSeg)));
+    const bar = h('div', { class: 'bar sp-bar' }, h('div', { class: 'bar-row' }, tabs, h('div', { class: 'sp-tools' }, this.searchBox, this.kindSeg, this.sort, this.collectionSort, this.layoutSeg)));
     this.list = h('section', { class: 'grid' });
     this.status = h('div', { class: 'status' });
     this.sentinel = h('div', { class: 'sentinel' });
@@ -132,6 +145,15 @@ export class SpaceApp {
     })
       .catch((e) => hero.replaceWith(h('section', { class: 'sp-hero' }, h('div', { class: 'sp-banner' }), h('div', { class: 'sp-id' }, h('div', { class: 'sp-who' }, h('h1', {}, `UID ${this.mid}`), h('p', { class: 'sp-sign' }, `资料加载失败：${(e as Error).message}`))))));
     new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) this.load(); }, { root: s.app, rootMargin: '900px 0px' }).observe(this.sentinel);
+    // 初次布局时哨兵可能已进入预加载范围，滚到末尾不一定再跨越 IO 阈值。
+    let scrollFrame = 0;
+    s.app.addEventListener('scroll', () => {
+      if (scrollFrame || this.loading || this.done || this.pageFailed) return;
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0;
+        if (this.sentinel.getBoundingClientRect().top < innerHeight + 900) this.load();
+      });
+    }, { passive: true });
     this.shell.filter.onChange(() => this.applyFilters());
     this.applyTabUi();
     this.load();
@@ -317,8 +339,8 @@ export class SpaceApp {
       return href ? h('a', { class: 'sp-stat', href, target: '_blank', rel: 'noopener' }, ...inner) : h('div', { class: 'sp-stat' }, ...inner);
     };
     return h('div', { class: 'sp-stats' },
-      stat(i?.follower, '粉丝', `https://space.bilibili.com/${this.mid}/fans/fans`),
-      stat(i?.following, '关注', `https://space.bilibili.com/${this.mid}/fans/follow`),
+      stat(i?.follower, '粉丝', `https://space.bilibili.com/${this.mid}/relation/fans?margin=off`),
+      stat(i?.following, '关注', `https://space.bilibili.com/${this.mid}/relation/follow?margin=off`),
       i?.likes ? stat(i.likes, '获赞') : null,
       i?.views ? stat(i.views, '播放') : null);
   }
@@ -357,6 +379,7 @@ export class SpaceApp {
     const vid = ['video', 'coin', 'like'].includes(this.tab) || !!this.collection || !!this.folder;
     const searchable = this.tab === 'video' || (this.tab === 'collections' && !!this.collection);
     this.sort.hidden = this.tab !== 'video';
+    this.collectionSort.hidden = !this.collection || !!this.q;
     this.kindSeg.hidden = this.tab !== 'video' || !this.chargingCount;
     this.searchBox.hidden = !searchable;
     if (this.qInput) {
@@ -404,6 +427,18 @@ export class SpaceApp {
     this.reload();
   }
 
+  /** 只在首次移动／复制时读取目标，包含自己的私密夹和后续页。 */
+  private targets(): Promise<Folder[]> {
+    return this.folderTargets ??= (async () => {
+      const list: Folder[] = [];
+      for (let page = 1; ; page++) {
+        const result = await publicFolders(this.mid, page);
+        list.push(...result.list);
+        if (!result.more) return list;
+      }
+    })().catch(error => { this.folderTargets = null; throw error; });
+  }
+
   private folderCard(folder: Folder): HTMLElement {
     const open = () => this.openFolder(folder);
     return h('article', { class: 'card sp-collection' },
@@ -418,6 +453,7 @@ export class SpaceApp {
     const open = () => {
       this.clearQuery();
       this.collection = c;
+      this.collectionReverse = false; this.collectionSort.set('default');
       this.tab = 'collections';
       history.replaceState(null, '', `/${this.mid}?margin_tab=collections`);
       this.collectionHead.replaceChildren(
@@ -434,6 +470,7 @@ export class SpaceApp {
     const open = () => {
       this.clearQuery();
       this.collection = c;
+      this.collectionReverse = false; this.collectionSort.set('default');
       this.collectionHead.replaceChildren(
         h('button', { class: 'ghost small', type: 'button', onclick: () => {
           this.clearQuery(); this.collection = null; this.reload();
@@ -457,7 +494,7 @@ export class SpaceApp {
     this.searchCards.clear();
     this.contentSeen.clear();
     this.gen++;
-    this.page = 1; this.offset = ''; this.done = false; this.loading = false;
+    this.page = 1; this.offset = ''; this.done = false; this.loading = false; this.pageFailed = false;
     this.list.replaceChildren();
     this.status.replaceChildren();
     if (this.hitBox) { this.hitBox.hidden = true; this.hitBox.replaceChildren(); }
@@ -467,7 +504,9 @@ export class SpaceApp {
 
   private async load(manual = false): Promise<void> {
     if (this.loading || this.done) return;
+    if (this.pageFailed && !manual) return;
     if (this.q && this.search && !manual) return;
+    this.pageFailed = false;
     this.loading = true;
     this.status.replaceChildren();
     const gen = this.gen;
@@ -491,14 +530,27 @@ export class SpaceApp {
         if (!this.list.children.length) this.status.replaceChildren(h('span', {}, this.tab === 'article' ? '还没有公开图文' : '还没有投稿音频'));
       } else if (this.tab === 'favorites') {
         if (this.folder) {
-          const r = await folderVideos(this.folder.id, this.page);
+          const folder = this.folder;
+          const [r, own] = await Promise.all([
+            folderVideos(folder.id, this.page),
+            nav().then(n => n.isLogin && n.mid === folder.mid, () => false),
+          ]);
           if (gen !== this.gen) return;
           skNodes.forEach(n => (n as Element).remove());
           this.page++;
           for (const video of r.list) {
             if (this.contentSeen.has(video.bvid)) continue;
             this.contentSeen.add(video.bvid);
-            this.list.append(listMode ? this.row(video, this.contentSeen.size) : videoCard(video, this.contentSeen.size - 1, { compact: false }));
+            const card = listMode ? this.row(video, this.contentSeen.size) : videoCard(video, this.contentSeen.size - 1, { compact: false });
+            if (own && !folder.kind) card.append(favoriteActions(video, folder, () => this.targets(), action => {
+              if (action === 'copy') return;
+              folder.count = Math.max(0, folder.count - 1);
+              if (gen === this.gen) {
+                card.remove();
+                if (!this.list.children.length && this.done) this.status.replaceChildren(h('span', {}, '暂无可播放视频'));
+              }
+            }));
+            this.list.append(card);
           }
           this.done = !r.more;
         } else {
@@ -561,7 +613,7 @@ export class SpaceApp {
           return;
         }
         const uploads = this.collection ? null : await spaceVideos(this.mid, this.page, this.order, this.q, undefined, this.kind);
-        const r = uploads ?? await spaceCollectionVideos(this.mid, this.collection!, this.page);
+        const r = uploads ?? await spaceCollectionVideos(this.mid, this.collection!, this.page, undefined, this.collectionReverse);
         if (gen !== this.gen) return;
         if (uploads && uploads.charging > this.chargingCount) this.showCharging(uploads.charging);
         this.page++;
@@ -590,6 +642,7 @@ export class SpaceApp {
       if (this.done && this.list.children.length) this.status.replaceChildren(h('span', {}, '没有更多了'));
     } catch (err) {
       if (gen !== this.gen) return;
+      this.pageFailed = true;
       skNodes.forEach((n) => (n as Element).remove());
       this.status.replaceChildren(h('span', {}, `加载失败：${(err as Error).message}`), h('button', { class: 'ghost small', type: 'button', onclick: () => this.load(true) }, '重试'));
       return;

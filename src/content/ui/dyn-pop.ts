@@ -1,7 +1,8 @@
 import { followFeed, followingLive, portal, toDyn, type Dyn } from '../api/dyn';
-import { historyList } from '../api/history';
+import { historyList, type Cursor } from '../api/history';
 import { folders } from '../api/fav';
-import { watchLater } from '../api/search';
+import { watchLater, removeWatchLater } from '../api/search';
+import { toast } from './controls';
 import { unread } from '../api/msg';
 import { bvidFromHref } from '../tags';
 import { h, icon, ICONS } from './dom';
@@ -19,7 +20,7 @@ const OPEN_DELAY = 0;
 const CLOSE_DELAY = 220;
 
 /** 列表里的一行：头像或封面 + 两行文字，或一个计数 */
-export interface PopRow { href: string; face?: string; title: string; who?: string; sub?: string; cover?: string; progress?: number; count?: number; live?: boolean; laterBvid?: string; dynamic?: Dyn }
+export interface PopRow { href: string; face?: string; title: string; who?: string; sub?: string; cover?: string; progress?: number; count?: number; live?: boolean; laterBvid?: string; dynamic?: Dyn; remove?: () => Promise<boolean> }
 export interface PopSpec {
   title: string;
   all: { href: string; label: string };
@@ -63,7 +64,7 @@ const thumb = (src: string, w: number, hh: number) => (src ? `${src}@${w}w_${hh}
 const img = (src: string, cls: string, w: number, hh = w) =>
   h('img', { class: cls, src: thumb(src, w, hh), alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
 
-function row(r: PopRow, hover: (d: Dyn, trigger: HTMLElement, entering: boolean) => void): HTMLElement {
+function row(r: PopRow, hover: (d: Dyn, trigger: HTMLElement, entering: boolean) => void, removed: () => void): HTMLElement {
   const cover = r.cover !== undefined
     ? h('span', { class: 'dp-cover' }, r.cover ? img(r.cover, '', 128, 72) : '', r.progress !== undefined ? h('i', { class: 'dp-prog', style: `--p:${Math.max(0, Math.min(1, r.progress))}` }) : '')
     : null;
@@ -74,7 +75,22 @@ function row(r: PopRow, hover: (d: Dyn, trigger: HTMLElement, entering: boolean)
       h('p', { class: 'dp-line' }, r.title)),
     r.count !== undefined ? h('em', { class: r.count ? 'dp-count' : 'dp-count zero' }, r.count > 99 ? '99+' : String(r.count)) : '',
     cover);
-  const entry: HTMLElement = r.laterBvid ? h('div', { class: 'dp-entry' }, link, laterButton(r.laterBvid)) : link;
+  const entry: HTMLElement = r.laterBvid || r.remove ? h('div', { class: 'dp-entry' }, link, r.laterBvid ? laterButton(r.laterBvid) : null) : link;
+  if (r.remove) {
+    const button = h('button', { type: 'button', class: 'dp-remove', title: '移出稍后再看', 'aria-label': '移出稍后再看' }, icon(ICONS.close)) as HTMLButtonElement;
+    button.onclick = async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        if (!await r.remove!()) throw new Error('remove failed');
+        entry.remove(); removed();
+      } catch {
+        button.disabled = false;
+        toast(entry.closest<HTMLElement>('.app') ?? entry.parentElement!, '移出失败，请重试');
+      }
+    };
+    entry.append(button);
+  }
   if (r.dynamic) {
     entry.classList.add('dp-dynamic');
     link.setAttribute('aria-expanded', 'false');
@@ -217,7 +233,11 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     clearTimeout(detailCloseT);
     previewT = window.setTimeout(() => { if (open && trigger.isConnected) void preview(d, trigger); }, 500);
   };
-  const renderRow = (r: PopRow) => row(r, hoverPreview);
+  const renderRow = (r: PopRow) => row(r, hoverPreview, () => {
+    loadedAt = 0;
+    if (!list.querySelector('.dp-row') && done) list.replaceChildren(h('p', { class: 'dp-empty' }, spec.empty));
+    else requestAnimationFrame(fill);
+  });
   // 屏蔽词过滤：主列表和分页追加都走同一套判断
   const visible = (rows: PopRow[]) => filter && spec.filterRow
     ? rows.filter((r) => { const t = spec.filterRow!(r); return !t || filter.allows(t); })
@@ -251,7 +271,16 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
       if (spec.canLoadMore && !spec.canLoadMore()) { done = true; if (restoreFocus) (nodes[0] ?? btn).focus({ preventScroll: true }); tail.remove(); }
       else if (spec.canLoadMore) tail.textContent = '加载更多';
       if (!shown.length) requestAnimationFrame(fill);
-    }).catch(() => { if (current === generation) { sk.remove(); done = !spec.canLoadMore; if (spec.canLoadMore) tail.textContent = '加载失败，重试'; } })
+    }).catch(() => {
+      if (current !== generation) return;
+      sk.remove(); done = !spec.canLoadMore;
+      if (spec.canLoadMore) tail.textContent = '加载失败，重试';
+      else {
+        const retry = h('button', { type: 'button', class: 'dp-more' }, '加载失败，重试');
+        retry.onclick = () => { retry.remove(); done = false; tailSeen = true; fill(); };
+        tail.before(retry);
+      }
+    })
       .finally(() => { if (current === generation) { busy = false; if (spec.canLoadMore) (tail as HTMLButtonElement).disabled = false; requestAnimationFrame(fill); } });
   };
   if (spec.canLoadMore) tail.addEventListener('click', () => { tailSeen = true; fill(); });
@@ -391,6 +420,21 @@ function dynSummary(d: Dyn): { line: string; cover: string; kind: string } {
 
 const dur = (s: number) => { const m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`; };
 
+/** 接口分页大小不一，缓存本页余量，每次只向预览追加 8 条。 */
+function previewPages(fetchPage: (first: boolean) => Promise<{ rows: PopRow[]; more: boolean } | null>): Pick<PopSpec, 'load' | 'more'> {
+  let pending: PopRow[] = [], more = true;
+  const page = async (first: boolean): Promise<PopRow[] | null> => {
+    if (first) { pending = []; more = true; }
+    if (!pending.length && more) {
+      const result = await fetchPage(first);
+      if (!result) return null;
+      pending = result.rows; more = result.more;
+    }
+    return pending.splice(0, 8);
+  };
+  return { load: () => page(true), more: async () => await page(false) ?? [] };
+}
+
 /** B 站分区：番剧影视走频道页，其余走 /c/ 分区页 */
 const ZONES: [string, string][] = [
   ['番剧', 'anime/'], ['国创', 'guochuang/'], ['电影', 'movie/'], ['电视剧', 'tv/'], ['纪录片', 'documentary/'], ['综艺', 'variety/'],
@@ -457,30 +501,42 @@ export const POPS: Record<string, (o: { onDyn?: () => void; msgRemind?: () => bo
       videoFilter: true, load: (videosOnly) => page(true, videosOnly), more: (videosOnly) => page(false, videosOnly),
     };
   },
-  历史: () => ({
+  历史: () => {
+    let cursor: Cursor | null = null;
+    return {
     title: '最近看过', all: { href: 'https://www.bilibili.com/history', label: '全部历史' }, empty: '还没有观看记录',
     filterRow: (r) => targetOfPopRow(r),
-    load: async () => (await historyList('all', null)).list.slice(0, 8).map((x) => ({
+    ...previewPages(async first => {
+      const result = await historyList('all', first ? null : cursor);
+      cursor = result.cursor;
+      return { more: !!cursor, rows: result.list.map((x) => ({
       href: x.url, title: x.title, who: x.author, sub: `${ago(x.viewAt)} · ${x.device}`, cover: x.cover,
       progress: x.duration > 0 ? (x.progress < 0 ? 1 : x.progress / x.duration) : undefined,
-    })),
-  }),
-  收藏: () => ({
+      })) };
+    }),
+  }; },
+  收藏: () => {
+    let page = 1;
+    return {
     title: '收藏夹', all: { href: 'https://www.bilibili.com/#fav', label: '全部收藏' }, empty: '还没有收藏夹',
-    load: async () => {
-      const f = await folders();
-      return f && f.slice(0, 8).map((x) => ({ href: `https://space.bilibili.com/${x.mid}/favlist?fid=${x.id}`, title: x.title, sub: `${x.count} 个内容${x.isPrivate ? ' · 私密' : ''}`, cover: x.cover }));
-    },
-  }),
+    ...previewPages(async first => {
+      const next = first ? 1 : page;
+      const f = await folders(false, next);
+      if (!f) return null;
+      page = next + 1;
+      return { more: f.length === 50, rows: f.map((x) => ({ href: `https://space.bilibili.com/${x.mid}/favlist?fid=${x.id}`, title: x.title, sub: `${x.count} 个内容${x.isPrivate ? ' · 私密' : ''}`, cover: x.cover })) };
+    }),
+  }; },
   稍后: () => ({
     title: '稍后再看', all: { href: 'https://www.bilibili.com/list/watchlater', label: '全部' }, empty: '稍后再看是空的',
     filterRow: (r) => targetOfPopRow(r),
-    load: async () => {
+    ...previewPages(async () => {
       const l = await watchLater();
-      return l && l.slice(0, 8).map((x) => ({
+      return l && { more: false, rows: l.map((x) => ({
         href: `https://www.bilibili.com/list/watchlater?bvid=${x.bvid}`, title: x.title, who: x.author, sub: dur(x.duration), cover: x.cover,
         progress: x.duration > 0 ? (x.progress < 0 ? 1 : x.progress / x.duration) : undefined,
-      }));
-    },
+        remove: () => removeWatchLater(x.aid),
+      })) };
+    }),
   }),
 };

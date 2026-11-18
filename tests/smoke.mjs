@@ -604,11 +604,14 @@ for (const theme of THEMES) {
         const settingsHost = name === 'native-space' ? 'margin-watch-top' : host;
         await page.locator(`#${settingsHost} .top [aria-label="设置"]`).click();
         await page.locator(`#${settingsHost} .sheet-layer:has(.sheet[aria-label="设置"]) .sheet-x`).click();
-        if (name === 'native-space') {
-          await page.waitForSelector('html.margin-space-native'); await sleep(300);
-          await page.evaluate(() => { const a = document.createElement('a'); a.href = '#fav'; document.body.append(a); a.click(); a.remove(); });
-        } else if (own) await page.locator(`#${host} .sp-tile`).filter({ hasText: '收藏夹' }).click();
-        else await page.locator(`#${host} .et-btn[aria-label="收藏"]`).click();
+        const openFavorites = async () => {
+          if (name === 'native-space') {
+            await page.waitForSelector('html.margin-space-native'); await sleep(300);
+            await page.evaluate(() => { const a = document.createElement('a'); a.href = '#fav'; document.body.append(a); a.click(); a.remove(); });
+          } else if (own) await page.locator(`#${host} .sp-tile`).filter({ hasText: '收藏夹' }).click();
+          else await page.locator(`#${host} .et-btn[aria-label="收藏"]`).click();
+        };
+        await openFavorites();
         const sheet = page.locator(`#${host} .sheet-layer[data-open="true"]`);
         const folder = sheet.locator('.gf-hit').nth(1);
         await folder.waitFor(); await folder.click();
@@ -616,7 +619,12 @@ for (const theme of THEMES) {
         if (await folder.getAttribute('aria-expanded') !== 'false') miss.push(`${name}: direct mode still fans out`);
         if (!(await sheet.locator('.crumb').textContent()).includes('动效参考')) miss.push(`${name}: wrong folder opened`);
         await seed({ favDirect: false });
+        // 关闭的设置面板按需同步；重新打开时核对控件，再从正常入口验证文件夹行为。
+        await sheet.locator('.sheet-x').click();
+        await page.locator(`#${settingsHost} .top [aria-label="设置"]`).click();
         await page.waitForFunction((id) => document.getElementById(id)?.shadowRoot?.querySelector('[aria-label="收藏夹直接展开"]')?.getAttribute('aria-checked') === 'false', settingsHost);
+        await page.locator(`#${settingsHost} .sheet-layer:has(.sheet[aria-label="设置"]) .sheet-x`).click();
+        await openFavorites();
         await sheet.locator('.sheet-body').evaluate((el) => el.scrollTo({ top: 0 }));
         await folder.click();
         if (await folder.getAttribute('aria-expanded') !== 'true') miss.push(`${name}: setting change did not restore fan-out`);

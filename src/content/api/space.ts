@@ -78,10 +78,10 @@ export async function spaceCollections(mid: number, page: number, signal?: Abort
   return { list, total: items.page?.total ?? list.length };
 }
 
-export async function spaceCollectionVideos(mid: number, collection: SpaceCollection, page: number, signal?: AbortSignal): Promise<{ list: Video[]; total: number }> {
+export async function spaceCollectionVideos(mid: number, collection: SpaceCollection, page: number, signal?: AbortSignal, reverse = false): Promise<{ list: Video[]; total: number }> {
   const d = collection.kind === 'season'
-    ? await getJSON<any>('/x/polymer/web-space/seasons_archives_list', { mid, season_id: collection.id, page_num: page, page_size: 30, sort_reverse: 'false' }, signal)
-    : await getJSON<any>('/x/series/archives', { mid, series_id: collection.id, pn: page, ps: 30, only_normal: 'true', sort: 'asc' }, signal);
+    ? await getJSON<any>('/x/polymer/web-space/seasons_archives_list', { mid, season_id: collection.id, page_num: page, page_size: 30, sort_reverse: String(reverse) }, signal)
+    : await getJSON<any>('/x/series/archives', { mid, series_id: collection.id, pn: page, ps: 30, only_normal: 'true', sort: reverse ? 'asc' : 'desc' }, signal);
   const list: Video[] = (d.archives ?? []).map((v: any) => ({
     bvid: v.bvid || `av${v.aid}`, cid: 0, title: v.title, cover: https(v.pic), duration: Number(v.duration) || 0,
     author: v.owner?.name ?? '', mid: v.owner?.mid ?? v.upMid ?? mid, face: https(v.owner?.face),

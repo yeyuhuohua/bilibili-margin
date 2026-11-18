@@ -27,8 +27,11 @@ export function installAppNavigation(enabled: boolean): void {
   installed = true;
   const navigate = (e: MouseEvent) => {
     if (!on || e.defaultPrevented) return;
-    const a = e.composedPath().find((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement);
+    const path = e.composedPath();
+    const a = path.find((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement);
     if (!a || (e.button !== 1 && a.target !== '_blank') || a.hasAttribute('download')) return;
+    // 捕获阶段先让链接内的操作按钮处理事件，避免抢在它的 preventDefault 前跳转。
+    if (path.slice(0, path.indexOf(a)).some(n => (n as Element).matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'))) return;
     const same = appUrl(a.href, e);
     if (!same) return;
     e.preventDefault();

@@ -23,7 +23,7 @@
 .brand b { font: 600 24px/1 var(--serif); letter-spacing: .04em; }
 .brand small { font: 10px/1 var(--mono); letter-spacing: .24em; color: var(--faint); }
 .search {
-  display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 12px 0 16px; border-radius: 999px;
+  display: flex; align-items: center; gap: 10px; min-width: 0; height: 42px; padding: 0 12px 0 16px; border-radius: 999px; overflow: hidden;
   background: var(--chip); border: 1px solid transparent; color: var(--muted); transition: border-color .2s var(--ease-out), background .2s var(--ease-out), box-shadow .2s var(--ease-out);
 }
 .search:focus-within { background: var(--surface); border-color: var(--line); }
@@ -45,6 +45,13 @@
 .top:has(.et-labels) .acts { min-width: 0; max-width: 100%; }
 .top:has(.et-labels) .search { min-width: 120px; }
 .top:has(.et-labels) { grid-template-columns: auto minmax(120px, 320px) minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .acts { gap: 6px; min-width: 0; max-width: 100%; }
+  .et { gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .et-sep { margin: 0 2px; }
+  .et-btn { padding: 0 6px; }
+  .upload { padding: 0 12px 0 10px; gap: 4px; }
+}
 .et-btn:hover { background: var(--chip); color: var(--ink); }
 /* 选中/悬停都不改变宽度：指示条（.et-thumb）滑过去，文字只在 title 里出现（#11：不再挤压重排） */
 .et-btn[data-selected] { color: var(--accent-text); }

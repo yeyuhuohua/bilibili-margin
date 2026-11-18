@@ -93,6 +93,8 @@ export function createHeroSearch(app: () => HTMLElement, _onPalette?: () => void
     q = q.trim();
     if (!q) { input.focus(); return; }
     rememberSearch(q);
+    close();
+    input.blur();
     openBili(searchUrl(q));
   };
   const opt = (cls: string, run: () => void, ...kids: (Node | string)[]) => {
@@ -169,6 +171,7 @@ export function createHeroSearch(app: () => HTMLElement, _onPalette?: () => void
     input.setAttribute('aria-expanded', 'false');
     app().classList.remove('hs-open');
     ctrl?.abort();
+    clearTimeout(timer);
   }
 
   const sync = () => {
@@ -216,12 +219,14 @@ export function createHeroSearch(app: () => HTMLElement, _onPalette?: () => void
     const typed = input.value.trim();
     const q = typed || current();
     if (!q) { input.focus(); return; }
-    go(q);
     if (typed) vanish(); else close();
+    go(q);
   }
 
   // ── 回车后文字化成粒子散去（21st Placeholders And Vanish Input 的原生 canvas 版） ──
+  let vanishFrame = 0;
   function vanish() {
+    cancelAnimationFrame(vanishFrame);
     const text = input.value;
     if (reducedMotion() || !text) { input.value = ''; sync(); close(); return; }
     const field = canvas.parentElement!;
@@ -263,12 +268,25 @@ export function createHeroSearch(app: () => HTMLElement, _onPalette?: () => void
         const s = p.r * (1 - lt * 0.6);
         ctx.fillRect(p.x + p.vx * lt * 28, p.y + p.vy * lt * 18, s, s);
       }
-      if (t < 1.02) requestAnimationFrame(step);
+      if (t < 1.02) vanishFrame = requestAnimationFrame(step);
       else { ctx.clearRect(0, 0, W, H); box.classList.remove('vanishing'); }
     };
-    requestAnimationFrame(step);
+    vanishFrame = requestAnimationFrame(step);
     close();
   }
+
+  const reset = () => {
+    close();
+    clearTimeout(timer);
+    ctrl?.abort();
+    input.blur();
+    cancelAnimationFrame(vanishFrame);
+    canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+    box.classList.remove('vanishing');
+  };
+  addEventListener('pagehide', reset);
+  addEventListener('pageshow', (e) => { if (e.persisted) reset(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 
   return { el, scrim, focus: () => input.focus() };
 }

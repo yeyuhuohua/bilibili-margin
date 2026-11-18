@@ -211,10 +211,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     const r = trigger.getBoundingClientRect();
     triggerBounds = r; triggerBoundsDirty = false;
     dpr = Math.min(2, devicePixelRatio || 1);
-    if (canvas.width !== Math.round(innerWidth * dpr)) canvas.width = Math.round(innerWidth * dpr);
-    if (canvas.height !== Math.round(innerHeight * dpr)) canvas.height = Math.round(innerHeight * dpr);
-    canvas.style.width = `${innerWidth}px`; canvas.style.height = `${innerHeight}px`;
-    dirty = { l: 0, t: 0, r: innerWidth, b: innerHeight };
+    canvasWidth = canvasHeight = 0;
     chainDirty = true;
     // 珠链从头像底部垂下，穿进工牌顶上的孔；卡片太靠右会出视口，就让链子静止时往左斜一点
     anchor.x = r.left + r.width / 2;
@@ -261,6 +258,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   // 珠链：沿绳子每 4.4px 一颗金属小珠，珠子之间一根细连杆
   const BEAD_GAP = 4.4, BEAD_R = 1.9;
   let dirty = { l: 0, t: 0, r: 0, b: 0 };
+  let canvasLeft = 0, canvasTop = 0, canvasWidth = 0, canvasHeight = 0;
   let chainDirty = true, chainDark: boolean | undefined;
   const drawn: { x: number; y: number }[] = [];
   const drawChain = () => {
@@ -271,7 +269,19 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
       const p = rendered[i];
       if (drawn[i]) { drawn[i].x = p.x; drawn[i].y = p.y; } else drawn.push({ x: p.x, y: p.y });
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let l = Infinity, r = -Infinity, tp = Infinity, bt = -Infinity;
+    for (const p of rendered) { l = Math.min(l, p.x); r = Math.max(r, p.x); tp = Math.min(tp, p.y); bt = Math.max(bt, p.y); }
+    // 珠链只占头像附近的一小块区域。留出缓冲，避免每移动一像素就重建画布。
+    if (!canvasWidth || l - 8 < canvasLeft || tp - 8 < canvasTop || r + 8 > canvasLeft + canvasWidth || bt + 10 > canvasTop + canvasHeight) {
+      canvasLeft = Math.floor((l - 24) / 32) * 32; canvasTop = Math.floor((tp - 24) / 32) * 32;
+      canvasWidth = Math.ceil((r + 24 - canvasLeft) / 32) * 32;
+      canvasHeight = Math.ceil((bt + 26 - canvasTop) / 32) * 32;
+      canvas.width = Math.ceil(canvasWidth * dpr); canvas.height = Math.ceil(canvasHeight * dpr);
+      canvas.style.left = `${canvasLeft}px`; canvas.style.top = `${canvasTop}px`;
+      canvas.style.width = `${canvasWidth}px`; canvas.style.height = `${canvasHeight}px`;
+      dirty = { l: canvasLeft, t: canvasTop, r: canvasLeft + canvasWidth, b: canvasTop + canvasHeight };
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, -canvasLeft * dpr, -canvasTop * dpr);
     // 只擦上一帧画过的范围（整屏 clearRect 在高分屏上每帧要清几百万像素）
     ctx.clearRect(dirty.l, dirty.t, dirty.r - dirty.l, dirty.b - dirty.t);
     const beads: { x: number; y: number }[] = [];
@@ -304,8 +314,6 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     ctx.beginPath(); ctx.ellipse(0, 1.5, 3.2, 4.6, 0, 0, Math.PI * 2);
     ctx.strokeStyle = dark ? '#d5d8dd' : '#7c8087'; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.restore();
-    let l = Infinity, r = -Infinity, tp = Infinity, bt = -Infinity;
-    for (const p of rendered) { l = Math.min(l, p.x); r = Math.max(r, p.x); tp = Math.min(tp, p.y); bt = Math.max(bt, p.y); }
     dirty = { l: l - 8, t: tp - 8, r: r + 8, b: bt + 10 };
   };
   const HOLE_Y = 20.5; // 孔中心离卡片顶部的距离（未缩放）
@@ -322,8 +330,8 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     if (transform !== lastCardTransform) { card.style.transform = transform; lastCardTransform = transform; }
     cardBounds = lanyardCardBounds(last.x, last.y, cardW, cardH, angle, CARD_SCALE, HOLE_Y);
   };
-  let hovering = false, overControl = false, lastMx = '', lastMy = '';
-  const updateTilt = (elapsed: number) => {
+  let hovering = false, overControl = false, lastMx = '', lastMy = '', nextHighlight = 0;
+  const updateTilt = (elapsed: number, now: number) => {
     if (!overControl) flipCurrent += (flipTarget - flipCurrent) * lanyardEase(0.16, elapsed);
     const over = !dragging && mouse.x > -1000;
     if (over) {
@@ -336,8 +344,11 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
       else { tiltTarget.y = dx * MAX_TILT; tiltTarget.x = -dy * MAX_TILT; }
       const mx = `${Math.round(Math.max(0, Math.min(100, ((mouse.x - cardX) / cardW) * 100)))}%`;
       const my = `${Math.round(Math.max(0, Math.min(100, ((mouse.y - cardY) / cardH) * 100)))}%`;
-      if (mx !== lastMx) { card.style.setProperty('--mx', mx); lastMx = mx; }
-      if (my !== lastMy) { card.style.setProperty('--my', my); lastMy = my; }
+      if (now >= nextHighlight) {
+        nextHighlight = now + LANYARD_STEP_MS;
+        if (mx !== lastMx) { card.style.setProperty('--mx', mx); lastMx = mx; }
+        if (my !== lastMy) { card.style.setProperty('--my', my); lastMy = my; }
+      }
     } else {
       tiltTarget.x = 0; tiltTarget.y = 0;
     }
@@ -382,7 +393,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     }
     // The grabbed end follows the pointer immediately; the other points remain interpolated.
     if (dragging) { const last = rendered[rendered.length - 1]; last.x = pointer.x; last.y = pointer.y; }
-    positionCard(); drawChain(); updateTilt(elapsed);
+    positionCard(); drawChain(); updateTilt(elapsed, now);
     still = settled() ? still + elapsed : 0;
     if (still < 350) raf = requestAnimationFrame(loop);
   };

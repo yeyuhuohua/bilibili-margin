@@ -31,6 +31,17 @@ describe('空间合集和系列', () => {
     await expect(spaceCollections(2, 1)).rejects.toThrow('网络错误');
     await expect(spaceCollectionVideos(2, collection, 1)).rejects.toThrow('网络错误');
   });
+  it.each(['season', 'series'] as const)('%s 使用原站默认排序，倒序沿用分页和取消信号', async kind => {
+    vi.mocked(getJSON).mockResolvedValue({ archives: [] });
+    const signal = new AbortController().signal;
+    await spaceCollectionVideos(2, { ...collection, kind }, 1);
+    expect(vi.mocked(getJSON).mock.calls[0][1]).toMatchObject(kind === 'season' ? { sort_reverse: 'false' } : { sort: 'desc' });
+    await spaceCollectionVideos(2, { ...collection, kind }, 3, signal, true);
+    expect(vi.mocked(getJSON).mock.calls[1]).toEqual([
+      kind === 'season' ? '/x/polymer/web-space/seasons_archives_list' : '/x/series/archives',
+      expect.objectContaining(kind === 'season' ? { page_num: 3, sort_reverse: 'true' } : { pn: 3, sort: 'asc' }), signal,
+    ]);
+  });
   it('系列收录其他 UP 的视频时保留实际投稿人', async () => {
     vi.mocked(getJSON).mockResolvedValue({ page: { total: 1 }, archives: [{ bvid: 'BVother', title: '联合视频', upMid: 147166910 }] });
     const r = await spaceCollectionVideos(546195, { ...collection, kind: 'series' }, 1);

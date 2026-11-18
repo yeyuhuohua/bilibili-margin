@@ -29,12 +29,22 @@ jobs:
         run: node tests/popup-version.mjs
         env:
           SMOKE_OUT: smoke-artifacts/popup-version
+      - name: Search return, hover pagination, page preferences and follow avatars
+        run: |
+          SMOKE_OUT=smoke-artifacts/search-return node tests/search-return.mjs
+          SMOKE_OUT=smoke-artifacts/hover-list-feedback node tests/hover-list-feedback.mjs
+          SMOKE_OUT=smoke-artifacts/page-redesign node tests/page-redesign.mjs
+          SMOKE_OUT=smoke-artifacts/feed-follow-avatars node tests/feed-follow-avatars.mjs
       - name: Favorites loading, drawer scrolling and inline dynamic comments
         run: |
           node tests/favorites-loading.mjs
           node tests/dynamic-inline-comments.mjs
           node tests/dynamic-inline-reply.mjs
           node tests/dynamic-composer-extension.mjs
+      - name: Card actions, enable switch, private space and update controls
+        run: node tests/reported-20261118.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/reported-20261118
       - name: Native Lit publish button and motion
         run: node tests/button-motion.mjs
       - name: Favorite actions, message recall and viewport edges
@@ -46,7 +56,10 @@ jobs:
       - name: Space drawer regressions
         run: pnpm run test:drawers
       - name: Space articles, audio and public favorites
-        run: node tests/space-content.mjs
+        run: |
+          node tests/space-content.mjs
+          SMOKE_OUT=smoke-artifacts/space-favorite-actions node tests/space-favorite-actions.mjs
+          SMOKE_OUT=smoke-artifacts/space-collection-order node tests/space-collection-order.mjs
         env:
           SMOKE_OUT: smoke-artifacts/space-content
       - name: Private favorites, dynamic badges and manual live expansion
@@ -85,6 +98,21 @@ jobs:
         run: node tests/dynamic-hover-preview.mjs
         env:
           SMOKE_OUT: smoke-artifacts/dynamic-hover-preview
+      - name: Favorite recovery, deferred folder rendering and App dates
+        run: |
+          SMOKE_OUT=smoke-artifacts/favorites-recovery node tests/favorites-recovery.mjs
+          SMOKE_OUT=smoke-artifacts/favorites-offscreen node tests/favorites-offscreen.mjs
+          SMOKE_OUT=smoke-artifacts/app-feed-time node tests/app-feed-time.mjs
+      - name: Homepage workload, preview cleanup and interface reuse
+        run: |
+          SMOKE_OUT=smoke-artifacts/home-workload node tests/home-workload.mjs
+          SMOKE_OUT=smoke-artifacts/preview-visibility node tests/preview-visibility.mjs
+          SMOKE_OUT=smoke-artifacts/interface-performance node tests/interface-performance.mjs
+      - name: Homepage widths, account motion and native vote themes
+        run: |
+          SMOKE_OUT=smoke-artifacts/home-width node tests/home-width.mjs
+          SMOKE_OUT=smoke-artifacts/account-motion node tests/account-motion.mjs
+          SMOKE_OUT=smoke-artifacts/vote-theme node tests/vote-theme.mjs
       - name: Native controls follow the selected accent
         run: node tests/accent-controls.mjs
         env:
@@ -133,6 +161,25 @@ jobs:
           SMOKE_OUT=smoke-artifacts/native-header node tests/native-header.mjs
         env:
           SMOKE_OUT: smoke-artifacts/header-surface
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-core-screenshots
+          path: smoke-artifacts/
+          if-no-files-found: warn
+  pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run build
       - name: Smoke test (offline mocked bilibili)
         run: pnpm run test:smoke
         env:

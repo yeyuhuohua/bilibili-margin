@@ -3,7 +3,7 @@ import { cardData } from './card';
 import { h } from './dom';
 
 /** 封面悬停 0.5 秒后静音播放低清预览，进度细线在底部 */
-export function attachPreview(container: HTMLElement, enabled: () => boolean): void {
+export function attachPreview(container: HTMLElement, enabled: () => boolean): () => void {
   let timer = 0;
   let generation = 0;
   let hovered: HTMLElement | null = null;
@@ -20,10 +20,12 @@ export function attachPreview(container: HTMLElement, enabled: () => boolean): v
     video.pause();
     setTimeout(() => { video.removeAttribute('src'); video.load(); video.remove(); bar.remove(); }, 250);
   };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+  addEventListener('pagehide', stop);
 
   container.addEventListener('mouseover', (e) => {
     const cover = (e.target as Element).closest?.('.cover, .dy-vcover[data-bvid]') as HTMLElement | null;
-    if (!cover || cover === hovered || !enabled()) return;
+    if (!cover || cover === hovered || !enabled() || document.hidden) return;
     const card = cover.closest('.card, .dy');
     const v = card && cardData.get(card);
     // 动态卡的视频封面没有 cardData，从链接里取 BV 号（#2）
@@ -33,8 +35,9 @@ export function attachPreview(container: HTMLElement, enabled: () => boolean): v
     hovered = cover;
     const current = generation;
     timer = window.setTimeout(async () => {
+      if (current !== generation || !enabled() || document.hidden || !cover.isConnected) return;
       const cid = v?.cid || await cidOf(bvid);
-      if (!cid || current !== generation || !enabled()) return;
+      if (!cid || current !== generation || !enabled() || document.hidden || !cover.isConnected) return;
       const url = await previewUrl(bvid, cid);
       if (!url || current !== generation || !enabled() || !cover.isConnected || document.hidden) return;
       const video = h('video', { muted: true, playsinline: true, loop: true, preload: 'auto', class: 'pv' }) as HTMLVideoElement;
@@ -56,4 +59,5 @@ export function attachPreview(container: HTMLElement, enabled: () => boolean): v
     if (to && cover.contains(to)) return;
     if (cover === hovered) stop();
   });
+  return stop;
 }
