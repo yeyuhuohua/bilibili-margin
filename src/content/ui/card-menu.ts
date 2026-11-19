@@ -17,7 +17,13 @@ export function bindCardMenu(container: HTMLElement, cm: ContextMenu, toastRoot:
     const url = `https://www.bilibili.com/video/${v.bvid}`;
     const copy = (text: string, msg: string) => navigator.clipboard.writeText(text).then(() => toast(toastRoot(), msg), () => toast(toastRoot(), '复制失败'));
     const items: MenuEntry[] = [
-      { label: '新标签页打开', icon: ICONS.arrow, shortcut: '↵', run: () => window.open(url, '_blank', 'noopener') },
+      { label: '新标签页打开', icon: ICONS.arrow, shortcut: '↵', run: async () => {
+        try {
+          const result = await chrome.runtime.sendMessage({ margin: 'open-video-tab', bvid: v.bvid });
+          if (result?.ok) return;
+        } catch { /* 扩展重载后，旧页面的消息通道可能已失效 */ }
+        toast(toastRoot(), '打开视频失败');
+      } },
       { label: '稍后再看', icon: ICONS.later, run: async () => { const r = await addWatchLater(v.bvid).catch(() => ({ ok: false, msg: '没加上，稍后再试' })); toast(toastRoot(), r.msg, r.ok && opts.onLater ? { label: '查看', run: opts.onLater } : undefined); } },
       'separator',
       { label: '复制链接', icon: ICONS.link, run: () => copy(url, '链接已复制') },

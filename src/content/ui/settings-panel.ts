@@ -719,7 +719,7 @@ function buildSettingsPanel(sheet: SettingsPage, get: () => Settings, currentSha
 
   sheet.section('privacy', '隐私与数据', '外部服务、搜索记录和备份。',
     row('允许外部辅助服务', '默认关闭；开启后允许天气定位、天气查询、社区广告片段和 GitHub 更新查询。服务会接收请求 IP。', externalT),
-    row('保存最近搜索', '默认关闭；开启后只存扩展内，最多 8 条、30 天过期，读取时清理。', historyT),
+    row('保存最近搜索', '默认关闭。开启后保存在扩展内，最多 8 条、保留 30 天；仍在网页里的旧版记录会在开启后移入。', historyT),
     row('搜索记录', null, clearHistory),
     h('p', { class: 'stg-note' }, 'App 授权默认仅保留在当前会话；可在实验功能中开启「记住授权」，最多保存 30 天。'),
     h('div', { class: 'row' },

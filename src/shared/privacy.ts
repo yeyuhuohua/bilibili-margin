@@ -15,7 +15,9 @@ export function cleanHistory(raw: unknown, now = Date.now()): SearchEntry[] {
   }).slice(0, 8);
 }
 
-export type HistoryMessage = { margin: 'privacy'; op: 'history-read' | 'history-remember' | 'history-forget'; query?: string };
+export type HistoryMessage =
+  | { margin: 'privacy'; op: 'history-read'; legacy?: unknown }
+  | { margin: 'privacy'; op: 'history-remember' | 'history-forget'; query?: string };
 export class PrivacyBlocked extends Error {
   constructor() { super('可选外部服务已关闭'); this.name = 'PrivacyBlocked'; }
 }

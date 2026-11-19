@@ -40,6 +40,51 @@ try {
     if (mode !== 'hero') assert(await page.locator('#margin-root .top .search').evaluate(el => !el.style.opacity && !el.style.pointerEvents));
     results.push({ mode, atNavigation, lifecycleReset: true });
   }
+  for (const searchStyle of ['classic', 'new']) {
+    await worker.evaluate(searchStyle => chrome.storage.local.set({
+      'margin:settings': { intro: false, theme: 'dark', bg: { mode: 'off' }, searchStyle },
+    }), searchStyle);
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.evaluate(() => {
+      window.playerKeys = [];
+      const shortcut = event => {
+        if (![' ', 'e', 'f'].includes(event.key) || /^(INPUT|TEXTAREA)$/.test(event.target?.tagName)) return;
+        window.playerKeys.push([event.type, event.key]);
+        event.preventDefault();
+      };
+      window.addEventListener('keydown', shortcut, true);
+      document.addEventListener('keypress', shortcut, true);
+      document.addEventListener('keyup', shortcut, true);
+    });
+    const host = page.locator('#margin-watch-top');
+    await host.locator('.top .search').click();
+    const input = host.locator('.cp-input input');
+    await input.pressSequentially('ef ef');
+    assert.equal(await input.inputValue(), 'ef ef');
+    assert.deepEqual(await page.evaluate(() => window.playerKeys), []);
+    await input.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter', isComposing: true, bubbles: true, composed: true, cancelable: true,
+    })));
+    assert.equal(await host.locator('.cp').getAttribute('data-open'), 'true', 'IME Enter must not submit');
+    await input.press('ArrowDown');
+    await input.press('Escape');
+    assert.equal(await host.locator('.cp').getAttribute('data-open'), 'false');
+    await page.keyboard.press('Space');
+    assert((await page.evaluate(() => window.playerKeys)).some(([type, key]) => type === 'keydown' && key === ' '),
+      'player shortcuts should run again after the search closes');
+    await page.keyboard.press('Control+k');
+    await input.press('Control+k');
+    assert.equal(await host.locator('.cp').getAttribute('data-open'), 'false', 'Ctrl+K still toggles the palette');
+    await page.keyboard.press('/');
+    await input.fill('ef ef');
+    const popup = page.waitForEvent('popup');
+    await input.press('Enter');
+    const target = await popup;
+    await target.waitForURL(url => url.searchParams.get('keyword') === 'ef ef');
+    await target.close();
+    await page.bringToFront();
+    results.push({ mode: `watch-${searchStyle}`, shortcutsIsolated: true, imeEnterPreserved: true });
+  }
   assert.deepEqual(errors, []);
 } finally { writeFileSync(join(out, 'results.json'), JSON.stringify({ results, errors }, null, 2)); await ctx.close(); }
 console.log(JSON.stringify(results));

@@ -21,24 +21,52 @@ export async function protectAuthStorage(): Promise<void> {
   await chrome.storage.local.remove(APP_AUTH_KEY);
 }
 
-export async function handleHistory(message: HistoryMessage): Promise<{ ok: boolean; entries: ReturnType<typeof cleanHistory> }> {
+const LEGACY_HISTORY_SUPPRESSED = 'margin:search-history-legacy-suppressed';
+
+export async function clearSearchHistory(): Promise<void> {
+  await chrome.storage.local.set({ [LEGACY_HISTORY_SUPPRESSED]: true });
+  await chrome.storage.local.remove(SEARCH_HISTORY_KEY);
+}
+
+export async function handleHistory(message: HistoryMessage): Promise<{
+  ok: boolean;
+  entries: ReturnType<typeof cleanHistory>;
+  legacyHandled?: boolean;
+}> {
+  if (message.op === 'history-forget' && message.query === undefined) {
+    await clearSearchHistory();
+    return { ok: true, entries: [] };
+  }
   const settings = await loadSettings();
   if (!settings.searchHistory) {
     await chrome.storage.local.remove(SEARCH_HISTORY_KEY);
     return { ok: true, entries: [] };
   }
   let entries = cleanHistory((await chrome.storage.local.get(SEARCH_HISTORY_KEY))[SEARCH_HISTORY_KEY]);
+  let legacyHandled = false;
   if (message.op === 'history-remember') {
     if (typeof message.query !== 'string' || !message.query.trim() || message.query.length > 200) return { ok: false, entries };
     const text = message.query.trim();
     entries = [{ text, at: Date.now() }, ...entries.filter(entry => entry.text !== text)].slice(0, 8);
   } else if (message.op === 'history-forget') {
-    if (message.query !== undefined && typeof message.query !== 'string') return { ok: false, entries };
-    entries = message.query === undefined ? [] : entries.filter(entry => entry.text !== message.query);
-  } else if (message.op !== 'history-read') return { ok: false, entries: [] };
+    if (typeof message.query !== 'string') return { ok: false, entries };
+    entries = entries.filter(entry => entry.text !== message.query);
+  } else if (message.op === 'history-read') {
+    if (Array.isArray(message.legacy)) {
+      const suppressed = (await chrome.storage.local.get(LEGACY_HISTORY_SUPPRESSED))[LEGACY_HISTORY_SUPPRESSED];
+      if (!suppressed) {
+        const now = Date.now();
+        const legacy = message.legacy.slice(0, 8)
+          .filter((text): text is string => typeof text === 'string' && text.length <= 200)
+          .map(text => ({ text: text.trim(), at: now }));
+        entries = cleanHistory([...entries, ...legacy], now);
+      }
+      legacyHandled = true;
+    }
+  } else return { ok: false, entries: [] };
   // 关闭记录与写入并发时，避免在用户关闭后重新保存。
-  if (!(await loadSettings()).searchHistory) entries = [];
+  if (!(await loadSettings()).searchHistory) { entries = []; legacyHandled = false; }
   if (entries.length) await chrome.storage.local.set({ [SEARCH_HISTORY_KEY]: entries });
   else await chrome.storage.local.remove(SEARCH_HISTORY_KEY);
-  return { ok: true, entries };
+  return legacyHandled ? { ok: true, entries, legacyHandled } : { ok: true, entries };
 }

@@ -19,6 +19,7 @@ import { startNativeFilter } from './native-filter';
 import { installAppNavigation } from './navigation';
 import { setSponsorSkip } from './sponsor-skip';
 import { applyAppearance } from './appearance';
+import { guardWatchSearchKeys } from './watch-search-keys';
 
 // Firefox：内容脚本自带的 fetch 以扩展身份发请求，B 站接口收不到登录 cookie（一直显示未登录）。
 // Firefox 另给了页面身份的 content.fetch，B 站自家域名的请求改走它；其他域名（天气等）照旧。Chrome 没有 content，不受影响。
@@ -296,7 +297,10 @@ async function start(): Promise<void> {
   injectFonts();
   trackKeyboard();
   startTracking(); // 足迹在所有 B 站页面记录，不只首页
-  if (isWatch()) return startWatch();
+  if (isWatch()) {
+    guardWatchSearchKeys();
+    return startWatch();
+  }
   const sm = spaceMatch();
   // 空间页的投稿接口依赖原版脚本写的指纹 cookie，不拦会 412
   if (sm) {

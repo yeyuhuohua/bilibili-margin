@@ -49,6 +49,23 @@ describe('最近搜索最小化', () => {
     expect((await handleHistory({ margin: 'privacy', op: 'history-forget', query: '测试搜索' })).entries).toEqual([]);
     expect(data[SEARCH_HISTORY_KEY]).toBeUndefined();
   });
+  it('开启后继承旧版文字记录，优先保留较新的扩展记录与时间', async () => {
+    const entry = { text: '已有词', at: Date.now() - 1000 };
+    data[SEARCH_HISTORY_KEY] = [entry];
+    const result = await handleHistory({ margin: 'privacy', op: 'history-read', legacy: [' 旧版词 ', '旧版词', '已有词', null, 'x'.repeat(201)] });
+    expect(result.legacyHandled).toBe(true);
+    expect(result.entries.map(row => row.text)).toEqual(['已有词', '旧版词']);
+    expect(result.entries[0]).toEqual(entry);
+  });
+  it('关闭记录时不迁移，清除后从其他页面收到的旧记录也不会复活', async () => {
+    const legacy = { margin: 'privacy', op: 'history-read', legacy: ['旧版词'] } as const;
+    data['margin:settings'] = {};
+    expect(await handleHistory(legacy)).toEqual({ ok: true, entries: [] });
+    await handleHistory({ margin: 'privacy', op: 'history-forget' });
+    data['margin:settings'] = { searchHistory: true };
+    expect(await handleHistory(legacy)).toEqual({ ok: true, entries: [], legacyHandled: true });
+    expect(data[SEARCH_HISTORY_KEY]).toBeUndefined();
+  });
   it('拒绝异常消息参数', async () => {
     expect((await handleHistory({ margin: 'privacy', op: 'history-remember', query: 'x'.repeat(201) })).ok).toBe(false);
     expect((await handleHistory({ margin: 'privacy', op: 'history-remember', query: 1 as unknown as string })).ok).toBe(false);

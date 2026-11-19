@@ -4,6 +4,7 @@ import { uiReducedMotion as reducedMotion } from '../motion';
 import { forgetSearch, hotSearch, rememberSearch, searchHistory, searchUrl, suggest } from '../api/search';
 import { h, highlight, icon, ICONS } from './dom';
 import { acceptTextDrop } from './text-drop';
+import { WATCH_SEARCH_KEY } from '../watch-search-keys';
 
 /**
  * 命令面板：21st「Command Palette」（rafa-porto，Raycast 风格）的原生移植。
@@ -160,8 +161,10 @@ export function createCommandPalette(commands: Command[]): Palette {
       } catch { /* 联想失败不影响搜索 */ }
     }, 120);
   });
-  input.addEventListener('keydown', (e) => {
+  const isCommandShortcut = (e: KeyboardEvent) => cmdK && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k';
+  const handleInputKey = (e: KeyboardEvent) => {
     if (e.isComposing) return;
+    if (isCommandShortcut(e)) { e.preventDefault(); close(); return; }
     const n = pane === 'l' ? rows.length : cmds.length;
     const step = (d: number) => { if (!n) return; if (pane === 'l') sel = (sel + d + n) % n; else csel = (csel + d + n) % n; mark(); };
     if (e.key === 'ArrowDown') { e.preventDefault(); step(1); }
@@ -169,6 +172,11 @@ export function createCommandPalette(commands: Command[]): Palette {
     else if (e.key === 'Enter') { e.preventDefault(); (pane === 'l' ? rows[sel] : cmds[csel])?.run(); }
     else if (e.key === 'Escape') { e.preventDefault(); close(); }
     else if (e.key === 'Tab') { e.preventDefault(); const to = pane === 'l' ? 'r' : 'l'; if ((to === 'l' ? rows : cmds).length) { pane = to; mark(); } }
+  };
+  input.addEventListener('keydown', handleInputKey);
+  input.addEventListener(WATCH_SEARCH_KEY, (e) => {
+    const key = (e as CustomEvent<unknown>).detail;
+    if (key instanceof KeyboardEvent) handleInputKey(key);
   });
   el.querySelector('.cp-scrim')!.addEventListener('click', () => close());
 
@@ -271,7 +279,12 @@ export function createCommandPalette(commands: Command[]): Palette {
         }, 360 * animK + 40);
       }
       render();
-      input.focus(); input.setSelectionRange(q.length, q.length);
+      const root = input.getRootNode();
+      const active = root instanceof Document || root instanceof ShadowRoot ? root.activeElement : null;
+      if (active !== input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
     });
     if (q) input.dispatchEvent(new Event('input'));
     hotSearch().then((list2) => { hot = list2.map((x, n) => ({ ...searchRow(x.keyword, 'hot', esc(x.name), n + 1) })); if (el.dataset.open === 'true' && !input.value.trim()) render(); });
@@ -295,6 +308,7 @@ export function createCommandPalette(commands: Command[]): Palette {
     const fromShape = clipping ? cornerShape(shell) : cornerShape(panel);
     const to = morphOrigin?.isConnected ? rect(morphOrigin) : null;
     el.dataset.open = 'false';
+    input.blur();
     ctrl?.abort();
     window.clearTimeout(morphTimer);
     window.clearTimeout(hideTimer);
@@ -327,7 +341,7 @@ export function createCommandPalette(commands: Command[]): Palette {
   onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && el.dataset.open === 'true') { e.preventDefault(); close(); return; }
-    if (cmdK && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); el.dataset.open === 'true' ? close() : open(); return; }
+    if (isCommandShortcut(e)) { e.preventDefault(); el.dataset.open === 'true' ? close() : open(); return; }
     if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || el.dataset.open === 'true') return;
     const typing = e.composedPath().some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement || (n instanceof HTMLElement && n.isContentEditable));
     if (typing) return;

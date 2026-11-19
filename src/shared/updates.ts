@@ -1,6 +1,8 @@
 export const UPDATE_PENDING = 'margin:update-pending';
 export const UPDATE_SEEN = 'margin:update-seen';
 export const UPDATE_NOTES = [
+  "修复播放页搜索时空格和字母误触播放器快捷键。",
+  "首页视频卡片右键选择新标签页打开时留在当前页；开启保存最近搜索后可继承仍存在的旧版记录。",
   "对齐首页搜索面板展开时的右上角和搜索按钮，让转角留白更均匀。",
   "修复应用窗口点击卡片操作同时打开视频；扩展开关保存时防止重复点击与反复刷新。",
   "本人空间收藏列表增加权限内兜底，修复滚到底部漏加载下一页；失败暂停并可手动重试。",

@@ -52,6 +52,13 @@ try {
     assert.equal((await local('margin:private-search-history'))['margin:private-search-history'], undefined);
   });
 
+  await page.evaluate(() => localStorage.setItem('margin:search-history', JSON.stringify(['旧版搜索', '旧版搜索', null, 'x'.repeat(201)])));
+  const heroSearch = page.locator('#margin-root .hs-input');
+  await heroSearch.focus();
+  await heroSearch.press('Escape');
+  assert.equal((await local('margin:private-search-history'))['margin:private-search-history'], undefined);
+  assert.notEqual(await page.evaluate(() => localStorage.getItem('margin:search-history')), null);
+
   await page.locator('#margin-root .top [aria-label="设置"]').click();
   await page.locator('#margin-root .sheet[aria-label="设置"]').getByRole('tab', { name: '隐私与数据', exact: true }).click();
   await check('privacy controls render and match defaults', async () => {
@@ -66,8 +73,11 @@ try {
   await check('history stores only inside extension and expires', async () => {
     await page.getByRole('switch', { name: '保存最近搜索', exact: true }).click();
     await popup.waitForFunction(() => chrome.storage.local.get('margin:settings').then(data => data['margin:settings'].searchHistory === true));
+    await page.waitForFunction(() => localStorage.getItem('margin:search-history') === null, null, { timeout: 5000 });
+    const kept = (await local('margin:private-search-history'))['margin:private-search-history'];
+    assert.deepEqual(kept.map(entry => entry.text), ['旧版搜索']);
     const response = await send({ margin: 'privacy', op: 'history-remember', query: 'privacy-preview-search' });
-    assert.equal(response.entries[0].text, 'privacy-preview-search');
+    assert.deepEqual(response.entries.map(entry => entry.text), ['privacy-preview-search', '旧版搜索']);
     assert.equal(await page.evaluate(() => localStorage.getItem('margin:search-history')), null);
     await worker.evaluate(() => chrome.storage.local.set({ 'margin:private-search-history': [{ text: 'expired', at: Date.now() - 31 * 86400000 }, { text: 'current', at: Date.now() }] }));
     assert.deepEqual((await send({ margin: 'privacy', op: 'history-read' })).entries.map(entry => entry.text), ['current']);

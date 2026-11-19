@@ -6,6 +6,17 @@
 
 - Align the following-list scroll arrows with avatar centers on the dynamics page, with layout regression checks at multiple viewport widths.
 
+## [v0.6.77](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.77) · Search input and video tabs
+
+- Keep spaces and letters in the focused watch-page search field from triggering the player. Preserve the search panel's keyboard controls and restore normal player shortcuts when it closes.
+- Open videos in background tabs from the home card context menu so you can keep browsing. A normal left click still switches to the video tab.
+- When saving recent searches is enabled, migrate surviving older history from page storage and deduplicate it against existing extension history.
+
+## v0.6.76 · Background video tabs and search history migration
+
+- Open videos in background tabs from the home card context menu. A normal left click still switches to the video tab.
+- Move surviving search terms from older versions into extension storage when saving recent searches is enabled. Clearing or disabling history prevents remaining legacy entries from being restored.
+
 ## [v0.6.75](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.75) · Search corners and page stability
 
 - Align the top-right corner of the expanded homepage search panel with its Search button for more even spacing around the corner.

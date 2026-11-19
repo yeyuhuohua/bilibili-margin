@@ -33,6 +33,39 @@ try {
     catch (e) { results.push({ name, ok: false, error: e.message }); console.log(`FAIL ${name}: ${e.message}`); await page.screenshot({ path: join(out, `${name}-failed.png`) }); }
     override = undefined;
   };
+  await check('206-video-tabs-from-card', async () => {
+    await seed({ appFeed: false });
+    await page.goto('https://www.bilibili.com/');
+    await page.bringToFront();
+    const activeTabId = () => sw.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return tab.id;
+    });
+    const homeTabId = await activeTabId();
+    const titles = page.locator('#margin-root .card:not(.sk) a.title');
+    const openVideo = async (title, chooseFromMenu) => {
+      await title.waitFor();
+      const url = await title.getAttribute('href');
+      if (chooseFromMenu) await title.click({ button: 'right' });
+      const [video] = await Promise.all([
+        ctx.waitForEvent('page', { timeout: 5000 }),
+        chooseFromMenu ? page.getByRole('menuitem', { name: /^新标签页打开/ }).click() : title.click(),
+      ]);
+      await video.waitForURL(u => u.href === url || u.href === `${url}/`, {
+        waitUntil: 'commit', timeout: 5000,
+      });
+    };
+    try {
+      for (const i of [0, 1, 2]) {
+        await openVideo(titles.nth(i), true);
+        assert.equal(await activeTabId(), homeTabId, 'right-click menu should keep the home tab active');
+      }
+      await openVideo(titles.nth(3), false);
+      assert.notEqual(await activeTabId(), homeTabId, 'left click should still switch to the video tab');
+    } finally {
+      for (const tab of ctx.pages()) if (tab !== page) await tab.close();
+    }
+  });
   await check('105-existing-duration-control', async () => {
     await seed({ appFeed: false, filters: { keywords: [], ups: [], minViews: 0, minDuration: 0 } });
     await page.goto('https://www.bilibili.com/');
