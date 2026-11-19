@@ -164,7 +164,8 @@ html.margin-watch:not(.margin-wide):not(.margin-webscreen) :is(.right-container,
 html.margin-watch .up-detail-top .up-name { font-weight: 600 !important; color: var(--m-ink) !important; }
 html.margin-watch .up-avatar-wrap .bili-avatar { box-shadow: 0 0 0 1px var(--m-line); border-radius: 50%; }
 html.margin-watch .follow-btn, html.margin-watch .follow-btn-inner { border-radius: 999px !important; }
-html.margin-watch .follow-btn.following, html.margin-watch .follow-btn.following .follow-btn-inner { background: var(--m-chip) !important; color: var(--m-muted) !important; }
+html.margin-watch .follow-btn.following { background: var(--m-chip) !important; color: var(--m-muted) !important; }
+html.margin-watch .follow-btn.following .follow-btn-inner { background: transparent !important; color: inherit !important; border: 0 !important; box-shadow: none !important; }
 html.margin-watch .charge-btn, html.margin-watch .old-charge-btn { border-radius: 999px !important; }
 
 /* 弹幕列表：外层一张圆角卡；标题栏不再单独圆角/描边/底色（之前收起时四角和外框错位） */
@@ -350,9 +351,11 @@ html.margin-watch .upinfo-btn-panel > .follow-btn.not-follow,
 html.margin-watch .upinfo-btn-panel > .follow-btn.not-follow .follow-btn-inner {
   background: var(--margin-primary, var(--m-ink)) !important; color: var(--margin-primary-fg, var(--m-canvas)) !important; border: 0 !important;
 }
-html.margin-watch .upinfo-btn-panel > .follow-btn .follow-btn-inner { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
-html.margin-watch .upinfo-btn-panel > .follow-btn:not(.not-follow) { background: var(--m-chip) !important; color: var(--m-muted) !important; }
-html.margin-watch .upinfo-btn-panel > .default-btn { transition: transform .15s var(--ease-out, ease), opacity .15s; }
+html.margin-watch .upinfo-btn-panel > .follow-btn .follow-btn-inner { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px !important; font-variant-numeric: tabular-nums; }
+html.margin-watch .upinfo-btn-panel > .follow-btn:not(.not-follow) { background: var(--m-chip) !important; color: var(--m-muted) !important; border: 0 !important; }
+html.margin-watch .upinfo-btn-panel > .follow-btn:not(.not-follow):hover { background: color-mix(in srgb, var(--m-ink) 10%, transparent) !important; color: var(--m-ink) !important; }
+html.margin-watch .upinfo-btn-panel > .follow-btn:not(.not-follow) .follow-btn-inner { background: transparent !important; color: inherit !important; border: 0 !important; box-shadow: none !important; }
+html.margin-watch .upinfo-btn-panel > .default-btn { transition: transform .15s var(--ease-out, ease), opacity .15s, background-color .15s, color .15s; }
 html.margin-watch .upinfo-btn-panel > .default-btn:active { transform: scale(.97); }
 
 /* 弹幕列表：一行 44px 的标题条 */
