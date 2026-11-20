@@ -288,26 +288,52 @@ html.margin-skin[data-margin-theme="dark"].margin-watch .video-info-container .v
    参考：21st「Item With Actions」（felipemenezes098）的头像 + 名字 + 尾部按钮行、「Profile Hover Card」（isaiahbjork）
    的统计行和整宽关注按钮；选集参考课程播放页（Syllabus / shadcn Course Detail）的编号目录 + 进度条。 */
 
-/* 信息行：一条通透胶囊，项之间发丝分隔；数字等宽 */
+/* 信息行：单行圆胶囊、多行收紧为圆角卡片；项间发丝分隔且换行首项不露多余竖线；数字等宽 */
 html.margin-watch .video-info-meta { margin-top: 2px; }
+html.margin-watch .video-info-meta > .show-more { display: none !important; }
 html.margin-watch .video-info-meta > .video-info-detail-list, html.margin-watch .video-info-detail-list.video-info-detail-content {
+  --m-meta-radius: min(15px, calc(15px * var(--margin-rk, 1)));
+  --m-meta-inner-radius: max(0px, calc(var(--m-meta-radius) - 4px));
   width: fit-content !important; max-width: 100%; flex: 0 1 auto !important;
   display: inline-flex !important; align-items: center; flex-wrap: wrap; gap: 0 !important; height: auto !important;
-  padding: 0 4px; border-radius: 999px; border: 1px solid var(--m-line);
+  padding: 1px 0 !important; border-radius: var(--m-meta-radius); corner-shape: round; border: 1px solid var(--m-line);
   background: color-mix(in srgb, var(--m-surface) 78%, transparent) !important;
-  box-shadow: 0 1px 2px rgb(0 0 0 / .04);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .04); overflow: hidden !important;
 }
 html.margin-watch .video-info-detail-list > .item {
-  display: inline-flex !important; align-items: center; gap: 6px; margin: 0 !important; padding: 0 12px !important;
-  height: 28px; line-height: 28px; position: relative; white-space: nowrap;
+  display: inline-flex !important; align-items: center; gap: 6px; margin: 0 !important; padding: 0 11px !important;
+  height: 28px; line-height: 28px; position: relative; white-space: nowrap; overflow: visible !important;
 }
+html.margin-watch .video-info-detail-list > .item:first-child:not(.honor) { padding-left: 12px !important; }
+html.margin-watch .video-info-detail-list > .item:last-child:not(.honor) { padding-right: 12px !important; }
 html.margin-watch .video-info-detail-list > .item + .item::before {
-  content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px; background: var(--m-line);
+  content: ''; position: absolute; left: -1px; top: 8px; bottom: 8px; width: 1px; background: var(--m-line);
 }
+html.margin-watch .video-info-detail-list > .item.honor {
+  height: 22px !important; line-height: 22px !important; margin: 3px 2px 3px 4px !important; padding: 0 8px 0 9px !important;
+  gap: 5px; border-radius: var(--m-meta-inner-radius) !important; corner-shape: round !important;
+  background: color-mix(in srgb, #fb7299 13%, transparent) !important;
+  transition: background-color .15s ease-out;
+}
+html.margin-watch .video-info-detail-list > .item.honor:hover {
+  background: color-mix(in srgb, #fb7299 20%, transparent) !important;
+}
+html.margin-watch .video-info-container .video-info-meta > .video-info-detail-list > .item.honor,
+html.margin-watch .video-info-container .video-info-meta > .video-info-detail-list > .item.honor * {
+  color: #d94872 !important;
+}
+html.margin-skin[data-margin-theme="dark"].margin-watch .video-info-container .video-info-meta > .video-info-detail-list > .item.honor,
+html.margin-skin[data-margin-theme="dark"].margin-watch .video-info-container .video-info-meta > .video-info-detail-list > .item.honor * {
+  color: #ff7aa2 !important;
+}
+html.margin-watch .video-info-detail-list > .item.honor + .item::before { display: none !important; }
+html.margin-watch .video-info-detail-list > .item.honor .honor-icon { width: 14px !important; height: 14px !important; }
+html.margin-watch .video-info-detail-list > .item.honor .honor-arrow { width: 11px !important; height: 11px !important; margin-left: -2px !important; opacity: .75; }
+html.margin-watch .video-info-detail-list > .item .video-argue-inner { display: inline-flex !important; align-items: center; gap: 5px; }
 html.margin-watch .video-info-detail-list > .item :is(.view-text, .dm-text, .pubdate-ip-text) {
   font-family: var(--m-mono) !important; font-size: 12px !important; color: var(--m-ink) !important; letter-spacing: .02em;
 }
-html.margin-watch .video-info-detail-list > .item :is(.copyright-text, .video-argue-text) { font-size: 12px !important; color: var(--m-muted) !important; }
+html.margin-watch .video-info-detail-list > .item :is(.copyright-text, .video-argue-text, .argue-text) { font-size: 12px !important; color: var(--m-muted) !important; }
 html.margin-watch .video-info-detail-list > .item svg { width: 16px !important; height: 16px !important; margin: 0 !important; flex: none; color: var(--m-muted) !important; }
 html.margin-watch .video-info-detail-list > .item svg :is(path, circle, rect) { fill: currentColor !important; }
 html.margin-skin[data-margin-theme="dark"].margin-watch .video-info-container .video-info-detail-list,
