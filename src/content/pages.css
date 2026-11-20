@@ -166,29 +166,38 @@ html.margin-search .vui_pagenation--btn-num.vui_button--active, html.margin-sear
 /* Both directions share the native page-number height; reserve hover width. */
 html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side {
   --m-arrow-size: 32px; --m-arrow-wide: 60px; --m-arrow-delta: 28px;
-  position: relative; flex: 0 0 var(--m-arrow-wide); width: var(--m-arrow-wide) !important; height: var(--m-arrow-size) !important;
+  --m-arrow-clip-r: min(17px, calc(999px * var(--margin-rk, 1)));
+  position: relative; flex: 0 0 var(--m-arrow-wide); min-width: 0 !important; width: var(--m-arrow-wide) !important; height: var(--m-arrow-size) !important;
   padding: 0 !important; font-size: 0 !important; background: transparent !important;
-  clip-path: inset(0 var(--m-arrow-delta) 0 0 round 16px); transition: clip-path .3s ease-in-out !important;
+  clip-path: inset(-1px calc(var(--m-arrow-delta) - 1px) -1px -1px round var(--m-arrow-clip-r)); transition: clip-path .3s ease-in-out !important;
 }
 html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::before {
   content: ''; position: absolute; inset: 0 auto 0 0; box-sizing: border-box; width: var(--m-arrow-size);
-  border: 1px solid currentColor; border-radius: 50%; corner-shape: round;
-  background: linear-gradient(currentColor, currentColor) left 16px center / 0 1.5px no-repeat;
-  transition: width .3s ease-in-out, border-radius .3s ease-in-out, background-size .3s ease-in-out; pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--m-ink) 18%, transparent); border-radius: 999px; corner-shape: round;
+  background-color: color-mix(in srgb, var(--m-surface) 80%, transparent);
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: left 16px center; background-size: 0 1.5px; background-repeat: no-repeat;
+  transition: width .3s ease-in-out, background-size .3s ease-in-out, background-color .2s ease-out, border-color .2s ease-out; pointer-events: none;
 }
 html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::after {
   content: ''; position: absolute; top: 50%; left: 8px; width: 16px; height: 16px; pointer-events: none;
   background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   transform: translate(var(--m-arrow-move, 0px), -50%) scaleX(var(--m-arrow-flip, 1)); transition: transform .3s ease-in-out;
 }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child { --m-arrow-flip: -1; clip-path: inset(0 0 0 var(--m-arrow-delta) round 16px); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child { --m-arrow-flip: -1; clip-path: inset(-1px -1px -1px calc(var(--m-arrow-delta) - 1px) round var(--m-arrow-clip-r)); }
 html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child::before { inset: 0 0 0 auto; background-position: right 16px center; }
 html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child::after { left: auto; right: 8px; }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: var(--m-arrow-delta); clip-path: inset(0 round 8px 16px 16px 8px); }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled)::before { width: var(--m-arrow-wide); border-radius: 8px 16px 16px 8px; background-size: var(--m-arrow-delta) 1.5px; }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: calc(-1 * var(--m-arrow-delta)); clip-path: inset(0 round 16px 8px 8px 16px); }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled)::before { border-radius: 16px 8px 8px 16px; }
-html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:focus-visible::before { box-shadow: inset 0 0 0 2px var(--m-accent); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: var(--m-arrow-delta); clip-path: inset(-1px round var(--m-arrow-clip-r)); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled)::before {
+  width: var(--m-arrow-wide); border-color: color-mix(in srgb, var(--m-ink) 32%, transparent);
+  background-color: color-mix(in srgb, var(--m-surface) 90%, var(--m-ink) 10%);
+  background-size: var(--m-arrow-delta) 1.5px;
+}
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:first-child:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]):not(.vui_button--disabled) { --m-arrow-move: calc(-1 * var(--m-arrow-delta)); clip-path: inset(-1px round var(--m-arrow-clip-r)); }
+html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side:focus-visible::before { border-color: var(--m-accent); box-shadow: inset 0 0 0 2px var(--m-accent); }
+html.margin-reduce.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side,
+html.margin-reduce.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::before,
+html.margin-reduce.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::after { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side,
   html.margin-search .vui_pagenation--btns > .vui_pagenation--btn-side::before,

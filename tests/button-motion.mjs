@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import ts from 'typescript';
 import { transformRadii } from '../scripts/radius.mjs';
 
-const out = resolve('delivery/button-motion'); mkdirSync(out, { recursive: true });
+const out = resolve(process.env.SMOKE_OUT || 'delivery/button-motion'); mkdirSync(out, { recursive: true });
 const source = path => readFileSync(path, 'utf8').replace(/^import .+;\r?\n/gm, '').replace(/export (async )?function /g, '$1function ');
 const code = ts.transpileModule(`const every=()=>()=>{};const loadSettings=async()=>({replyTree:true});const onSettingsChange=()=>{};
 ${source('src/content/ui/send-button.ts')}
@@ -22,7 +22,7 @@ try {
     html{--m-ink:#f3f4f7;--m-accent:#00aeec;--m-surface:#24262b;--m-canvas:#101114;--m-chip:#303238;--m-sans:system-ui}
     body{padding:50px;background:#171a20;color:#f3f4f7;font:14px system-ui}
     button{background:#085873;color:#fff;border:0;border-radius:999px;padding:0 18px;height:32px;cursor:pointer}
-    button:disabled{opacity:.4;cursor:default}.vui_pagenation--btns{display:flex;gap:8px;align-items:center;margin:32px 0}
+    button:disabled{opacity:.4;cursor:default}.vui_pagenation--btns{display:flex;gap:8px;align-items:center;margin:32px 0}.vui_pagenation--btn-side{min-width:100px}
   </style></head><body><bili-comments></bili-comments>
   <div id="custom"></div><div class="vui_pagenation--btns"><button id="prev" class="vui_pagenation--btn vui_pagenation--btn-side" aria-label="上一页">上一页</button><button id="page2" class="vui_pagenation--btn">2</button><button id="next" class="vui_pagenation--btn vui_pagenation--btn-side" aria-label="下一页">下一页</button></div></body></html>`);
   await page.addStyleTag({ content: transformRadii(readFileSync('src/content/pages.css', 'utf8')) });
@@ -94,6 +94,26 @@ try {
   check('next uses the matching compact circle, not the old text pill', await right.evaluate(el => getComputedStyle(el, '::before').width === '32px' && getComputedStyle(el).fontSize === '0px'));
   const rightBox = await right.boundingBox(); await page.mouse.move(rightBox.x + 16, rightBox.y + 16); await page.waitForTimeout(350);
   check('next expands to the right without shifting page numbers', await right.evaluate(el => getComputedStyle(el, '::before').width === '60px') && Math.abs((await next.boundingBox()).x - adjacent.x) < .1);
+  check('expanded pagination capsule keeps round corners and unclipped symmetric radii across radius scales', await right.evaluate(el => {
+    const root = document.documentElement;
+    const saved = root.style.getPropertyValue('--margin-rk');
+    const hadReduce = root.classList.contains('margin-reduce');
+    root.classList.add('margin-reduce');
+    try {
+      return [0, 0.5, 1, 1.5].every(rk => {
+        root.style.setProperty('--margin-rk', String(rk));
+        const s = getComputedStyle(el), b = getComputedStyle(el, '::before');
+        const shape = b.getPropertyValue('corner-shape').trim();
+        const symmetric = b.borderTopLeftRadius === b.borderTopRightRadius && b.borderTopLeftRadius === b.borderBottomRightRadius && b.borderTopLeftRadius === b.borderBottomLeftRadius;
+        const expectedClip = rk === 0 ? 'inset(-1px)' : 'inset(-1px round 17px)';
+        return el.getBoundingClientRect().width === 60 && symmetric && (!shape || shape === 'round' || shape === 'superellipse(1)') && s.clipPath === expectedClip;
+      });
+    } finally {
+      if (!hadReduce) root.classList.remove('margin-reduce');
+      if (saved) root.style.setProperty('--margin-rk', saved);
+      else root.style.removeProperty('--margin-rk');
+    }
+  }));
   await page.screenshot({ path: join(out, 'arrow-next-hover.png') });
   await right.evaluate(el => { el.disabled = true; }); await page.waitForTimeout(350);
   check('disabled next stays circular', await right.evaluate(el => getComputedStyle(el, '::before').width === '32px'));
