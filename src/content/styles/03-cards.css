@@ -9,6 +9,10 @@
 /* 信息行的播放 / 弹幕改成「图标 + 数字」（详情页推荐卡同款）：图标不缩，比分数字淡一档 */
 .card .meta > .stat { display: inline-flex; align-items: center; gap: 4px; }
 .card .meta > .author > svg, .card .meta > .stat > svg { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.home-grid .card .meta { gap: 6px; overflow: visible; }
+.home-grid .card .meta > .author { margin-bottom: 2px; font-size: 13px; }
+.home-grid .card .meta > .stat { white-space: nowrap; }
+.home-grid .card .meta > .pubtime { margin: 0 0 0 auto; max-width: 100%; overflow-wrap: anywhere; }
 .card-block { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgb(0 0 0 / .55); opacity: 0; transform: translateY(-4px); transition: opacity .2s var(--ease-out), transform .2s var(--ease-out), background .2s var(--ease-out); z-index: 3; }
 .card-block svg { width: 13px; height: 13px; }
 .card:hover .card-block, .card-block:focus-visible { opacity: 1; transform: none; backdrop-filter: blur(10px); }

@@ -43,9 +43,10 @@ export function createExpandableTabs(items: TabItem[], onChange?: (i: number | n
     const i = hover >= 0 ? hover : selected;
     const b = i === null ? null : buttons[i];
     if (!b || !b.getClientRects().length) return;
-    const r = b.getBoundingClientRect(), o = el.getBoundingClientRect();
-    thumb.style.translate = `${r.left - o.left - el.clientLeft}px 0`;
-    thumb.style.width = `${r.width}px`;
+    thumb.style.translate = `${b.offsetLeft}px 0`;
+    thumb.style.width = `${b.offsetWidth}px`;
+    thumb.style.top = `${b.offsetTop}px`;
+    thumb.style.height = `${b.offsetHeight}px`;
   };
 
   const select = (i: number | null) => {

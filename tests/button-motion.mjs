@@ -51,6 +51,12 @@ try {
   check('flight animation runs only on hover', await send.locator('.m-send-flight').evaluate(el => getComputedStyle(el).animationName === 'm-send-fly'));
   await page.screenshot({ path: join(out, 'publish-hover.png') });
   await send.click(); check('original click still posts exactly once', await page.evaluate(() => window.posts === 1));
+  const sendBounds = await send.boundingBox();
+  await page.mouse.move(sendBounds.x + 1, sendBounds.y + sendBounds.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(220);
+  await page.mouse.up();
+  check('clicking the edge of the native button still posts', await page.evaluate(() => window.posts === 2));
   await send.evaluate(el => { el.disabled = true; }); await page.waitForTimeout(350);
   check('disabled button does not fly', await send.locator('.m-send-flight').evaluate(el => getComputedStyle(el).animationName === 'none'));
   await send.evaluate(el => { el.disabled = false; });
@@ -58,7 +64,7 @@ try {
   check('idle publish has no running animation', await send.locator('.m-send-flight').evaluate(el => getComputedStyle(el).animationName === 'none'));
   await page.keyboard.press('Tab'); await send.focus(); await page.waitForTimeout(350);
   check('keyboard focus is visible', await send.evaluate(el => getComputedStyle(el).outlineStyle !== 'none'));
-  await page.keyboard.press('Enter'); check('keyboard activation preserves single submission', await page.evaluate(() => window.posts === 2));
+  await page.keyboard.press('Enter'); check('keyboard activation preserves single submission', await page.evaluate(() => window.posts === 3));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   check('system reduced motion leaves label and plane still', await send.evaluate(el => getComputedStyle(el.querySelector('.m-send-flight')).animationName === 'none' && getComputedStyle(el.querySelector('svg')).transform === 'none'));
   await page.emulateMedia({ reducedMotion: 'no-preference' });

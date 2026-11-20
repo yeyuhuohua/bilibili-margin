@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getJSON, postForm, postJSON } from './http';
+import { parseCountText, parseDurationText } from '../parse';
+import type { Video } from './feed';
 
 /** 一条动态，抽成渲染需要的最小结构 */
 export interface DynText { text: string; emoji?: string }
@@ -17,7 +19,7 @@ export interface DynReserve {
 export interface Dyn {
   id: string; type: string; author: string; face: string; mid: number; ts: number; time: string;
   text: string; emotes?: Record<string, string>; richText?: DynText[]; title?: string;
-  video?: { bvid: string; title: string; cover: string; dur: string; play: string; desc: string; ad?: boolean };
+  video?: { bvid: string; title: string; cover: string; dur: string; play: string; danmaku?: string; desc: string; ad?: boolean };
   pics: string[];
   article?: { title: string; cover: string; desc: string; url: string };
   /** 直播（开播提醒 LIVE_RCMD / 直播间分享 LIVE），#4 */
@@ -87,7 +89,7 @@ export function toDyn(it: any): Dyn | null {
   if (major.archive) {
     const v = major.archive;
     const ad = v.is_ad === true || Boolean(v.ad_info) || Boolean(v.business_info) || undefined;
-    out.video = { bvid: v.bvid, title: v.title, cover: https(v.cover), dur: v.duration_text ?? '', play: v.stat?.play ?? '', desc: v.desc ?? '', ad };
+    out.video = { bvid: v.bvid, title: v.title, cover: https(v.cover), dur: v.duration_text ?? '', play: String(v.stat?.play ?? ''), danmaku: v.stat?.danmaku == null ? undefined : String(v.stat.danmaku), desc: v.desc ?? '', ad };
     out.url = `https://www.bilibili.com/video/${v.bvid}`;
     if (!out.cmtType && !out.cmtOid && v.aid) { out.cmtType = 1; out.cmtOid = String(v.aid); }
   }
@@ -186,11 +188,26 @@ export async function spaceDynamics(mid: number, offset: string): Promise<{ list
 
 export type FeedType = 'all' | 'video' | 'pgc' | 'article';
 /** 关注动态流；hostMid 只看某个 UP */
-export async function followFeed(type: FeedType, offset: string, hostMid = 0): Promise<{ list: Dyn[]; offset: string; more: boolean; baseline: string }> {
+export async function followFeed(type: FeedType, offset: string, hostMid = 0, signal?: AbortSignal): Promise<{ list: Dyn[]; offset: string; more: boolean; baseline: string }> {
   const p: Record<string, string | number> = { type, offset, timezone_offset: -480, features: dynamicFeatures };
   if (hostMid) p.host_mid = hostMid;
-  const d = await getJSON<any>('/x/polymer/web-dynamic/v1/feed/all', p);
+  const d = await getJSON<any>('/x/polymer/web-dynamic/v1/feed/all', p, signal);
   return { list: (d.items ?? []).map(toDyn).filter(Boolean) as Dyn[], offset: d.offset ?? '', more: !!d.has_more, baseline: d.update_baseline ?? '' };
+}
+
+/** 首页「关注」只取作者直接投稿的视频，沿用动态流顺序和游标。 */
+export async function followedVideos(offset: string, signal: AbortSignal): Promise<{ list: Video[]; offset: string; more: boolean }> {
+  const page = await followFeed('video', offset, 0, signal);
+  const list = page.list.flatMap((d): Video[] => {
+    const v = d.video;
+    if (d.type !== 'DYNAMIC_TYPE_AV' || !v?.bvid || !v.title || v.ad) return [];
+    return [{
+      bvid: v.bvid, cid: 0, title: v.title, cover: v.cover, author: d.author, mid: d.mid, face: d.face,
+      duration: parseDurationText(v.dur) ?? 0, views: parseCountText(v.play) ?? NaN,
+      danmaku: parseCountText(v.danmaku) ?? NaN, pubdate: d.ts,
+    }];
+  });
+  return { list, offset: page.offset, more: page.more && !!page.offset && page.offset !== offset };
 }
 
 export interface Up { mid: number; name: string; face: string; fresh: boolean }
@@ -252,7 +269,7 @@ export async function dynCommentTarget(d: Dyn): Promise<{ type: number; oid: str
 }
 
 export interface Reply {
-  rpid: string; name: string; face: string; mid: number; text: string; emotes?: Record<string, string>; richText?: DynText[]; like: number; ts: number; rcount: number;
+  rpid: string; name: string; face: string; mid: number; text: string; emotes?: Record<string, string>; richText?: DynText[]; like: number; liked: boolean; ts: number; rcount: number;
   pics: string[];
   location?: string; level: number; senior: boolean; pendant?: string; nameplate?: { name: string; image: string }; top?: boolean;
   medal?: { name: string; level: number; color: string; endColor: string; borderColor: string; nameColor: string; levelColor: string; firstIcon: string; secondIcon: string };
@@ -281,7 +298,7 @@ export function toReply(r: any): Reply {
       const emoji = https(r.content?.emote?.[text]?.url);
       return { text, ...(/^https:\/\//.test(emoji) ? { emoji } : {}) };
     }),
-    like: r.like ?? 0, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
+    like: Math.max(Number(r.like) || 0, 0), liked: r.action === 1, ts: r.ctime ?? 0, rcount: r.rcount ?? 0,
     location: typeof r.reply_control?.location === 'string' ? r.reply_control.location.trim() || undefined : undefined,
     level: Math.max(0, Math.min(6, Math.trunc(Number(m.level_info?.current_level) || 0))),
     senior: !!m.is_senior_member,
@@ -323,4 +340,8 @@ export async function dynSubReplies(type: number, oid: string, root: string, pn:
 export async function dynReply(type: number, oid: string, message: string, target?: { root: string; parent: string }): Promise<Reply | null> {
   const data = await postForm<any>('/x/v2/reply/add', { type, oid, message, plat: 1, ...target });
   return data?.reply?.rpid_str || data?.reply?.rpid ? toReply(data.reply) : null;
+}
+
+export async function dynReplyLike(type: number, oid: string, rpid: string, liked: boolean): Promise<void> {
+  await postForm('/x/v2/reply/action', { type, oid, rpid, action: liked ? 1 : 0 });
 }

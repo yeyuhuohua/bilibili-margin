@@ -64,6 +64,27 @@ try {
       console.log(`${clean ? 'PASS' : 'TRACE'} ${name} ${theme} ${glass}`);
     }
   }
+  await page.goto('https://www.bilibili.com/');
+  const quick = page.locator('#margin-root .et');
+  await quick.waitFor();
+  await quick.evaluate(el => {
+    el.style.cssText = 'max-width:196px;overflow-x:auto;scrollbar-width:thin';
+    el.scrollLeft = 56;
+  });
+  const active = quick.locator('.et-btn:visible').nth(3);
+  await active.hover();
+  await page.waitForTimeout(250);
+  const offsets = await quick.evaluate(el => {
+    const rect = q => q.getBoundingClientRect();
+    const board = rect(el.querySelector('.et-thumb'));
+    const button = rect([...el.querySelectorAll('.et-btn')].filter(x => !x.hidden)[3]);
+    const toggle = rect(el.parentElement.querySelector('.ts'));
+    const orb = rect(el.parentElement.querySelector('.ts-sm'));
+    const centerY = r => r.top + r.height / 2;
+    return { x: board.left-button.left, y:centerY(board)-centerY(button), orb:centerY(orb)-centerY(toggle), scroll:el.scrollLeft };
+  });
+  assert(offsets.scroll > 0 && [offsets.x, offsets.y, offsets.orb].every(diff => Math.abs(diff) < 1), JSON.stringify(offsets));
+  results.push({name:'aligned nav hover and theme switch after horizontal scrolling', ...offsets});
   assert.deepEqual(errors, []);
 } finally {
   writeFileSync(join(out, 'results.json'), JSON.stringify({ results, errors }, null, 2));

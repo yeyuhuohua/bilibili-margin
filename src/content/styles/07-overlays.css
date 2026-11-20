@@ -1,15 +1,14 @@
 /* ── 吸顶分类栏：液态玻璃胶囊（与顶栏同一套） ── */
-.bar-mark { height: 1px; margin-bottom: -1px; }
-.bar { --bar-ease: cubic-bezier(.22, 1, .36, 1); transition: padding .4s var(--bar-ease), background .3s var(--ease-out); }
-.bar .eyebrow { max-height: 20px; overflow: hidden; transition: max-height .4s var(--bar-ease), opacity .3s var(--ease-out), margin .4s var(--bar-ease); }
+.bar-mark { height: 6px; margin-bottom: -6px; pointer-events: none; }
+.bar .eyebrow { max-height: 20px; overflow: hidden; transition: opacity .2s var(--ease-out); }
 .bar .tabs, .bar .refresh { backdrop-filter: none; }
 .bar.stuck, .app:not([data-bg="off"]) .bar.stuck {
   padding-top: 12px; padding-bottom: 0; background: none; backdrop-filter: none; border-bottom-color: transparent; pointer-events: none;
 }
 .bar.stuck .eyebrow { max-height: 0; opacity: 0; margin-bottom: 0; }
 .bar.stuck .bar-row > * { pointer-events: auto; }
-.bar .tabs { border-radius: 99em; transition: padding .4s var(--bar-ease), gap .4s var(--bar-ease); }
-.bar .tab { transition: color .2s var(--ease-out), font-size .4s var(--bar-ease), padding .4s var(--bar-ease), background-color .3s var(--ease-out); border-radius: 99em; }
+.bar .tabs { border-radius: 99em; }
+.bar .tab { transition: color .2s var(--ease-out), background-color .2s var(--ease-out); border-radius: 99em; white-space: nowrap; }
 .bar.stuck .tabs, .bar.stuck .refresh {
   background-color: color-mix(in srgb, var(--c-glass) 12%, color-mix(in srgb, var(--canvas) 50%, transparent));
   box-shadow:
@@ -30,6 +29,16 @@
 .bar.stuck .tab[aria-selected="true"] { color: var(--ink); background-color: color-mix(in srgb, var(--ink) 9%, transparent); }
 .bar.stuck .tab[aria-selected="true"]::after { opacity: 0; }
 .bar.stuck .refresh { height: 40px; color: color-mix(in srgb, var(--ink) 72%, transparent); }
+.bar:not([data-tab="popular"]) .rank-link { display: none; }
+.bar .rank-link { white-space: nowrap; }
+@media (max-width: 680px) {
+  .bar-row { gap: 8px; flex-wrap: wrap; }
+  .bar .tabs { gap: 13px; }
+  .bar.stuck .tabs { gap: 2px; }
+  .bar .tab { font-size: 16px; }
+  .bar.stuck .tab { padding: 6px 9px; }
+  .bar .bar-acts > .ghost { padding-inline: 9px; }
+}
 @media (prefers-reduced-transparency: reduce) {
   .bar.stuck .tabs, .bar.stuck .refresh { backdrop-filter: none !important; background-color: var(--surface); }
 }

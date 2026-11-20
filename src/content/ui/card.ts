@@ -12,6 +12,7 @@ export interface CardOpts {
   onDislike?: (v: Video, card: HTMLElement) => void;
   /** 首页「卡片信息」里关掉的项（v0.43）：author / views / danmaku / ago / dur / reason */
   hide?: ReadonlySet<string>;
+  inlineTime?: boolean;
 }
 
 export function videoCard(v: Video, index: number, opts: CardOpts = {}): HTMLElement {
@@ -43,7 +44,7 @@ export function videoCard(v: Video, index: number, opts: CardOpts = {}): HTMLEle
     h('div', { class: 'body' },
       h('a', { class: 'title', href, target: '_blank', rel: 'noopener', title: v.title }, v.title),
       metaRow(v, opts),
-      pubTime(v, opts),
+      opts.inlineTime ? null : pubTime(v, opts),
       v.reason && v.reason !== '已关注' && !opts.hide?.has('reason') ? h('span', { class: 'reason' }, v.reason) : null,
     ),
   );
@@ -80,7 +81,7 @@ function metaRow(v: Video, opts: CardOpts): HTMLElement {
     if (v.reason === '已关注') author.append(h('span', { class: 'card-followed' }, icon(ICONS.check), '已关注'));
     parts.push(author);
   }
-  if (!off('views')) {
+  if (!off('views') && !Number.isNaN(v.views)) {
     const views = fmtCount(v.views);
     parts.push(h('span', { class: 'stat', title: `${views} 播放`, 'aria-label': `${views} 播放` }, icon(ICONS.play), views));
   }
@@ -95,7 +96,9 @@ function metaRow(v: Video, opts: CardOpts): HTMLElement {
   }
   const meta = h('div', { class: 'meta' });
   parts.forEach((el, i) => { if (i) meta.append(h('span', { class: 'dot' }, '·')); meta.append(el); });
-  if (!parts.length) meta.style.display = 'none';
+  const date = opts.inlineTime ? pubTime(v, opts) : null;
+  if (date) meta.append(date);
+  if (!meta.childElementCount) meta.style.display = 'none';
   return meta;
 }
 

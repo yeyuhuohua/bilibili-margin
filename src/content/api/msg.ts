@@ -180,7 +180,7 @@ export async function ackSession(talker: number, seq: number, csrf: string): Pro
 // ---- 私信 ----
 export interface Session { talker: number; unread: number; last: string; ts: number; maxSeq?: number; person?: Person }
 export interface MsgCard { title: string; desc: string; cover: string; url: string; rows: [string, string][]; action: string }
-export interface Msg { sender: number; type: number; text: string; image: string; ts: number; key: string; seq: number; card?: MsgCard; emotes?: MessageEmote[] }
+export interface Msg { sender: number; type: number; text: string; image: string; ts: number; key: string; seq: number; card?: MsgCard; emotes?: MessageEmote[]; autoReply?: boolean }
 export interface MessageEmote { text: string; url: string; size?: number }
 export interface EmotePack { id: number; name: string; emotes: MessageEmote[] }
 export interface MessageImage { url: string; width: number; height: number; imageType: string; original: number; size: number }
@@ -232,13 +232,19 @@ export function msgText(type: number, raw: string): { text: string; image: strin
 }
 
 export interface SessionPage { list: Session[]; more: boolean; endTs: number }
+// 原站用 msg_source 区分关注、收到消息、关键词及航海触发的自动回复。
+const isAutoReply = (source: number) => [8, 9, 10, 11].includes(source);
 /** 私信会话一页 20 个（v0.49：以前只拉第一页，后面的会话看不到、未读也清不掉，顶栏红点一直在；B 站评论反馈） */
 export async function sessions(endTs = 0): Promise<SessionPage> {
   const d = await get<any>('https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions', { session_type: 1, group_fold: 1, unfollow_fold: 0, sort_rule: 2, ...(endTs ? { end_ts: endTs } : {}) });
   const raw: any[] = d.session_list ?? [];
   const list: Session[] = raw.filter((s: any) => s.session_type === 1).map((s: any) => ({
     talker: s.talker_id, unread: s.unread_count ?? 0, ts: s.session_ts ? Math.floor(s.session_ts / 1e6) : s.last_msg?.timestamp ?? 0, maxSeq: Number(s.max_seqno) || 0,
-    last: s.last_msg ? (() => { const t = msgText(s.last_msg.msg_type, s.last_msg.content); return t.text || (t.card ? `[卡片] ${t.card.title || t.card.desc}` : '[图片]'); })() : '',
+    last: s.last_msg ? (() => {
+      const t = msgText(s.last_msg.msg_type, s.last_msg.content);
+      const preview = t.text || (t.card ? `[卡片] ${t.card.title || t.card.desc}` : '[图片]');
+      return isAutoReply(s.last_msg.msg_source) ? `[自动回复]${preview}` : preview;
+    })() : '',
     person: s.account_info?.name ? { mid: s.talker_id, name: String(s.account_info.name), face: https(s.account_info.pic_url ?? '') } as Person : s.talker_id === 0 ? { mid: 0, name: '系统提示', face: '' } as Person : undefined,
   }));
   const lastTs = raw.length ? Number(raw[raw.length - 1].session_ts) || 0 : 0;
@@ -306,7 +312,7 @@ export async function messages(talker: number): Promise<Msg[]> {
     const type = m.msg_status === 1 ? 5 : m.msg_type;
     const body = msgText(type, m.content);
     const emotes = [...new Set(body.text.match(/\[[^\]\n]{1,100}\]/g) ?? [])].map(text => knownEmotes.get(text)).filter((e): e is MessageEmote => !!e);
-    return { sender: m.sender_uid, type, ...body, ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes };
+    return { sender: m.sender_uid, type, ...body, ts: m.timestamp, key: String(m.msg_key), seq: Number(m.msg_seqno) || 0, emotes, autoReply: isAutoReply(m.msg_source) };
   }).reverse();
 }
 

@@ -8,7 +8,7 @@ const baseline = process.argv.includes('--baseline');
 const out = resolve(process.env.SMOKE_OUT || 'tests/artifacts/comment-layout');
 mkdirSync(out, { recursive: true });
 const source = readFileSync(baseline ? 'artifacts/triage-20261108/comment-before-121.ts' : 'src/content/ui/comment-skin.ts', 'utf8').replace(/^import .+;\r?\n/gm, '').replace(/export function /g, 'function ');
-const code = ts.transpileModule(`const every=()=>()=>{};const loadSettings=async()=>({replyTree:true});const onSettingsChange=()=>{};\n${source}\nglobalThis.startComments=skinComments;`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const code = ts.transpileModule(`(()=>{const every=()=>()=>{};const loadSettings=async()=>({replyTree:true});const onSettingsChange=()=>{};\n${source}\nglobalThis.startComments=skinComments;})();`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' }) });
 try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
@@ -30,6 +30,12 @@ try {
   await page.evaluate(() => startComments());
   const toggle = page.locator('.margin-replies-toggle');
   await toggle.waitFor();
+  if (!baseline) {
+    await page.addScriptTag({ content: code });
+    await page.evaluate(() => startComments());
+    await page.waitForTimeout(150);
+    assert.equal(await toggle.count(), 1, 'two independently loaded comment skins must share one collapse control');
+  }
   const labels = await page.locator('bili-comment-reply-renderer').evaluate(reply => [...reply.shadowRoot.querySelectorAll('.metadata > *')].map(el => ({ text: el.textContent, height: el.getBoundingClientRect().height })));
   const before = await toggle.boundingBox();
   await page.evaluate(() => scrollTo(0, 240));
@@ -42,7 +48,9 @@ try {
   await page.evaluate(() => scrollTo(0, 0));
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.locator('#expander-contents').isVisible(), false);
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('#expander-contents').isVisible(), true);
   console.log('PASS third-party IP metadata width, scrolling collapse control and expand/collapse');
 } finally { await browser.close(); }

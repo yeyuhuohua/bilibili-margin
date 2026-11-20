@@ -2,13 +2,13 @@
 const CSS = `
   :is(html.margin-skin, :host-context(html.margin-skin), .app) .margin-send-button {
     position: relative !important; overflow: hidden !important; min-width: 88px;
-    min-height: 32px; font-size: 0 !important; transition: scale .2s ease !important;
+    min-height: 32px; font-size: 0 !important;
   }
   :is(html.margin-skin, :host-context(html.margin-skin), .app) .margin-send-button > :not(.m-send-visual) { opacity: 0 !important; font-size: 0 !important; }
   .m-send-visual[hidden] { display: none; }
   :is(html.margin-skin, :host-context(html.margin-skin), .app) .margin-send-button > .m-send-visual {
     display: flex !important; position: absolute; inset: 0; align-items: center; justify-content: center;
-    gap: 6px; pointer-events: none; font: 500 14px/1 var(--m-sans, var(--sans, system-ui)); color: inherit;
+    gap: 6px; pointer-events: none; font: 500 14px/1 var(--m-sans, var(--sans, system-ui)); color: inherit; transition: scale .2s ease;
   }
   .m-send-flight { display: inline-flex; }
   .m-send-flight svg { display: block; width: 20px; height: 20px; transition: transform .3s ease; }
@@ -22,9 +22,9 @@ const CSS = `
     .margin-send-button:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]) .m-send-flight { animation: m-send-fly .6s ease-in-out infinite alternate; }
     .margin-send-button:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]) svg { transform: translateX(19px) rotate(45deg) scale(1.1); }
     .margin-send-button:is(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]) .m-send-label { transform: translateX(5em); }
-    .margin-send-button:active:not(:disabled):not([aria-disabled="true"]) { scale: .95; }
+    .margin-send-button:active:not(:disabled):not([aria-disabled="true"]) > .m-send-visual { scale: .95; }
   }
-  @media (prefers-reduced-motion: reduce) { .margin-send-button, .m-send-flight svg, .m-send-label { transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .m-send-visual, .m-send-flight svg, .m-send-label { transition: none !important; } }
   :is(html:is(.margin-reduce, .margin-ui-still), :host-context(html:is(.margin-reduce, .margin-ui-still))) .margin-send-button,
   :is(html:is(.margin-reduce, .margin-ui-still), :host-context(html:is(.margin-reduce, .margin-ui-still))) .margin-send-button * { animation: none !important; transition: none !important; transform: none !important; scale: none !important; }
   @keyframes m-send-fly { from { transform: translateY(1.4px); } to { transform: translateY(-1.4px); } }

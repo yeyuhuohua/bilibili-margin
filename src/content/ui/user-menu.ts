@@ -1,7 +1,7 @@
-import { loadSettings, onSettingsChange } from '../../shared/settings';
+import { loadSettings, onSettingsChange, type Settings } from '../../shared/settings';
 import { account, accountStat, dynamicUpdates, logout, resetDynamicBaseline, unreadTotal, type Account } from '../api/account';
 import { fmtCount, h, icon, ICONS, setMarkup } from './dom';
-import { uiReducedMotion as reducedMotion } from '../motion';
+import { onUiMotionChange, uiReducedMotion as reducedMotion } from '../motion';
 import { LANYARD_STEP_MS, LanyardClock, lanyardCardBounds, lanyardEase, type LanyardBounds } from './user-menu-motion';
 
 /**
@@ -15,7 +15,8 @@ import { LANYARD_STEP_MS, LanyardClock, lanyardCardBounds, lanyardEase, type Lan
 
 const NUM_POINTS = 13;
 const REST_LENGTH = 70;
-const CARD_SCALE = 1.1;
+const CARD_WIDTH = 260;
+const CARD_HEIGHT = 506;
 const SEGMENT_LENGTH = REST_LENGTH / (NUM_POINTS - 1);
 const GRAVITY = 0.55;
 const FRICTION = 0.97;
@@ -55,15 +56,20 @@ function barcode(mid: number): HTMLElement {
 
 // 设置「账号卡片可拖拽」（v0.46，B 站评论建议）：关掉后卡片固定挂着，只能点击翻面
 let idDrag = false;
+const openDragCards = new Set<() => void>();
 // 消息提醒（v0.47）：关闭后账号卡片不再请求未读总数和新动态
 let msgRemind = true;
 const msgCards = new Set<(on: boolean) => void>();
-loadSettings().then((s) => { idDrag = s.idDrag; msgRemind = s.msgRemind; }).catch(() => {});
-onSettingsChange((s) => {
-  idDrag = s.idDrag;
+const syncSettings = (s: Settings) => {
+  if (s.idDrag !== idDrag) {
+    idDrag = s.idDrag;
+    openDragCards.forEach((sync) => sync());
+  }
   const on = s.msgRemind;
   if (on !== msgRemind) { msgRemind = on; msgCards.forEach((f) => f(on)); }
-});
+};
+loadSettings().then(syncSettings).catch(() => {});
+onSettingsChange(syncSettings);
 
 export function createUserMenu(a: Account): HTMLElement {
   const face = (px: number) => `${a.face}@${px}w_${px}h_1c.webp`;
@@ -177,7 +183,10 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   const canvas = h('canvas', { class: 'idcl-chain' }) as HTMLCanvasElement;
   const stage = h('div', { class: 'idcl-stage', hidden: '' }, card, canvas);
   if (/firefox/i.test(navigator.userAgent)) stage.classList.add('idcl-lite');
-  if (idDrag && !localStorage.getItem(HINT_KEY)) card.append(hint);
+  const syncHint = (fixed: boolean) => {
+    if (fixed) hint.remove();
+    else if (!localStorage.getItem(HINT_KEY)) card.append(hint);
+  };
 
   /* ── 物理（原组件逻辑） ─────────────────────────── */
   const ctx = canvas.getContext('2d')!;
@@ -216,7 +225,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     // 珠链从头像底部垂下，穿进工牌顶上的孔；卡片太靠右会出视口，就让链子静止时往左斜一点
     anchor.x = r.left + r.width / 2;
     anchor.y = r.bottom - 3;
-    restX = Math.min(anchor.x, innerWidth - (236 * CARD_SCALE) / 2 - 20);
+    restX = Math.min(anchor.x, innerWidth - CARD_WIDTH / 2 - 20);
     const dx = restX - anchor.x;
     restLen = Math.max(REST_LENGTH, Math.hypot(dx, REST_LENGTH * 0.65));
     const dy = Math.sqrt(Math.max(1, restLen ** 2 - dx * dx));
@@ -318,17 +327,17 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   };
   const HOLE_Y = 20.5; // 孔中心离卡片顶部的距离（未缩放）
   // 卡片几何缓存：以前每帧先写 left/top 再读 offsetLeft/offsetWidth，强制同步重排，Firefox 上尤其卡（用户反馈）
-  let cardW = 236, cardH = 460, cardX = 0, cardY = 0;
+  let cardW = CARD_WIDTH, cardH = CARD_HEIGHT, cardX = 0, cardY = 0;
   let lastCardTransform = '', lastFlipperTransform = '';
-  const measure = () => { cardW = card.offsetWidth || 236; cardH = card.offsetHeight || 460; };
+  const measure = () => { cardW = card.offsetWidth || CARD_WIDTH; cardH = card.offsetHeight || CARD_HEIGHT; };
   const positionCard = () => {
     const last = rendered[rendered.length - 1], prev = rendered[rendered.length - 2];
     // 减去静止时绳子的斜角，卡片静止时保持竖直，甩动时照常转
     const angle = Math.atan2(last.y - prev.y, last.x - prev.x) - Math.PI / 2 - restAngle;
     cardX = last.x - cardW / 2; cardY = last.y - HOLE_Y;
-    const transform = `translate3d(${cardX.toFixed(2)}px,${cardY.toFixed(2)}px,0) rotate(${angle.toFixed(4)}rad) scale(${CARD_SCALE})`;
+    const transform = `translate3d(${cardX.toFixed(2)}px,${cardY.toFixed(2)}px,0) rotate(${angle.toFixed(4)}rad)`;
     if (transform !== lastCardTransform) { card.style.transform = transform; lastCardTransform = transform; }
-    cardBounds = lanyardCardBounds(last.x, last.y, cardW, cardH, angle, CARD_SCALE, HOLE_Y);
+    cardBounds = lanyardCardBounds(last.x, last.y, cardW, cardH, angle, 1, HOLE_Y);
   };
   let hovering = false, overControl = false, lastMx = '', lastMy = '', nextHighlight = 0;
   const updateTilt = (elapsed: number, now: number) => {
@@ -512,9 +521,17 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     clock.reset(performance.now());
     if (!document.hidden) wake();
   };
+  const syncDragMode = () => {
+    const fixed = !idDrag || reducedMotion();
+    if (stage.classList.contains('idcl-fixed') === fixed) return;
+    stage.classList.toggle('idcl-fixed', fixed);
+    syncHint(fixed);
+    onOut();
+  };
 
   /* ── 打开 / 收起：在头像上停 200ms 才垂下（划过不弹），，离开头像和卡片 .4s 后收起 ── */
   let loaded = false;
+  let stopDragMotion: (() => void) | undefined;
   const open = () => {
     clearTimeout(t);
     if (isOpen) return;
@@ -539,7 +556,7 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     stage.hidden = false;
     stage.classList.remove('idcl-leaving');
     stage.classList.toggle('idcl-fixed', fixed);
-    if (fixed) hint.remove();
+    syncHint(fixed);
     measure();
     addEventListener('pointermove', onMove);
     addEventListener('pointerup', onUp);
@@ -549,6 +566,8 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
     addEventListener('blur', onOut);
     document.addEventListener('visibilitychange', onVisibility);
     cancelAnimationFrame(raf); raf = 0; still = 0;
+    openDragCards.add(syncDragMode);
+    stopDragMotion = onUiMotionChange(syncDragMode);
     const now = performance.now(); clock.reset(now); loop(now);
     wrap.setAttribute('data-open', '');
     // 未读和新动态每次打开都刷新（会变）；关闭消息提醒时两者都不请求
@@ -567,6 +586,8 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   const close = () => {
     if (!isOpen || dragging) return;
     isOpen = false;
+    openDragCards.delete(syncDragMode);
+    stopDragMotion?.();
     pendingMove = null;
     cancelAnimationFrame(raf); raf = 0;
     wrap.removeAttribute('data-open');

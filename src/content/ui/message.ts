@@ -155,7 +155,7 @@ export class MessageApp {
       } catch { toast(this.shell.app, '操作失败，稍后再试'); }
       finally { markAll.disabled = false;markAll.textContent = '全部已读'; }
     });
-    this.nav.append(markAll);
+    this.nav.append(h('a', { class: 'ms-item', href: 'https://message.bilibili.com/?margin=off#/config', target: '_blank', rel: 'noopener' }, '消息设置'), markAll);
     this.pane = h('section', { class: 'ms-pane' });
     this.shell.main.append(h('div', { class: 'ms' }, this.nav, this.pane));
     // hash 变化：切到已知视图就重渲染；hash 被清空 = 从顶栏「消息」重新进入本页
@@ -195,7 +195,7 @@ export class MessageApp {
     const u = await unread().catch(() => null);
     if (!u) return null;
     const n: Record<View, number> = { whisper: u.chat, reply: u.reply, at: u.at, like: u.like, system: u.system };
-    this.nav.querySelectorAll<HTMLElement>('.ms-item').forEach((b) => { const c = n[b.dataset.view as View]; b.querySelector('.ms-n')!.textContent = c ? (c > 99 ? '99+' : String(c)) : ''; });
+    this.nav.querySelectorAll<HTMLElement>('.ms-item[data-view]').forEach((b) => { const c = n[b.dataset.view as View]; b.querySelector('.ms-n')!.textContent = c ? (c > 99 ? '99+' : String(c)) : ''; });
     // 顶栏角标同步：直接带上本次取到的未读总数，避免顶栏另发一次请求拿到不同口径的数字
     dispatchEvent(new CustomEvent('margin:unread', { detail: { total: u.reply + u.at + u.like + u.system + u.chat } }));
     return u;
@@ -482,6 +482,7 @@ export class MessageApp {
             } }, h('img', { src: /\.gif([?#]|$)/i.test(m.image) || !/^https:\/\/[^/]+\.(?:hdslb|biliimg)\.com\/[^?]+$/.test(m.image) ? m.image : `${m.image}@360w.webp`, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' })) : null,
             m.text ? h('p', {}, ...messageText(m.text, m.emotes)) : null,
             card,
+            m.autoReply ? h('span', { class: 'wh-auto-reply' }, '此条消息为自动回复') : null,
             h('time', {}, fmtAgo(m.ts)), recall));
       }));
       log.scrollTop = log.scrollHeight;

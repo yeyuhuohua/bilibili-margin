@@ -13,14 +13,22 @@ const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir()
   channel: 'chromium', headless: true, viewport: { width: 1200, height: 1000 },
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
 });
-const results = [], errors = [], posts = [];
+const results = [], errors = [], posts = [], reactions = [];
 let release, reject = false;
 try {
   await installMocks(context, raw => {
     const p = new URL(raw).pathname;
     if (p.endsWith('/feed/all')) return { code: 0, data: { items: [{ id_str: '8101', type: 'DYNAMIC_TYPE_WORD', basic: { comment_type: 17, comment_id_str: '8101' }, modules: { module_author: { mid: 1, name: '动态作者', pub_ts: 1 }, module_dynamic: { desc: { text: '内联回复测试' } }, module_stat: { comment: { count: 2 }, like: { count: 0 }, forward: { count: 0 } } } }], has_more: false } };
     if (p === '/x/v2/reply') return { code: 0, data: { replies: [row(root, '主评论作者', '主评论正文', 1), row('90071992547409939', '暂无回复作者', '零回复主评论')], page: { count: 2, size: 8 } } };
-    if (p === '/x/v2/reply/reply') return { code: 0, data: { replies: [row(child, '楼中楼作者', '楼中楼正文')], page: { count: 1, size: 10 } } };
+    if (p === '/x/v2/reply/reply') return { code: 0, data: { replies: [{ ...row(child, '楼中楼作者', '楼中楼正文'), action: 1, like: 2 }], page: { count: 1, size: 10 } } };
+  });
+  let acceptLike, notifyLike;
+  const likeStarted = () => new Promise(resolve => { notifyLike = resolve; });
+  await context.route('**/x/v2/reply/action', async route => {
+    const form = Object.fromEntries(new URLSearchParams(route.request().postData()));
+    reactions.push(form);
+    if (form.rpid === root) await new Promise(resolve => { acceptLike = resolve; notifyLike(); });
+    await route.fulfill({ json: form.rpid === root ? { code: 0 } : { code: -101, message: '模拟未登录' } });
   });
   await context.route('**/x/v2/reply/add', async route => {
     const form = Object.fromEntries(new URLSearchParams(route.request().postData())); posts.push(form);
@@ -63,6 +71,33 @@ try {
   assert.equal(await input.inputValue(), '发送期间新草稿'); assert.match(await card.locator('.dy-reply-context').textContent(), /主评论作者/);
   assert.equal(await emptyThread.locator('.dy-replies-toggle').getAttribute('aria-expanded'), 'true');
   results.push('a previously empty thread accepts replies and completion preserves a newer target and draft');
+  const rootLike = main.locator(':scope > .dy-r-b > .dy-r-meta > .dy-r-like');
+  const childLike = nested.locator('.dy-r-like');
+  assert.equal(await rootLike.getAttribute('aria-pressed', { timeout: 3000 }), 'false');
+  assert.equal(await rootLike.textContent(), '0');
+  const firstLike = likeStarted();
+  await rootLike.click();
+  await firstLike;
+  await rootLike.evaluate(button => button.click());
+  assert.deepEqual(reactions.map(({ type, oid, rpid, action }) => [type, oid, rpid, action]), [['17', '8101', root, '1']]);
+  assert.equal(await rootLike.textContent(), '0');
+  acceptLike();
+  await rootLike.getByText('1', { exact: true }).waitFor();
+  assert.equal(await rootLike.getAttribute('aria-pressed'), 'true');
+  const undoLike = likeStarted();
+  await rootLike.click();
+  await undoLike;
+  assert.equal(reactions.at(-1).action, '0');
+  acceptLike();
+  await rootLike.getByText('0', { exact: true }).waitFor();
+  assert.equal(await rootLike.getAttribute('aria-pressed'), 'false');
+  assert.equal(await childLike.getAttribute('aria-pressed'), 'true');
+  await childLike.click();
+  await page.getByRole('status').filter({ hasText: '模拟未登录' }).waitFor();
+  assert.equal(reactions.at(-1).rpid, child);
+  assert.equal(await childLike.getAttribute('aria-pressed'), 'true');
+  assert.equal(await childLike.textContent(), '2');
+  results.push('comment likes target the exact IDs, prevent duplicate writes, and retain server state on error');
   for (const theme of ['dark', 'light']) {
     await worker.evaluate(async theme => { const saved = (await chrome.storage.local.get('margin:settings'))['margin:settings']; await chrome.storage.local.set({ 'margin:settings': { ...saved, theme } }); }, theme);
     await page.screenshot({ path: join(out, `${theme}.png`) });

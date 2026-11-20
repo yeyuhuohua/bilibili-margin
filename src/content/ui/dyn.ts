@@ -1,10 +1,11 @@
-import { dynCommentTarget, dynLike, dynPreview, dynReplies, dynReply, dynRepost, dynReserve, dynSubReplies, type Dyn, type DynText, type Reply } from '../api/dyn';
+import { dynCommentTarget, dynLike, dynPreview, dynReplies, dynReply, dynReplyLike, dynRepost, dynReserve, dynSubReplies, type Dyn, type DynText, type Reply } from '../api/dyn';
 import { fmtAgo, fmtCount, h, icon, ICONS, safeUrl } from './dom';
 import { laterButton } from './later-btn';
 import { openLightbox } from './lightbox';
 import { appUrl, openBili } from '../navigation';
 import { decorateSendButton } from './send-button';
 import { observeDynamicGlass } from './dynamic-glass';
+import { toast } from './controls';
 
 const img = (src: string, w: number, hgt?: number) => h('img', { src: src ? `${src}@${w}w${hgt ? `_${hgt}h_1c` : ''}.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
 const ext = { target: '_blank', rel: 'noopener' };
@@ -271,7 +272,7 @@ function kindLabel(d: Dyn): string {
   return 'NOTE';
 }
 
-function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement {
+function replyRow(r: Reply, ownerMid: number, type: number, oid: string, onReply?: () => void): HTMLElement {
   const pictures = r.pics.length ? h('div', { class: `dy-r-pics n${Math.min(r.pics.length, 3)}` },
     ...r.pics.map((src, i) => {
       const link = h('a', { href: src, 'aria-label': `查看评论图片 ${i + 1}`, ...ext },
@@ -283,6 +284,24 @@ function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement
       });
       return link;
     })) : null;
+  const count = h('span', {}, fmtCount(r.like));
+  const like = h('button', { class: 'dy-r-like', type: 'button', 'aria-label': '点赞评论', 'aria-pressed': String(r.liked) }, icon(ICONS.like), count);
+  like.disabled = !/^\d+$/.test(r.rpid);
+  like.addEventListener('click', async () => {
+    if (like.disabled || like.hasAttribute('aria-busy')) return;
+    like.setAttribute('aria-busy', 'true');
+    const next = !r.liked;
+    try {
+      await dynReplyLike(type, oid, r.rpid, next);
+      r.liked = next;
+      r.like = Math.max(0, r.like + (next ? 1 : -1));
+      like.setAttribute('aria-pressed', String(next));
+      count.textContent = fmtCount(r.like);
+    } catch (error) {
+      const root = like.closest<HTMLElement>('.app');
+      if (root) toast(root, `操作失败：${(error as Error).message}`);
+    } finally { like.removeAttribute('aria-busy'); }
+  });
   return h('div', { class: 'dy-r' },
     h('a', { class: `dy-r-face${r.pendant ? ' has-pendant' : ''}`, href: `https://space.bilibili.com/${r.mid}`, ...ext },
       h('img', { class: 'dy-r-avatar', src: r.face ? `${r.face}@64w_64h_1c.webp` : '', alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
@@ -291,7 +310,7 @@ function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement
       replyUser(r, ownerMid),
       h('p', {}, ...(r.richText ? richText(r.text, r.richText) : replyText(r.text, r.emotes))),
       pictures,
-      h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.location, r.like ? `赞 ${fmtCount(r.like)}` : ''].filter(Boolean).join(' · '),
+      h('span', { class: 'dy-r-meta' }, [fmtAgo(r.ts), r.location].filter(Boolean).join(' · '), like,
         onReply ? h('button', { type: 'button', class: 'dy-r-reply', 'aria-label': `回复 ${r.name}`, onclick: onReply }, '回复') : null)));
 }
 
@@ -299,7 +318,7 @@ function replyRow(r: Reply, ownerMid: number, onReply?: () => void): HTMLElement
 function replyThread(r: Reply, type: number, oid: string, active: () => boolean, ownerMid: number,
   onReply: (target: Reply, root: string, append: (reply: Reply | null, message: string, name: string) => void) => void): HTMLElement {
   const choose = (target: Reply) => onReply(target, r.rpid, append);
-  const row = replyRow(r, ownerMid, () => choose(r));
+  const row = replyRow(r, ownerMid, type, oid, () => choose(r));
   const toggle = h('button', { type: 'button', class: 'dy-replies-toggle', 'aria-expanded': 'false' }, `展开 ${r.rcount} 条回复`);
   toggle.hidden = !r.rcount;
   const status = h('div', { class: 'dy-rempty', role: 'status' });
@@ -316,7 +335,7 @@ function replyThread(r: Reply, type: number, oid: string, active: () => boolean,
       page++;
       for (const reply of result.list) {
         if (seen.has(reply.rpid)) continue;
-        seen.add(reply.rpid); list.insertBefore(replyRow(reply, ownerMid, () => choose(reply)), status);
+        seen.add(reply.rpid); list.insertBefore(replyRow(reply, ownerMid, type, oid, () => choose(reply)), status);
       }
       status.textContent = seen.size ? '' : '暂无回复';
       more.textContent = '加载更多回复';
@@ -336,7 +355,7 @@ function replyThread(r: Reply, type: number, oid: string, active: () => boolean,
     if (!page && r.rcount) void load();
     if (!reply || !seen.has(reply.rpid)) {
       if (reply) seen.add(reply.rpid);
-      list.insertBefore(reply ? replyRow(reply, ownerMid, () => choose(reply))
+      list.insertBefore(reply ? replyRow(reply, ownerMid, type, oid, () => choose(reply))
         : h('div', { class: 'dy-r mine' }, h('div', { class: 'dy-r-b' }, h('b', {}, `我 回复 @${name}`), h('p', {}, message))), status);
     }
     r.rcount++; toggle.hidden = false; toggle.textContent = '收起回复'; toggle.setAttribute('aria-expanded', 'true'); list.hidden = false;

@@ -16,6 +16,7 @@ try {
  await installMocks(ctx);
  const worker=ctx.serviceWorkers()[0]||await ctx.waitForEvent('serviceworker'),page=await ctx.newPage();
  page.on('pageerror',e=>errors.push(e.message));
+ await page.emulateMedia({reducedMotion:'no-preference'});
  for(const draggable of [false,true]){
   await worker.evaluate(idDrag=>chrome.storage.local.set({'margin:settings':{theme:'dark',idDrag,intro:false,bg:{mode:'off'}}}),draggable);
   await page.goto('https://www.bilibili.com/',{waitUntil:'domcontentloaded'});
@@ -28,6 +29,20 @@ try {
   });
   const dragChecks=[];
   if(draggable){
+   const fixedStage=page.locator('#margin-root .idcl-stage.idcl-fixed');
+   const dragStage=page.locator('#margin-root .idcl-stage:not(.idcl-fixed)');
+   await page.emulateMedia({reducedMotion:'reduce'});
+   await fixedStage.waitFor({state:'visible',timeout:5000});
+   await page.emulateMedia({reducedMotion:'no-preference'});
+   await dragStage.waitFor({state:'visible',timeout:5000});
+   for(const idDrag of [false,true]){
+    await worker.evaluate(async idDrag=>{
+     const key='margin:settings';
+     const saved=(await chrome.storage.local.get(key))[key];
+     await chrome.storage.local.set({[key]:{...saved,idDrag}});
+    },idDrag);
+    await (idDrag?dragStage:fixedStage).waitFor({state:'visible',timeout:5000});
+   }
    const name=await page.locator('#margin-root .idcl-name').boundingBox();
    const before=await card.getAttribute('style');
    await page.mouse.move(name.x+name.width/2,name.y+name.height/2);

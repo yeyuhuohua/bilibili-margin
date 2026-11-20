@@ -92,9 +92,11 @@ try {
  await page.evaluate(()=>{
    const root=document.querySelector('#margin-watch-top').shadowRoot, cp=root.querySelector('.cp');
    window.closeTiming={};
-   document.addEventListener('keydown',event=>{if(event.key==='Escape')window.closeTiming.start=performance.now();},{capture:true,once:true});
-   const observer=new MutationObserver(()=>{if(cp.hidden){window.closeTiming.end=performance.now();observer.disconnect();}});
-   observer.observe(cp,{attributes:true,attributeFilter:['hidden']});
+   const observer=new MutationObserver(()=>{
+     if(cp.dataset.open==='false' && window.closeTiming.start===undefined) window.closeTiming.start=performance.now();
+     if(cp.hidden){window.closeTiming.end=performance.now();observer.disconnect();}
+   });
+   observer.observe(cp,{attributes:true,attributeFilter:['data-open','hidden']});
  });
  await page.keyboard.press('Escape');
  const duration=await page.locator('#margin-watch-top .cp-shell').evaluate(el=>Math.max(...getComputedStyle(el).transitionDuration.split(',').map(value=>parseFloat(value)*1000)));

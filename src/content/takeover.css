@@ -270,6 +270,7 @@ html.margin-reduce .sp-menu { animation: none; }
 .wh-sn b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wh-sn time { font: 500 11px/1.6 var(--mono); color: var(--faint); flex: none; }
 .wh-sl { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wh-auto-reply { font-size: 12px; color: var(--muted); }
 .wh-dot { position: absolute; left: 36px; top: 5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: #fb7299; color: #fff; font: 600 10px/18px var(--mono); font-style: normal; text-align: center; }
 .wh-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .wh-chat > .ms-empty { margin: auto; }
@@ -654,9 +655,12 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 .dy-r-pics a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dy-r-pics img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .dy-r-meta { display: block; margin-top: 4px; font: 400 11px/1.4 var(--mono); color: var(--faint); }
-.dy-r-reply, .dy-reply-cancel { margin-left: 10px; padding: 2px 4px; border: 0; background: transparent; color: var(--muted); font: 500 12px/1.5 var(--sans); cursor: pointer; }
-.dy-r-reply:hover, .dy-reply-cancel:hover { color: var(--accent); }
-.dy-r-reply:focus-visible, .dy-reply-cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dy-r-like, .dy-r-reply, .dy-reply-cancel { margin-left: 10px; padding: 2px 4px; border: 0; background: transparent; color: var(--muted); font: 500 12px/1.5 var(--sans); cursor: pointer; }
+.dy-r-like { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.dy-r-like svg { width: 14px; height: 14px; }
+.dy-r-like[aria-busy="true"] { cursor: progress; }
+.dy-r-like:is(:hover,[aria-pressed="true"]), .dy-r-reply:hover, .dy-reply-cancel:hover { color: var(--accent); }
+.dy-r-like:focus-visible, .dy-r-reply:focus-visible, .dy-reply-cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dy-reply-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--muted); font: 12px/1.5 var(--sans); }
 .dy-reply-context > span { min-width: 0; overflow-wrap: anywhere; }
 .dy-reply-cancel { flex-shrink: 0; }

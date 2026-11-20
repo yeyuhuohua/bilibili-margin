@@ -1,0 +1,17 @@
+name: 功能建议 / Feature request
+description: 提出改进功能或界面的建议 / Suggest a feature or design improvement
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: 使用场景 / Use case
+      description: 你在哪个页面做什么时遇到了困难？ / What are you trying to do, and on which page?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议 / Proposal
+      description: 希望怎样改进？如有参考图或链接，可以附在这里。 / Describe the proposed change and include references if available.
+    validations:
+      required: true

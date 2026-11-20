@@ -18,11 +18,20 @@ const page=ctx.pages()[0];const errors=[];page.on('pageerror',e=>errors.push(e.m
 async function json(route,body){await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':route.request().headers().origin||'https://message.bilibili.com','access-control-allow-credentials':'true'},body:JSON.stringify(body)});}
 async function check(name,fn){await fn();results.push(name);console.log('PASS '+name);}
 try{
-  await installMocks(ctx);
+  const quickReply = { msg_source: 8, sender_uid: 101, msg_type: 1, content: JSON.stringify({ content: '你好，这是自动回复' }), timestamp: 1, msg_key: '9000', msg_seqno: 1 };
+  const regularMessage = { ...quickReply, msg_source: 0, content: JSON.stringify({ content: '普通消息' }), msg_key: '9001', msg_seqno: 2 };
+  await installMocks(ctx, raw => {
+    if (new URL(raw).pathname.endsWith('/get_sessions')) return { code: 0, data: { session_list: [
+      { talker_id: 101, session_type: 1, last_msg: quickReply },
+      { talker_id: 102, session_type: 1, last_msg: regularMessage },
+    ] } };
+  });
   await ctx.route('**/x/emote/user/panel/web?*',async route=>{emojiLoads++;await json(route,{code:0,data:{packages:[{id:1,text:'小电视',emote:emotes.map(e=>({text:e.text,url:e.gif_url,flags:{unlocked:true}}))},{id:2,text:'颜文字',emote:[{text:'[开心]',url:'https://i0.hdslb.com/happy.png'}]}]}});});
   await ctx.route('**/fetch_session_msgs?*',async route=>{
     const talker=Number(new URL(route.request().url()).searchParams.get('talker_id'));
-    const body={code:0,data:{e_infos:emotes,messages:sent.filter(m=>m.to===talker).map((m,i)=>({sender_uid:m.from,msg_type:m.type,content:JSON.stringify(m.content),timestamp:Math.floor(Date.now()/1000),msg_key:String(i+1),msg_seqno:i+1})).reverse()}};
+    const messages=sent.filter(m=>m.to===talker).map((m,i)=>({sender_uid:m.from,msg_type:m.type,content:JSON.stringify(m.content),timestamp:Math.floor(Date.now()/1000),msg_key:String(i+1),msg_seqno:i+3})).reverse();
+    if (talker===101) messages.push(regularMessage, quickReply);
+    const body={code:0,data:{e_infos:emotes,messages}};
     if(holdHistory){holdHistory=false;await new Promise(r=>{releaseHistory=r;});}
     return json(route,body);
   });
@@ -45,6 +54,21 @@ try{
   const sessions=page.locator('#margin-root .wh-s');await sessions.first().click();
   const root='#margin-root',input=page.locator(`${root} .wh-input`),send=page.locator(`${root} .wh-send`),pick=page.locator(`${root} input[type=file]`),panel=page.locator(`${root} .wh-emoji-panel`),attachment=page.locator(`${root} .wh-attachment`);
   await input.waitFor();
+  await check('original auto-reply markers and native message settings link', async () => {
+    const automatic = sessions.filter({ hasText: '你好，这是自动回复' });
+    assert.match(await automatic.locator('.wh-sl').textContent(), /^\[自动回复\]/);
+    assert.doesNotMatch(await sessions.filter({ hasText: '普通消息' }).locator('.wh-sl').textContent(), /自动回复/);
+    const note = page.getByText('此条消息为自动回复', { exact: true });
+    await note.waitFor({ timeout: 3000 });
+    assert.match(await note.locator('..').textContent(), /你好，这是自动回复/);
+    assert.equal(await note.count(), 1);
+    const settings = page.getByRole('link', { name: '消息设置', exact: true });
+    assert.equal(await settings.getAttribute('href'), 'https://message.bilibili.com/?margin=off#/config');
+    const [native] = await Promise.all([page.waitForEvent('popup'), settings.click()]);
+    await native.waitForURL('https://message.bilibili.com/?margin=off#/config');
+    assert.equal(await native.locator('#margin-root').count(), 0);
+    await native.close();
+  });
   await check('lazy Bilibili emoji picker, insertion at selection and keyboard dismissal',async()=>{
     assert.equal(emojiLoads,0);assert(await send.isDisabled());
     await input.fill('abc');await selectDraftText(input,1,2);

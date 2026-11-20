@@ -80,18 +80,22 @@ try {
   await patch({watch:false});
   await page.locator('html.margin-live-home').waitFor({state:'detached'});
   assert.equal(await page.locator('.rank-ctnr').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+  // The settings change reloads live pages. Start the bypass check in a fresh tab.
+  await page.close();
   await patch({watch:true});
-  await page.goto('https://live.bilibili.com/?margin=off');
-  await page.waitForTimeout(250);
-  assert.equal(await page.locator('html.margin-live-home').count(),0);
-  await page.goto('https://live.bilibili.com/');
-  await page.locator('html.margin-live-home').waitFor({state:'attached'});
-  await page.locator('.room-card-ctnr').click();
-  await page.waitForURL('https://live.bilibili.com/3');
-  await page.locator('html.margin-live').waitFor({state:'attached'});
-  await page.locator('#margin-watch-top').waitFor({state:'attached'});
-  await page.goto('https://live.bilibili.com/blackboard/activity');
-  assert.equal(await page.locator('html.margin-live-home').count(),0);
+  const bypass = await context.newPage();
+  bypass.on('pageerror',error=>errors.push(error.message));
+  await bypass.goto('https://live.bilibili.com/?margin=off');
+  await bypass.waitForTimeout(250);
+  assert.equal(await bypass.locator('html.margin-live-home').count(),0);
+  await bypass.goto('https://live.bilibili.com/');
+  await bypass.locator('html.margin-live-home').waitFor({state:'attached'});
+  await bypass.locator('.room-card-ctnr').click();
+  await bypass.waitForURL('https://live.bilibili.com/3');
+  await bypass.locator('html.margin-live').waitFor({state:'attached'});
+  await bypass.locator('#margin-watch-top').waitFor({state:'attached'});
+  await bypass.goto('https://live.bilibili.com/blackboard/activity');
+  assert.equal(await bypass.locator('html.margin-live-home').count(),0);
   console.log('PASS native room navigation, disable restoration and bypass/activity routing');
   assert.deepEqual(errors,[]);
 } finally {writeFileSync(join(out,'results.json'),JSON.stringify({results,errors},null,2));await context.close();}

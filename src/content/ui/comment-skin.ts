@@ -322,26 +322,38 @@ const replyControls = new WeakMap<HTMLElement, HTMLButtonElement>();
 /** 只折叠现有 DOM，保留原生分页、输入框和 lit 的节点归属。 */
 function replyCollapse(list: HTMLElement): void {
   let button = replyControls.get(list);
-  const hasReplies = !!list.querySelector('bili-comment-reply-renderer, .sub-reply-item');
+  const adjacent = list.previousElementSibling;
+  if (adjacent instanceof HTMLButtonElement && adjacent.classList.contains('margin-replies-toggle') && adjacent !== button) {
+    button?.remove();
+    button = adjacent;
+    replyControls.set(list, button);
+  }
+  const hasReplies = !!list.querySelector(':scope > bili-comment-reply-renderer, :scope > .sub-reply-item');
   if (!hasReplies) { if (button) { button.hidden = true; button.style.display = 'none'; } return; }
   if (!button) {
     button = document.createElement('button');
     button.type = 'button'; button.className = 'margin-replies-toggle';
     button.style.cssText = 'display:block;position:static;margin:8px 0;padding:6px 12px;border:0;border-radius:999px;'
       + 'background:var(--m-surface,#fff);color:var(--m-muted,#666);font:500 12px/1.5 var(--m-sans,system-ui);cursor:pointer;scroll-margin-top:88px';
-    button.textContent = '收起回复'; button.setAttribute('aria-expanded', 'true');
     button.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
-      const collapsed = list.toggleAttribute('data-margin-replies-collapsed');
-      button!.textContent = collapsed ? '展开回复' : '收起回复';
-      button!.setAttribute('aria-expanded', String(!collapsed));
-      button!.scrollIntoView({ block: 'nearest' });
+      const control = e.currentTarget as HTMLButtonElement;
+      const target = control.nextElementSibling;
+      if (!target?.matches('#expander-contents, .sub-reply-list')) return;
+      const collapsed = target.toggleAttribute('data-margin-replies-collapsed');
+      control.textContent = collapsed ? '展开回复' : '收起回复';
+      control.setAttribute('aria-expanded', String(!collapsed));
+      control.scrollIntoView({ block: 'nearest' });
     });
     replyControls.set(list, button);
   }
   if (button.nextElementSibling !== list) list.before(button);
+  const expanded = !list.hasAttribute('data-margin-replies-collapsed');
+  const label = expanded ? '收起回复' : '展开回复';
+  if (button.textContent !== label) button.textContent = label;
+  button.setAttribute('aria-expanded', String(expanded));
   // 原生尚未展开时不显示扩展按钮；我们自己折叠后仍保留重开入口。
-  const visible = list.hasAttribute('data-margin-replies-collapsed') || getComputedStyle(list).display !== 'none';
+  const visible = !expanded || getComputedStyle(list).display !== 'none';
   button.style.display = visible ? 'block' : 'none';
   button.hidden = !visible;
 }

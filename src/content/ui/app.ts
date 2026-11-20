@@ -3,6 +3,7 @@ import { openBili } from '../navigation';
 import { appDislike, appRecommended } from '../api/appfeed';
 import { noteNegative, rerank, resetRank } from '../rank';
 import { followClassics, resetClassics } from '../api/space';
+import { followedVideos } from '../api/dyn';
 import { account } from '../api/account';
 import { loadSettings, normalizeHomeOrder, saveSettings, type HomeSection, type Settings } from '../../shared/settings';
 import { BATCH_QUEUE_MAX, batchCount, batchIndexOf, batchStartOf, newContentStart, trimmedStart } from '../../shared/batch';
@@ -35,8 +36,8 @@ import css from '../styles/index';
 import { mountUpdateNotice } from './update-notice';
 import { attachNavigationGlass } from './navigation-glass';
 
-type Tab = 'rcmd' | 'popular' | 'classic';
-type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; done: boolean; batchStart: number };
+type Tab = 'rcmd' | 'popular' | 'following' | 'classic';
+type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; followOffset: string; done: boolean; batchStart: number };
 
 export class MarginApp {
   readonly host: HTMLElement;
@@ -62,6 +63,7 @@ export class MarginApp {
   private recommendationScene: RecommendScene = 'scroll';
   /** App 推荐流的翻页游标（上一批最后一张卡的 idx），换一批时归零 */
   private appIdx = 0;
+  private followOffset = '';
   private appHinted = false;
   private page = 1;
   private loading = false;
@@ -69,7 +71,7 @@ export class MarginApp {
   private refreshBtn: HTMLElement | null = null;
   /** 吸顶分类栏：换一批后滚到它吸住的位置，即视频区顶部 */
   private barEl: HTMLElement | null = null;
-  /** 分类栏前的 1px 标记（不参与吸顶），用来算分类栏的流式位置 */
+  /** 分类栏前的定位标记（不参与吸顶），用来算分类栏的流式位置 */
   private barMarkEl: HTMLElement | null = null;
   private anchorTimer = 0;
   private done = false;
@@ -166,7 +168,7 @@ export class MarginApp {
     this.dash.hidden = !s.footprint && !s.weather;
   }
 
-  private cardOpts() { return { onBlock: (x: Video) => this.blockUp(x), onDislike: (x: Video, el: HTMLElement) => this.nope(x, el), hide: new Set<string>(this.settings.homeHide) }; }
+  private cardOpts() { return { onBlock: (x: Video) => this.blockUp(x), onDislike: (x: Video, el: HTMLElement) => this.nope(x, el), hide: new Set<string>(this.settings.homeHide), inlineTime: true }; }
 
   /** 复用最近两轮常见长度的列表，限制引用数，长时间翻页时可以回收旧节点。 */
   private cardFor(v: Video, index: number): HTMLElement {
@@ -245,6 +247,7 @@ export class MarginApp {
       { id: 'rcmd', title: '看推荐', cat: '跳转', icon: ICONS.moments, keys: ['首页'], run: () => (this.app.querySelector('.tab[data-tab=rcmd]') as HTMLElement)?.click() },
       { id: 'classic', title: '看关注的 UP 的老视频', cat: '跳转', icon: ICONS.history, keys: ['老片', 'classic'], run: () => (this.app.querySelector('.tab[data-tab=classic]') as HTMLElement)?.click() },
       { id: 'popular', title: '看热门', cat: '跳转', icon: ICONS.heat, keys: ['popular', '排行'], run: () => (this.app.querySelector('.tab[data-tab=popular]') as HTMLElement)?.click() },
+      { id: 'following', title: '看关注的 UP 的最新投稿', cat: '跳转', icon: ICONS.user, keys: ['关注', 'follow'], run: () => (this.app.querySelector('.tab[data-tab=following]') as HTMLElement)?.click() },
       { id: 'fav', title: '打开收藏夹', cat: '操作', icon: ICONS.fav, keys: ['收藏'], run: () => this.fav.open() },
       { id: 'foot', title: '看足迹', desc: '一年的 B 站热力图', cat: '跳转', icon: ICONS.heat, keys: ['热力图', '足迹'], run: () => this.showFoot() },
       { id: 'theme', title: '切换亮色 / 暗色', cat: '操作', icon: ICONS.moon, keys: ['主题', '夜间', 'dark', 'light'], run: () => this.toggleTheme() },
@@ -276,7 +279,9 @@ export class MarginApp {
       b.dataset.tab = id;
       return b;
     };
-    tabs.append(mkTab('rcmd', '推荐'), mkTab('popular', '热门'), mkTab('classic', '关注老片'));
+    tabs.append(mkTab('rcmd', '推荐'), mkTab('popular', '热门'), mkTab('following', '关注'), mkTab('classic', '关注老片'));
+    const rank = h('a', { class: 'ghost rank-link', href: 'https://www.bilibili.com/v/popular/rank/all', target: '_blank', rel: 'noopener', 'aria-label': '打开 B 站排行榜' },
+      icon(ICONS.heat), h('span', {}, '排行榜'));
     const refresh = h('button', { class: 'ghost refresh', type: 'button', title: '换一批', onclick: () => this.reload(true) }, icon(ICONS.refresh), h('span', {}, '换一批'));
     this.refreshBtn = refresh;
     // 上一批（评论区 K-aloy：习惯 biliplus 的首页回退）：换一批之后可以回到刚才那批，再点一次又回来
@@ -296,7 +301,7 @@ export class MarginApp {
     const heroS = createHeroSearch(() => this.app);
     const hero = heroS.el;
     this.headEl = head.el; this.heroEl = hero;
-    const bar = h('div', { class: 'bar' }, h('div', { class: 'eyebrow' }, h('span', {}, todayLabel()), h('span', { class: 'en' }, 'For You'), h('span', { class: 'no' }, issueNo())), h('div', { class: 'bar-row' }, tabs, h('div', { class: 'bar-acts' }, this.backBtn, refresh, this.batchBar)));
+    const bar = h('div', { class: 'bar', 'data-tab': this.tab }, h('div', { class: 'eyebrow' }, h('span', {}, todayLabel()), h('span', { class: 'en' }, 'For You'), h('span', { class: 'no' }, issueNo())), h('div', { class: 'bar-row' }, tabs, h('div', { class: 'bar-acts' }, rank, this.backBtn, refresh, this.batchBar)));
     this.barEl = bar;
 
     this.grid = h('section', { class: 'grid home-grid', 'aria-live': 'polite' });
@@ -377,8 +382,12 @@ export class MarginApp {
     const favGrid = this.fav.el.querySelector('.fav-grid') as HTMLElement | null;
     if (favGrid) bindCardMenu(favGrid, cm, () => this.app, { onLater: () => later.open() });
     new IntersectionObserver(([e]) => {
-      bar.classList.toggle('stuck', !e.isIntersecting && e.boundingClientRect.top < 80);
-    }, { root: this.app, rootMargin: '-72px 0px 0px 0px', threshold: 0 }).observe(barMark);
+      const top = e.rootBounds?.top;
+      if (top == null) return;
+      // 标记完全越过才收拢，完全回到视口才展开，避免吸顶临界处反复切换。
+      if (e.boundingClientRect.bottom <= top) bar.classList.add('stuck');
+      else if (e.boundingClientRect.top >= top) bar.classList.remove('stuck');
+    }, { root: this.app, rootMargin: '-72px 0px 0px 0px', threshold: [0, 1] }).observe(barMark);
     // 大搜索框滚出视野后，顶栏的小搜索框淡入（v0.47，评论区：往下滑时搜索栏能跟着走）
     new IntersectionObserver(([e]) => {
       head.el.classList.toggle('hs-away', !e.isIntersecting && e.boundingClientRect.top < 80);
@@ -429,6 +438,7 @@ export class MarginApp {
     this.recommendationRequest.abort();
     this.recommendationRequest = new AbortController();
     this.tab = id;
+    if (this.barEl) this.barEl.dataset.tab = id;
     tabs.querySelectorAll<HTMLElement>('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === id)));
     this.syncBatchBar();
     const m = this.tabMem.get(id);
@@ -440,7 +450,7 @@ export class MarginApp {
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.items = s.items.slice();
     this.seen = new Set(s.items.map((v) => v.bvid));
-    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done;
+    this.page = s.page; this.appIdx = s.appIdx; this.followOffset = s.followOffset; this.done = s.done;
     this.batchStart = s.batchStart;
     this.loading = false;
     this.refreshBusy(false);
@@ -456,7 +466,7 @@ export class MarginApp {
   private snap: Snap | null = null;
 
   private snapshot(): typeof this.snap {
-    return { tab: this.tab, items: this.items.slice(), page: this.page, appIdx: this.appIdx, done: this.done, batchStart: this.batchStart };
+    return { tab: this.tab, items: this.items.slice(), page: this.page, appIdx: this.appIdx, followOffset: this.followOffset, done: this.done, batchStart: this.batchStart };
   }
 
   private restore(): void {
@@ -470,7 +480,7 @@ export class MarginApp {
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.items = s.items.slice();
     this.seen = new Set(s.items.map((v) => v.bvid));
-    this.page = s.page; this.appIdx = s.appIdx; this.done = s.done;
+    this.page = s.page; this.appIdx = s.appIdx; this.followOffset = s.followOffset; this.done = s.done;
     this.loading = false;
     this.refreshBusy(false);
     this.status.replaceChildren();
@@ -484,7 +494,7 @@ export class MarginApp {
     this.recommendationRequest.abort();
     this.recommendationRequest = new AbortController();
     this.recommendationScene = 'refresh';
-    const prev = { snap: this.snap, page: this.page, appIdx: this.appIdx, done: this.done };
+    const prev = { snap: this.snap, page: this.page, appIdx: this.appIdx, followOffset: this.followOffset, done: this.done };
     const gen = ++this.gen;
     clearTimeout(this.fillRetry); this.fillRetry = 0;
     this.snap = keep && this.items.length ? this.snapshot() : null;
@@ -495,6 +505,7 @@ export class MarginApp {
     this.loading = false;
     this.page = 1;
     this.appIdx = 0;
+    this.followOffset = '';
     resetRank();
     resetClassics();
     if (!keep) {
@@ -515,7 +526,7 @@ export class MarginApp {
   }
 
   /** 换一批：旧列表撑到新一批就绪，整块替换后回到视频区顶部；本来就在页面顶部时原地刷新，不往下跳 */
-  private async swapFeed(gen: number, prev: { snap: Snap | null; page: number; appIdx: number; done: boolean }): Promise<void> {
+  private async swapFeed(gen: number, prev: { snap: Snap | null; page: number; appIdx: number; followOffset: string; done: boolean }): Promise<void> {
     const fresh = { items: [] as Video[], seen: new Set<string>() };
     const frag = document.createDocumentFragment();
     const target = this.videoTop();
@@ -559,7 +570,7 @@ export class MarginApp {
       // 失败时旧列表原样保留，游标和「上一批」也退回去，不影响继续浏览
       this.snap = prev.snap;
       if (this.backBtn) this.backBtn.hidden = !this.snap;
-      this.page = prev.page; this.appIdx = prev.appIdx; this.done = prev.done;
+      this.page = prev.page; this.appIdx = prev.appIdx; this.followOffset = prev.followOffset; this.done = prev.done;
       toast(this.app, `换一批失败：${(err as Error).message}`);
     } finally {
       if (gen === this.gen) { this.loading = false; this.refreshBusy(false); }
@@ -591,9 +602,8 @@ export class MarginApp {
     const flowTop = (el: Element) => el.getBoundingClientRect().top - appTop + this.app.scrollTop;
     const markTop = flowTop(mark), gridTop = flowTop(this.grid);
     if (markTop > gridTop) return Math.max(0, gridTop - sticky);
-    // 分类栏在视频区前面：多滚 4px 落在「已经吸住」的一侧。
-    // 正好卡在吸顶临界点时，落位后分类栏还会展开/收起一次，把卡片上下顶一下。
-    return Math.max(0, markTop - sticky + 4);
+    // 多滚过完整标记，落在吸顶缓冲带外。
+    return Math.max(0, markTop - sticky + mark.getBoundingClientRect().height + 1);
   }
 
   private refreshBusy(on: boolean): void {
@@ -951,6 +961,13 @@ export class MarginApp {
       if (gen !== this.gen) return [];
       this.recommendationScene = 'scroll';
       list = [...first, ...second];
+    } else if (this.tab === 'following') {
+      const signal = this.recommendationRequest.signal;
+      const r = await followedVideos(this.followOffset, signal);
+      if (gen !== this.gen) return [];
+      list = r.list;
+      this.followOffset = r.offset;
+      this.done = !r.more;
     } else if (this.tab === 'classic') {
       const me = (await account())?.mid;
       if (gen !== this.gen) return [];

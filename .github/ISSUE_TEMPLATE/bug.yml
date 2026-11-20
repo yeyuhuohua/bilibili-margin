@@ -1,0 +1,26 @@
+name: 报告故障 / Bug report
+description: 报告一个无法正常使用的功能 / Report something that is broken
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与预期 / Issue and expected behavior
+      description: 出现了什么？你预期会发生什么？ / What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 如方便，请附 B 站页面链接、截图或录屏。 / Include the Bilibili page URL or a screenshot if available.
+  - type: input
+    id: environment
+    attributes:
+      label: 系统与浏览器 / OS and browser
+      placeholder: Windows 11, Edge 157
+  - type: input
+    id: version
+    attributes:
+      label: 映间版本 / MARGIN version
+      description: 可以在映间的设置总览或浏览器扩展管理页查看。 / Check Settings → Overview or the browser's extension manager.
+      placeholder: 0.6.78
