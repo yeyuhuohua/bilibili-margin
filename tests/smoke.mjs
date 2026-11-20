@@ -219,10 +219,36 @@ for (const theme of THEMES) {
         return { radius:c.borderRadius,height:c.height,font:input.fontFamily,buttonRadius:button.borderRadius };
       });
       const miss = [];
-      if (style.radius !== '28px' || style.height !== '56px' || !style.font.includes('Instrument Serif') || style.buttonRadius !== '999px') miss.push(`classic search changed: ${JSON.stringify(style)}`);
+      if (style.radius !== '28px' || style.height !== '56px' || !style.font.includes('Instrument Serif') || style.buttonRadius !== '22px') miss.push(`classic search changed: ${JSON.stringify(style)}`);
       if (await page.locator('#margin-root .q-side,#margin-root .watch-theme').count()) miss.push('home inherited watch navigation/theme');
       if (!await page.locator('#margin-root .top .ts').count()) miss.push('classic theme switch missing');
-      await page.screenshot({path:join(OUT,'home-classic.png')});return miss;
+      await page.screenshot({path:join(OUT,'home-classic.png')});
+      const viewport = page.viewportSize();
+      try {
+        await page.setViewportSize({width:800,height:712});
+        for (const [radius, outer, inner] of [[0,0,0],[50,14,8],[100,28,22],[150,28,22]]) {
+          await seed({radius});
+          await page.goto(HOME, {waitUntil:'domcontentloaded'});
+          const hero = page.locator('#margin-root .main .hero-search');
+          await hero.waitFor();
+          for (const open of [false,true]) {
+            if (open) {
+              await hero.locator('.hs-input').fill('映间');
+              await page.locator('.hero-search[data-open="true"].has-list').waitFor();
+              await hero.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
+            }
+            const corners = await hero.evaluate(el => [
+              getComputedStyle(el).borderTopRightRadius,
+              getComputedStyle(el.querySelector('.hs-btn')).borderTopRightRadius,
+            ]);
+            if (corners.join('/') !== `${outer}px/${inner}px`) miss.push(`radius=${radius} open=${open}: ${corners}`);
+          }
+        }
+      } finally {
+        await page.setViewportSize(viewport);
+        await reset();
+      }
+      return miss;
     });
 
     await feature('search-morph', async () => {

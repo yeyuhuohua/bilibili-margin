@@ -6,6 +6,18 @@ New entries are grouped under Added, Changed, and Fixed, following [Keep a Chang
 
 ## Unreleased
 
+## [v0.6.82](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.82) · Home search corners and Japanese README
+
+Display version 0.6.82, browser update version 0.60.82.
+
+### Added
+
+- Add a Japanese README with links between all three languages and clarify the optional App-feed authorization retention period (#216).
+
+### Fixed
+
+- Derive the home search button corners from the outer radius and inset. The small setting now aligns and the large setting keeps the button clear of the expanded suggestions panel edge (#221).
+
 ## [v0.6.81](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.81) · Home feed, comments and header fixes
 
 Display version 0.6.81, browser update version 0.60.81.
