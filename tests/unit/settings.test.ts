@@ -98,6 +98,17 @@ describe('settings 迁移（merge / loadSettings）', () => {
     expect((await loadSettings()).danmakuJump).toBe(true);
   });
 
+  it('首页过场动画默认关闭，仅显式布尔值开启，支持保存与导入', async () => {
+    expect(DEFAULTS.intro).toBe(false);
+    expect((await loadSettings()).intro).toBe(false);
+    store.set('margin:settings', { intro: 'true' });
+    expect((await loadSettings()).intro).toBe(false);
+    expect(sanitizeSettings({ intro: 'true' })?.intro).toBe(false);
+    expect(sanitizeSettings({ intro: true })?.intro).toBe(true);
+    await saveSettings({ intro: true });
+    expect((await loadSettings()).intro).toBe(true);
+  });
+
   it('弹幕空降默认关闭，旧设置及导入严格接受布尔值', async () => {
     expect(DEFAULTS.danmakuAirborne).toBe(false);
     expect((await loadSettings()).danmakuAirborne).toBe(false);

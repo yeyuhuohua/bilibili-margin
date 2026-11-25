@@ -61,7 +61,7 @@ export interface Settings {
   watch: boolean;
   /** 单独保留原站外观的页面；空列表保持原有行为。 */
   pageOff: RedesignPage[];
-  /** 首页开场动画（每次打开浏览器后首次进入首页播放一次） */
+  /** 首页过场动画（默认关闭；开启后每次打开浏览器首次进入首页播放一次） */
   intro: boolean;
   /** YouTube 风格首页（可选，默认关）：只借布局结构，配色和主题不变；只影响首页 */
   /** 首页顶部「B 站足迹」热力图（关掉只是不显示，后台照样记录） */
@@ -185,7 +185,7 @@ export const DEFAULTS: Settings = {
   hoverPreview: true,
   watch: true,
   pageOff: [],
-  intro: true,
+  intro: false,
   footprint: true,
   weather: true,
   privacyExternal: false,
@@ -269,6 +269,7 @@ function merge(raw: Partial<Settings> | undefined): Settings {
   return {
     ...DEFAULTS,
     ...r,
+    intro: r.intro === true,
     pageOff: Array.isArray(r.pageOff) ? REDESIGN_PAGES.filter(p => r.pageOff!.includes(p)) : [],
     filters: { ...DEFAULTS.filters, ...(r.filters ?? {}) },
     bg: { ...DEFAULTS.bg, ...(r.bg ?? {}) },

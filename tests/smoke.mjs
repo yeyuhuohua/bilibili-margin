@@ -925,10 +925,19 @@ for (const theme of THEMES) {
         const control = row?.querySelector('[role="switch"]');
         if (!control) return 'intro switch missing';
         if (row.closest('.sd')) return 'intro switch is hidden inside a drawer';
+        if (control.getAttribute('aria-checked') !== 'false') return 'intro switch should default off';
         control.click();
         return '';
       });
       if (introProblem) miss.push(introProblem);
+      await sleep(300);
+      const introEnabled = await sw.evaluate(async () => (await chrome.storage.local.get('margin:settings'))['margin:settings']?.intro);
+      if (introEnabled !== true) miss.push('intro switch did not save enabled state');
+      await page.evaluate(() => {
+        const r = document.getElementById('margin-root')?.shadowRoot;
+        const label = [...r?.querySelectorAll('.row-label span') ?? []].find((e) => e.textContent === '首页过场动画');
+        label?.closest('.row')?.querySelector('[role="switch"]')?.click();
+      });
       await sleep(300);
       const introSaved = await sw.evaluate(async () => (await chrome.storage.local.get('margin:settings'))['margin:settings']?.intro);
       if (introSaved !== false) miss.push('intro switch was not saved');
