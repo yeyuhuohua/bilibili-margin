@@ -125,19 +125,60 @@ try {
   await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
   await page.locator('#margin-watch-top').waitFor();
   await page.evaluate(() => {
+    const native = document.createElement('style');
+    native.textContent = '.usercard-wrap .user-card-m-exp{width:366px}'
+      + '.usercard-wrap .user-info-wrapper{display:flex;padding:0 20px}'
+      + '.usercard-wrap .face{margin-right:12px}'
+      + '.usercard-wrap .face .bili-avatar{position:relative;width:48px;height:48px}'
+      + '.usercard-wrap .face .bili-avatar-face{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%}'
+      + '.usercard-wrap .user{margin:12px 0 10px}';
+    document.head.append(native);
     const popup = document.createElement('div');
     popup.className = 'usercard-wrap';
-    popup.style.cssText = 'position:fixed;z-index:12000;top:120px;right:90px;width:320px';
+    popup.style.cssText = 'position:fixed;z-index:12000;top:120px;right:90px';
     popup.innerHTML = '<div class="user-card-m-exp"><div class="bg" style="background-image:linear-gradient(130deg,#3c515d,#73968f)"></div>'
-      + '<div class="user-info-wrapper"><div class="face" style="background:#56857e"></div><div class="info">'
+      + '<div class="user-info-wrapper"><a class="face"><div class="bili-avatar"><img class="bili-avatar-face" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 56 56%22%3E%3Crect width=%2256%22 height=%2256%22 fill=%22%2356857e%22/%3E%3C/svg%3E"></div></a><div class="info">'
       + '<div class="user"><a class="name">山间记录</a></div><div class="sign">记录路上遇见的山、河和人。更新长途徒步与独立纪录片。</div>'
       + '<div class="social"><span><span>24.6万</span><span class="tip_text">粉丝</span></span><span><span>128</span><span class="tip_text">投稿</span></span></div>'
-      + '<div class="btn-box"><a class="follow-btn">关注</a><a class="message-btn">发消息</a></div></div></div></div>';
+      + '<div class="btn-box"><a class="like">关注</a><a class="message">发消息</a></div></div></div></div>';
     document.body.append(popup);
   });
   const profile = page.locator('.usercard-wrap .user-card-m-exp');
   assert.equal(await profile.locator('.social').evaluate(el => getComputedStyle(el).display), 'grid');
   assert.equal(await profile.locator('.sign').evaluate(el => getComputedStyle(el).webkitLineClamp), '2');
+  const cardLayout = await profile.evaluate(card => {
+    const wrap = card.querySelector('.user-info-wrapper');
+    const face = card.querySelector('.face');
+    const avatarImg = card.querySelector('.bili-avatar-face');
+    const info = card.querySelector('.info');
+    const user = card.querySelector('.user');
+    const btns = card.querySelector('.btn-box');
+    const c = card.getBoundingClientRect();
+    const f = face.getBoundingClientRect();
+    const a = avatarImg.getBoundingClientRect();
+    const i = info.getBoundingClientRect();
+    const b = btns.getBoundingClientRect();
+    return {
+      wrapperDisplay: getComputedStyle(wrap).display,
+      userMarginTop: parseFloat(getComputedStyle(user).marginTop),
+      infoBelowFace: i.top >= f.bottom + 10,
+      leftAligned: Math.abs(i.left - f.left),
+      sidePaddingDelta: Math.abs((i.left - c.left) - (c.right - i.right)),
+      btnWidthDelta: Math.abs(b.width - i.width),
+      bottomPad: c.bottom - b.bottom,
+      avatarW: Math.round(a.width),
+      avatarH: Math.round(a.height),
+    };
+  });
+  assert.equal(cardLayout.wrapperDisplay, 'block', JSON.stringify(cardLayout));
+  assert.equal(cardLayout.userMarginTop, 0, JSON.stringify(cardLayout));
+  assert(cardLayout.infoBelowFace, JSON.stringify(cardLayout));
+  assert(cardLayout.leftAligned <= 1, JSON.stringify(cardLayout));
+  assert(cardLayout.sidePaddingDelta <= 1, JSON.stringify(cardLayout));
+  assert(cardLayout.btnWidthDelta <= 1, JSON.stringify(cardLayout));
+  assert(cardLayout.bottomPad >= 18, JSON.stringify(cardLayout));
+  assert.equal(cardLayout.avatarW, 56, JSON.stringify(cardLayout));
+  assert.equal(cardLayout.avatarH, 56, JSON.stringify(cardLayout));
   await profile.screenshot({ path: join(out, 'creator-card.png') });
 
   await page.evaluate(() => {

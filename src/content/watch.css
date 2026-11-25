@@ -512,7 +512,7 @@ html.margin-watch .video-page-card-small .info { align-self: center; }
 /* #2：UP 主悬停名片（B 站 .usercard-wrap）换成映间风格：大圆角卡、渐隐横幅、衬线名字、等宽统计、胶囊按钮 */
 html.margin-watch .usercard-wrap { border: 0 !important; background: transparent !important; box-shadow: none !important; }
 html.margin-watch .usercard-wrap .user-card-m-exp {
-  max-width: calc(100vw - 24px) !important; border: 0 !important; border-radius: 20px !important; overflow: hidden !important;
+  max-width: calc(100vw - 24px) !important; min-height: 0 !important; border: 0 !important; border-radius: 20px !important; overflow: hidden !important;
   background: var(--m-surface) !important; color: var(--m-ink) !important;
   box-shadow: 0 0 0 1px var(--m-line), 0 24px 48px -12px rgb(0 0 0 / .22), 0 8px 16px -8px rgb(0 0 0 / .12) !important;
   animation: m-ucard-in 200ms cubic-bezier(.23, 1, .32, 1) both;
@@ -520,11 +520,13 @@ html.margin-watch .usercard-wrap .user-card-m-exp {
 @keyframes m-ucard-in { from { opacity: 0; } }
 html.margin-watch .usercard-wrap .bg { height: 96px !important; border-radius: 0 !important; background-size: cover !important; background-position: center !important;
   -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); }
-html.margin-watch .usercard-wrap .user-info-wrapper { padding: 0 20px !important; margin-top: -36px !important; position: relative; }
-html.margin-watch .usercard-wrap .face { position: relative !important; left: auto !important; top: auto !important; display: block !important; width: 56px !important; height: 56px !important; margin-bottom: 12px; border-radius: 50%; box-shadow: 0 0 0 3px var(--m-surface); }
+html.margin-watch .usercard-wrap .user-info-wrapper { display: block !important; box-sizing: border-box !important; width: auto !important; padding: 0 20px 20px !important; margin-top: -36px !important; position: relative; }
+html.margin-watch .usercard-wrap .face { position: relative !important; left: auto !important; top: auto !important; display: block !important; width: 56px !important; height: 56px !important; margin: 0 0 12px !important; border-radius: 50%; background: var(--m-surface); box-shadow: 0 0 0 3px var(--m-surface); }
 html.margin-watch .usercard-wrap .face .bili-avatar { width: 56px !important; height: 56px !important; }
-html.margin-watch .usercard-wrap .info { margin-left: 0 !important; padding: 0 !important; width: auto !important; }
-html.margin-watch .usercard-wrap .user { display: flex !important; align-items: center; gap: 6px; flex-wrap: wrap; height: auto !important; }
+html.margin-watch .usercard-wrap .face .bili-avatar-face { width: 100% !important; height: 100% !important; object-fit: cover; }
+html.margin-watch .usercard-wrap .info { display: block !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
+html.margin-watch .usercard-wrap .user { display: flex !important; align-items: center; gap: 6px; flex-wrap: wrap; height: auto !important; margin: 0 !important; }
+html.margin-watch .usercard-wrap .user > * { margin: 0 !important; }
 html.margin-watch .usercard-wrap .user .name { font: 650 18px/1.35 var(--m-sans) !important; color: var(--m-ink) !important; max-width: min(220px, 100%); overflow-wrap: anywhere; }
 html.margin-watch .usercard-wrap .user .name:hover { color: var(--m-accent) !important; }
 html.margin-watch .usercard-wrap .user-label { border-radius: 999px !important; padding: 0 8px !important; background: #fb7299 !important; }
@@ -532,9 +534,9 @@ html.margin-watch .usercard-wrap .social { display: grid !important; grid-auto-f
 html.margin-watch .usercard-wrap .social > * { display: inline-flex !important; flex-direction: column-reverse; gap: 2px; margin: 0 !important; color: var(--m-muted) !important; font-size: 12px !important; }
 html.margin-watch .usercard-wrap .social > * > span:not(.tip_text) { font: 600 16px/1.2 var(--m-mono) !important; color: var(--m-ink) !important; font-variant-numeric: tabular-nums; }
 html.margin-watch .usercard-wrap .social .tip_text { margin: 0 !important; color: var(--m-muted) !important; font-size: 12px !important; }
-html.margin-watch .usercard-wrap .official-wrapper { margin-top: 8px !important; color: var(--m-muted) !important; font-size: 12px !important; }
+html.margin-watch .usercard-wrap .official-wrapper { margin: 8px 0 0 !important; color: var(--m-muted) !important; font-size: 12px !important; }
 html.margin-watch .usercard-wrap .sign { margin: 10px 0 0 !important; font-size: 13px !important; line-height: 1.6 !important; color: var(--m-muted) !important; height: auto !important; max-height: none; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal !important; overflow-wrap: anywhere; }
-html.margin-watch .usercard-wrap .btn-box { display: flex !important; gap: 8px; margin: 14px 0 0 !important; width: auto !important; padding-top: 12px; border-top: 1px solid var(--m-line); }
+html.margin-watch .usercard-wrap .btn-box { display: flex !important; gap: 8px; margin: 14px 0 0 !important; width: 100% !important; padding-top: 12px; border-top: 1px solid var(--m-line); }
 html.margin-watch .usercard-wrap .btn-box a { flex: 1; display: inline-flex !important; align-items: center; justify-content: center; gap: 4px; width: auto !important; height: 36px !important; margin: 0 !important; border-radius: 999px !important; font-size: 14px !important; font-weight: 500 !important; border: 0 !important; transition: transform 150ms cubic-bezier(.23, 1, .32, 1), opacity 150ms; }
 html.margin-watch .usercard-wrap .btn-box a:active { transform: scale(.97); }
 html.margin-watch .usercard-wrap .btn-box .like { background: var(--m-ink) !important; color: var(--m-surface) !important; }
@@ -542,7 +544,7 @@ html.margin-watch .usercard-wrap .btn-box .like .plus, html.margin-watch .userca
 html.margin-watch .usercard-wrap .btn-box .like.is-followed, html.margin-watch .usercard-wrap .btn-box .liked { background: var(--m-chip) !important; color: var(--m-muted) !important; }
 html.margin-watch .usercard-wrap .btn-box .message { background: var(--m-chip) !important; color: var(--m-ink) !important; box-shadow: inset 0 0 0 1px var(--m-line) !important; }
 html.margin-watch .usercard-wrap .btn-box a:hover { opacity: .88; }
-html.margin-watch .usercard-wrap .latest-archives { margin: 16px 0 0 !important; padding: 16px 20px 20px !important; border-top: 1px solid var(--m-line) !important; width: auto !important; }
+html.margin-watch .usercard-wrap .latest-archives { margin: 0 !important; padding: 16px 20px 20px !important; border-top: 1px solid var(--m-line) !important; width: auto !important; }
 html.margin-watch .usercard-wrap .latest-archives__header { color: var(--m-ink) !important; font-size: 14px !important; font-weight: 600; }
 html.margin-watch .usercard-wrap .latest-archives__more { color: var(--m-muted) !important; font-size: 12px !important; }
 html.margin-watch .usercard-wrap .latest-archives__list { gap: 10px !important; }
