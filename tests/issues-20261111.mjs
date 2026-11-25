@@ -21,9 +21,12 @@ const check = async (name, run) => { await run(); results.push({ name, passed: t
 try {
   await installMocks(ctx, async url => {
     const u = new URL(url), p = u.pathname; requests.push(p);
-    if (p.includes('/fav/folder/info')) return { code: 0, data: folder(Number(u.searchParams.get('media_id')), u.searchParams.get('media_id') === '902' ? 2 : 1) };
+    if (p.includes('/fav/folder/info')) {
+      const id = Number(u.searchParams.get('media_id'));
+      return { code: 0, data: { ...folder(id, [902, 903].includes(id) ? 2 : 1), attr: id === 903 ? 2 : 3, media_count: id === 904 ? 0 : 1 } };
+    }
     if (p.includes('/fav/folder/created/list') && u.searchParams.get('up_mid') === '1') return { code: 0, data: { list: [folder(901)], count: 1, has_more: false } };
-    if (p.includes('/fav/resource/list')) return { code: 0, data: { medias: [{ id: 100, type: 2, bvid: 'BV1mock00001', title: '私密夹内的视频', attr: 0, cover: '', duration: 10, upper: { name: '作者', mid: 3 }, cnt_info: { play: 10, danmaku: 0 } }], has_more: false } };
+    if (p.includes('/fav/resource/list')) return { code: 0, data: { medias: u.searchParams.get('media_id') === '904' ? [] : [{ id: 100, type: 2, bvid: 'BV1mock00001', title: '私密夹内的视频', attr: 0, cover: '', duration: 10, upper: { name: '作者', mid: 3 }, cnt_info: { play: 10, danmaku: 0 } }], has_more: false } };
     if (p.endsWith('/portal')) return { code: 0, data: { up_list: [], live_users: { count: 19, items: Array.from({ length: 8 }, (_, i) => live(i + 1)) } } };
     if (p.endsWith('/GetWebList')) { liveRequests++; return liveFails ? { code: -500, message: '模拟直播失败' } : { code: 0, data: { rooms: Array.from({ length: 19 }, (_, i) => ({ ...live(i + 1), uid: 201 + i })) } }; }
     if (p.endsWith('/feed/all')) return { code: 0, data: { items: [{ id_str: '6001', type: 'DYNAMIC_TYPE_WORD', basic: { comment_type: 17, comment_id_str: '6001' }, modules: { module_author: { mid: 2, name: '动态作者', face: '', pub_ts: Math.floor(Date.now() / 1000) }, module_dynamic: { desc: { text: '评论标识回归' } }, module_stat: { comment: { count: 2 }, like: { count: 0 }, forward: { count: 0 } } } }], has_more: false, offset: '' } };
@@ -37,6 +40,15 @@ try {
     await page.goto('https://space.bilibili.com/1/favlist?fid=901');
     await page.locator('.sp-collection-head h2').getByText('本人私密收藏夹', { exact: true }).waitFor();
     await page.getByText('私密夹内的视频', { exact: true }).waitFor();
+    const head = page.locator('.sp-collection-head');
+    assert.equal(await head.getByRole('link', { name: '播放全部' }).getAttribute('href'), 'https://www.bilibili.com/list/ml901?sid=901');
+    const manage = head.getByRole('link', { name: '原版批量管理' });
+    const opened = page.waitForEvent('popup');
+    await manage.click();
+    const native = await opened;
+    await native.waitForURL('https://space.bilibili.com/1/favlist?fid=901&margin=off');
+    assert.equal(await native.locator('.sp-collection-head').count(), 0);
+    await native.close();
     assert.equal(new URL(page.url()).searchParams.has('margin'), false);
     assert.equal(requests.filter(p => /\/fav\/.*(?:edit|add|del)/.test(p)).length, 0);
     await page.locator('.sp-collection-head').getByRole('button', { name: '收藏夹', exact: true }).click();
@@ -53,6 +65,16 @@ try {
     await page.goto('https://space.bilibili.com/2/favlist?fid=902');
     await page.waitForURL(u => u.searchParams.get('margin') === 'off');
     assert.equal(await page.locator('.sp-collection-head h2').count(), 0);
+  });
+  await check('他人公开夹只能播放，本人空夹仍可进入原版管理', async () => {
+    const head = page.locator('.sp-collection-head');
+    await page.goto('https://space.bilibili.com/2/favlist?fid=903');
+    await page.getByText('私密夹内的视频', { exact: true }).waitFor();
+    assert.equal(await head.getByRole('link', { name: '播放全部' }).getAttribute('href'), 'https://www.bilibili.com/list/ml903?sid=903');
+    assert.equal(await head.getByRole('link', { name: '原版批量管理' }).count(), 0);
+    await page.goto('https://space.bilibili.com/1/favlist?fid=904');
+    await head.getByRole('link', { name: '原版批量管理' }).waitFor();
+    assert.equal(await head.getByRole('link', { name: '播放全部' }).count(), 0);
   });
   await page.goto('https://t.bilibili.com/');
   const card = page.locator('.fd-list > .dy').first(); await card.waitFor();
@@ -88,14 +110,14 @@ try {
   });
   const pop = page.locator('.dp[aria-label="正在直播"]');
   await check('直播更多失败保留已有内容，支持点击重试且不自动重复请求', async () => {
-    await pop.getByRole('button', { name: '加载更多', exact: true }).click();
+    await pop.locator('.dp-list').hover(); await page.mouse.wheel(0, 1000);
     await pop.getByRole('button', { name: '加载失败，重试', exact: true }).waitFor();
     assert.equal(await pop.locator('.dp-row').count(), 8); assert.equal(liveRequests, 1);
     liveFails = false; await pop.getByRole('button', { name: '加载失败，重试', exact: true }).click();
     await pop.locator('.dp-row').nth(15).waitFor(); assert.equal(liveRequests, 2);
   });
   await check('直播逐批展开并去重，第二批不重复请求完整列表', async () => {
-    await pop.getByRole('button', { name: '加载更多', exact: true }).click();
+    await pop.locator('.dp-list').hover(); await page.mouse.wheel(0, 1000);
     await pop.locator('.dp-row').nth(18).waitFor();
     const hrefs = await pop.locator('.dp-row').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
     assert.equal(new Set(hrefs).size, 19); assert.equal(liveRequests, 2); assert.equal(await pop.locator('.dp-more').count(), 0);

@@ -94,6 +94,16 @@ html.margin-live .link-footer { background: var(--m-canvas) !important; border-t
 html.margin-live .link-footer, html.margin-live .link-footer a { color: var(--m-muted) !important; }
 html.margin-live #sections-vm, html.margin-live .room-info-ctnr { background: transparent !important; }
 
+/* 原站礼物栏使用独立的浅色文字和箭头素材。 */
+html.margin-live[data-margin-theme="dark"] #gift-control-vm :is(.gift-panel-switch,.m-guard-ent,.m-recharge-ent) {
+  background-color: var(--m-surface) !important; color: var(--m-ink) !important;
+}
+html.margin-live[data-margin-theme="dark"] #gift-control-vm :is(.gift-panel-switch,.m-guard-ent,.m-recharge-ent):hover { background-color: color-mix(in srgb, var(--m-surface) 88%, var(--m-ink)) !important; }
+html.margin-live[data-margin-theme="dark"] #gift-control-vm :is(.guard-info,.balance-info,.guard-info .title,.balance-info .title,.gift-item .gift-label) { color: var(--m-ink) !important; }
+html.margin-live[data-margin-theme="dark"] #gift-control-vm .gift-panel-switch > .arrow {
+  background: currentColor !important; clip-path: polygon(0 64%, 50% 18%, 100% 64%, 92% 73%, 50% 35%, 8% 73%);
+}
+
 /* 直播首页复用原生分区、卡片与导航，通过它们已有的颜色变量适配主题。 */
 html.margin-live-home {
   --Ga0: var(--m-surface); --Ga1: var(--m-canvas); --Ga2: var(--m-line); --Ga3: var(--graph_bg_thick);

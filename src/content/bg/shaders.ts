@@ -3,9 +3,17 @@ import type { ShaderId } from '../../shared/settings';
 
 // 四款原创背景着色器（WebGL1）。共用 value noise / fbm，配色由 u_c1..u_c3 传入。
 const COMMON = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 uniform vec2 u_res; uniform float u_t; uniform vec3 u_c1; uniform vec3 u_c2; uniform vec3 u_c3; uniform vec3 u_bg;
-float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+float hash(vec2 p){
+#ifndef GL_FRAGMENT_PRECISION_HIGH
+  p=mod(p,31.);
+#endif
+  p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
 float noise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),u.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x), u.y); }
 float fbm(vec2 p){ float v=0., a=.5; mat2 m=mat2(1.6,1.2,-1.2,1.6); for(int i=0;i<5;i++){ v+=a*noise(p); p=m*p; a*=.5; } return v; }
@@ -57,7 +65,7 @@ void main(){
   vec2 uv=gl_FragCoord.xy/u_res; vec2 p=vec2(uv.x*u_res.x/u_res.y, uv.y);
   float t=u_t*.05;
   float w=fbm(vec2(p.x*1.4+t, t*.6));
-  float band=smoothstep(.0,.55,uv.y-.18+w*.35)*smoothstep(1.05,.45,uv.y+w*.25);
+  float band=smoothstep(.0,.55,uv.y-.18+w*.35)*(1.-smoothstep(.45,1.05,uv.y+w*.25));
   float rays=.55+.45*sin(p.x*9.+w*6.+u_t*.15);
   vec3 col=mix(u_c1,u_c2,smoothstep(.2,.8,w));
   col=mix(col,u_c3,smoothstep(.55,1.,uv.y+w*.3));

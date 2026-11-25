@@ -14,9 +14,61 @@ const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'm
 const results = [], errors = [];
 try {
   await installMocks(ctx);
-  await ctx.route('https://search.bilibili.com/**', r => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Results</title>' }));
+  await ctx.route('https://search.bilibili.com/**', r => r.request().resourceType() === 'document' ? r.fulfill({ contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><title>Results</title>
+    <main><div class="search-header"><form class="search-input-wrap" style="display:flex;align-items:center"><input class="search-input-el" name="keyword" type="search" aria-label="本页搜索" value="折射"></form></div></main>` }) : r.fallback());
   const worker = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker'), page = await ctx.newPage();
   page.on('pageerror', e => errors.push(e.message));
+  // The results page belongs to Bilibili: retain its editable query and native submit handler.
+  await worker.evaluate(() => chrome.storage.local.set({ 'margin:settings': { intro:false, theme:'dark', bg:{mode:'off'}, searchStyle:'new', cmdK:true } }));
+  await page.goto('https://search.bilibili.com/all?keyword=%E6%8A%98%E5%B0%84');
+  const head = page.locator('#margin-watch-top .top'), native = page.getByRole('searchbox', {name:'本页搜索'});
+  await head.waitFor();
+  const command = head.getByRole('button', {name:'打开命令面板'}), dialog = page.getByRole('dialog', {name:'搜索与命令'});
+  assert.equal(await command.count(), 1, 'the results header must expose a command button, not hide an unused input');
+  assert.equal(await head.locator('form, input').count(), 0);
+  await native.fill('原生搜索词');
+  await native.press('/');
+  assert.equal(await native.inputValue(), '原生搜索词/');
+  await native.evaluate(input => input.form.addEventListener('submit', e => { e.preventDefault(); input.dataset.submitted = input.value; }));
+  await native.press('Enter');
+  assert.equal(await native.getAttribute('data-submitted'), '原生搜索词/');
+  for (const via of ['click', 'Enter', 'Space']) {
+    if (via === 'click') await command.click(); else { await command.focus(); await command.press(via); }
+    await dialog.waitFor();
+    const field = dialog.getByRole('combobox'); await field.fill('临时命令'); await field.press('Escape');
+    await dialog.waitFor({state:'hidden'});
+    assert.equal(await command.evaluate(el => el.matches(':focus')), true, 'Escape returns to the command launcher');
+    assert.equal(await native.inputValue(), '原生搜索词/');
+  }
+  await page.keyboard.press('Control+k'); await dialog.waitFor(); await dialog.getByRole('combobox').press('Escape');
+  await dialog.waitFor({state:'hidden'});
+  const keyCap = command.locator('kbd');
+  assert.match(await keyCap.innerText(), await page.evaluate(() => /Mac|iPad|iPhone/.test(navigator.platform)) ? /⌘\s*K/ : /Ctrl\s*K/);
+  for (const width of [1440, 1024, 768, 375]) {
+    await page.setViewportSize({width,height:900});
+    const b = await command.boundingBox(), main = await native.boundingBox();
+    assert.ok(b && b.height >= 44 && b.width >= 44 && b.width <= 132 && b.x >= 0 && b.x+b.width <= width, `compact reachable button at ${width}: ${JSON.stringify(b)}`);
+    assert.ok(main && main.width > 2*b.width && main.y >= b.y+b.height, `primary field stays prominent and separate at ${width}`);
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  await worker.evaluate(async () => { const k='margin:settings'; await chrome.storage.local.set({[k]:{...(await chrome.storage.local.get(k))[k],cmdK:false}}); });
+  await page.waitForFunction(() => document.querySelector('#margin-watch-top').shadowRoot.querySelector('.top button[aria-haspopup="dialog"] kbd')?.textContent === '/');
+  const intercepted = await command.evaluate(el => !el.dispatchEvent(new KeyboardEvent('keydown', {key:'k', ctrlKey:true, bubbles:true, composed:true, cancelable:true})));
+  assert.equal(intercepted, false, 'when disabled, Ctrl+K is left to the browser');
+  assert.equal(await dialog.count(), 0);
+  await command.press('/'); await dialog.waitFor(); await dialog.getByRole('combobox').press('Escape');
+  await dialog.waitFor({state:'hidden'});
+  const session = await ctx.newCDPSession(page);
+  const platform = await page.evaluate(() => navigator.platform);
+  await session.send('Emulation.setNavigatorOverrides', {platform:'MacIntel'});
+  await worker.evaluate(async () => { const k='margin:settings'; await chrome.storage.local.set({[k]:{...(await chrome.storage.local.get(k))[k],cmdK:true}}); });
+  await page.reload(); await command.waitFor();
+  assert.equal(await keyCap.innerText(), '⌘ K');
+  await command.press('Meta+k'); await dialog.waitFor();
+  assert.deepEqual(await dialog.locator('.cp-hint').first().locator('kbd').allTextContents(), ['⌘','K']);
+  await dialog.getByRole('combobox').press('Escape'); await dialog.waitFor({state:'hidden'});
+  await session.send('Emulation.setNavigatorOverrides', {platform}); await session.detach();
+  results.push({mode:'results', nativeSubmit:true, commandMouseAndKeyboard:true, shortcutDisabled:true, macShortcut:true});
   for (const mode of ['hero', 'classic', 'new']) {
     await worker.evaluate(opts => chrome.storage.local.set({ 'margin:settings': { intro: false, theme: 'dark', bg: { mode: 'off' }, ...opts } }), { searchStyle: mode === 'new' ? 'new' : 'classic', homeHide: mode === 'hero' ? [] : ['search'] });
     await page.goto('https://www.bilibili.com/');

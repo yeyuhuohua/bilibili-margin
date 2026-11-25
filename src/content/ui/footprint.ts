@@ -8,12 +8,17 @@ import { every } from '../sched';
 const SRC = { local: '本机记录', history: '历史估算' } as const;
 const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 const fmt = (sec: number) => {
-  const s = Math.round(sec || 0), hr = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  const s = Math.floor(sec || 0), hr = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   if (s > 0 && s < 60) return '不到 1 分钟';
   return hr ? `${hr} 小时 ${m} 分` : `${m} 分钟`;
 };
 
 const VIEW_KEY = 'margin:fp-view';
+function dayTitle(date: Date, rec: DayRecord | undefined, seconds: number) {
+  const label = `${date.getMonth() + 1}月${date.getDate()}日`;
+  return seconds ? `${label} · ${fmt(seconds)} · ${SRC[sourceOf(rec) ?? 'local']}` : label;
+}
+const COMPACT_MAX_DAYS = 2;
 const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEK_1 = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -121,13 +126,54 @@ export function createFootprintCard(): HTMLElement {
   }
   let ro: ResizeObserver | null = null;
   // 21st「Glass Calendar」：年 / 月两种视图，月视图是一条可横向滑动的日期条，点哪天看哪天
-  let view: 'year' | 'month' = (() => { try { return localStorage.getItem(VIEW_KEY) === 'month' ? 'month' : 'year'; } catch { return 'year'; } })();
+  const savedView = (() => { try { return localStorage.getItem(VIEW_KEY); } catch { return null; } })();
+  let explicitView = savedView === 'year' || savedView === 'month';
+  let view: 'year' | 'month' = savedView === 'month' ? 'month' : 'year';
   let monthAt = new Date(); monthAt.setDate(1); monthAt.setHours(0, 0, 0, 0);
   let picked: string | null = null, renderedPicked: string | null = null;
   let activity: Activity = {};
   let renderedKey = '', renderedCells: HTMLElement[] = [];
   let thr: [number, number, number] = [900, 2700, 5400];
-  const lv = (rec: DayRecord | undefined) => String(levelOf(secondsOf(rec), thr));
+  function paintDay(cell: HTMLElement, seconds: number) {
+    const level = String(levelOf(seconds, thr));
+    if (cell.dataset.l !== level) cell.dataset.l = level;
+    cell.classList.toggle('fp-glass-day', seconds >= 3 * 3600);
+  }
+
+  // Reuse the existing explicit year/month preference; auto mode needs no storage key.
+  const disclosure = h('button', { type: 'button', class: 'fp-disclosure', onclick: () => {
+    explicitView = el.dataset.view === 'compact'; view = 'year'; picked = null;
+    try { if (explicitView) localStorage.setItem(VIEW_KEY, 'year'); else localStorage.removeItem(VIEW_KEY); } catch { /* session only */ }
+    paint(activity); disclosure.focus({ preventScroll: true });
+  } });
+  const headline = h('h3', { class: 'fp-brief-title' });
+  const week = h('div', { class: 'fp-week', role: 'img' });
+  const dots = Array.from({ length: 7 }, () => h('i', { class: 'fp-cell', 'aria-hidden': 'true' }));
+  week.append(...dots);
+  function compact(today: Date, active: number) {
+    if (el.dataset.view !== 'compact') {
+      ro?.disconnect(); renderedKey = ''; renderedCells = [];
+      el.dataset.view = 'compact'; disclosure.hidden = false; disclosure.textContent = '展开全年'; disclosure.setAttribute('aria-expanded','false');
+      el.replaceChildren(h('div', { class: 'fp-brief-copy' }, h('div', { class: 'eyebrow' }, h('span', { class: 'en' }, 'Footprint'), '足迹'), headline),
+        h('div', { class: 'fp-brief-actions' }, h('div', { class: 'fp-week-wrap' }, h('span', {}, '近七天'), week), disclosure),
+        h('span', { class: 'fp-status fp-brief-status', role: 'status' }, note));
+    }
+    const todayKey = dayKey(today);
+    // Returning after a year is not a first visit. Count only known active days, not empty heartbeat records.
+    const firstDay = active === 1 && activeOf(activity[todayKey]) && !Object.keys(activity).some(k => k < todayKey && activeOf(activity[k]));
+    const title = !active ? '足迹从今天开始' : firstDay ? '今天是你在映间的第 1 天' : `近一年留下了 ${active} 天足迹`;
+    if (headline.textContent !== title) headline.textContent = title;
+    let lit = 0;
+    dots.forEach((dot, i) => {
+      const d = new Date(today); d.setDate(d.getDate() - 6 + i);
+      const k = dayKey(d), seconds = secondsOf(activity[k]);
+      paintDay(dot, seconds);
+      if (dot.dataset.l !== '0') lit++;
+      if (dot.dataset.k !== k) dot.dataset.k = k;
+      dot.title = `${d.getMonth()+1}月${d.getDate()}日 · ${dot.dataset.l === '0' ? '未点亮' : fmt(seconds)}`;
+    });
+    week.setAttribute('aria-label', `最近七天有 ${lit} 天点亮，最右为今天`);
+  }
 
   function paint(data: Activity) {
     activity = data;
@@ -145,7 +191,12 @@ export function createFootprintCard(): HTMLElement {
     const n = Math.round((+today - +start) / 864e5) + 1 + (6 - today.getDay());
     // 分档阈值跟着自己近一年的分布走（活跃日不到 14 天时用 15 / 45 / 90 分钟）
     const yearAgo = dayKey(new Date(+today - 364 * 864e5)), todayK = dayKey(today);
-    thr = levelThresholds(Object.keys(data).filter((k) => k >= yearAgo && k <= todayK).map((k) => secondsOf(data[k])));
+    const windowKeys = Object.keys(data).filter(k => k >= yearAgo && k <= todayK);
+    thr = levelThresholds(windowKeys.map(k => secondsOf(data[k])));
+    const activeDays = windowKeys.filter(k => activeOf(data[k])).length;
+    if (!explicitView && activeDays <= COMPACT_MAX_DAYS) { compact(today, activeDays); return; }
+    disclosure.hidden = activeDays > COMPACT_MAX_DAYS;
+    disclosure.setAttribute('aria-expanded', 'true'); disclosure.textContent = '收起足迹';
     for (let i = 0; i < n; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const k = dayKey(d), rec = data[k], s = secondsOf(rec), future = d > today;
@@ -155,8 +206,8 @@ export function createFootprintCard(): HTMLElement {
       if (view === 'year') {
         const c = (sameView && renderedCells[i]) || h('i', { class: `fp-cell${future ? ' future' : ''}${+d === +today ? ' today' : ''}` });
         if (c.dataset.k !== k) c.dataset.k = k;
-        const l = future ? '0' : lv(rec);
-        if (c.dataset.l !== l) c.dataset.l = l;
+        paintDay(c, future ? 0 : s);
+        if (!sameView && !future) c.tabIndex = +d === +today ? 0 : -1;
         cells.push(c);
       }
     }
@@ -184,8 +235,10 @@ export function createFootprintCard(): HTMLElement {
       text('.fp-foot > span:first-child', note);
       el.querySelectorAll<HTMLElement>('.fp-day-b').forEach((b) => {
         const rec = data[b.dataset.k!];
-        const l = b.hasAttribute('disabled') ? '0' : lv(rec);
-        if (b.dataset.l !== l) b.dataset.l = l;
+        const seconds = b.hasAttribute('disabled') ? 0 : secondsOf(rec);
+        paintDay(b, seconds);
+        const title = dayTitle(new Date(b.dataset.k + 'T00:00:00'), rec, seconds);
+        if (b.title !== title) b.title = title;
         const pressed = String(picked === b.dataset.k);
         if (b.getAttribute('aria-pressed') !== pressed) b.setAttribute('aria-pressed', pressed);
       });
@@ -203,6 +256,7 @@ export function createFootprintCard(): HTMLElement {
     const weeks = Math.ceil(cells.length / 7);
     const stat = (v: string, label: string) => h('div', { class: 'fp-stat' }, h('b', {}, v), h('small', {}, label));
     const legend = h('span', { class: 'fp-legend' }, '少', ...[0, 1, 2, 3, 4].map((l) => { const c = h('i', { class: 'fp-cell' }); c.dataset.l = String(l); return c; }), '多');
+    legend.append(h('i', { class: 'fp-cell fp-glass-day', 'data-l': '4', 'aria-hidden': 'true' }), '≥ 3 小时');
     const graph = h('div', { class: 'fp-graph' },
       h('div', { class: 'fp-months', style: `width:calc(${weeks} * (var(--c) + var(--gp)))` },
         // 最后不足 3 周的月份放不下标签（窄屏格子小时会和上一个月叠在一起），干脆不标，同 GitHub 贡献图
@@ -210,7 +264,7 @@ export function createFootprintCard(): HTMLElement {
       h('div', { class: 'fp-days' }, ...['', '一', '', '三', '', '五', ''].map((x) => h('span', {}, x))),
       h('div', { class: 'fp-cells' }, ...cells),
     );
-    const segBtn = (v: 'year' | 'month', label: string) => h('button', { type: 'button', class: 'fp-seg-b', 'aria-pressed': String(view === v), onclick: () => { if (view === v) return; view = v; try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ } paint(activity); } }, label);
+    const segBtn = (v: 'year' | 'month', label: string) => h('button', { type: 'button', class: 'fp-seg-b', 'aria-pressed': String(view === v), onclick: () => { if (view === v) return; view = v; explicitView = true; try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ } paint(activity); } }, label);
     const seg = h('div', { class: 'fp-seg', role: 'group', 'aria-label': '视图' }, segBtn('year', '年'), segBtn('month', '月'));
     el.dataset.view = view;
     el.replaceChildren(
@@ -224,7 +278,7 @@ export function createFootprintCard(): HTMLElement {
         stat(fmt(secondsOf(t)), `${pLabel}时长`),
         stat(fmt(total), '近一年累计'),
         stat(`${streak} 天`, `当前连续 · 最长 ${best} 天`))),
-      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot', style: 'flex-wrap:wrap;gap:8px' }, h('span', { class: 'fp-status', role: 'status', 'aria-live': 'polite', style: 'flex:1 1 180px;min-width:0;white-space:normal;overflow-wrap:anywhere' }, note), retry, legend)),
+      h('div', { class: 'fp-main' }, view === 'year' ? graph : monthView(data, today), h('div', { class: 'fp-foot', style: 'flex-wrap:wrap;gap:8px' }, h('span', { class: 'fp-status', role: 'status', 'aria-live': 'polite', style: 'flex:1 1 180px;min-width:0;white-space:normal;overflow-wrap:anywhere' }, note), retry, legend, disclosure)),
       tip,
     );
     const fit = () => {
@@ -242,8 +296,8 @@ export function createFootprintCard(): HTMLElement {
     };
     ro?.disconnect();
     if (view === 'year') { requestAnimationFrame(fit); ro = new ResizeObserver(fit); ro.observe(el); }
-    graph.onpointerover = (e) => {
-      const c = (e.target as HTMLElement).closest<HTMLElement>('.fp-cells .fp-cell');
+    const showDay = (target: EventTarget | null) => {
+      const c = target instanceof HTMLElement ? target.closest<HTMLElement>('.fp-cells .fp-cell') : null;
       if (!c || c.classList.contains('future')) { tip.hidden = true; return; }
       const r = activity[c.dataset.k!], d = new Date(`${c.dataset.k}T00:00:00`), s = secondsOf(r), f = firstOf(r);
       tip.replaceChildren(h('b', {}, `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`), h('br'),
@@ -261,6 +315,19 @@ export function createFootprintCard(): HTMLElement {
       tip.style.left = `${Math.round(left)}px`;
       tip.style.top = `${Math.round(top)}px`;
     };
+    graph.onpointerover = e => showDay(e.target);
+    graph.addEventListener('focusin', e => showDay(e.target));
+    graph.addEventListener('focusout', () => { tip.hidden = true; });
+    graph.onkeydown = e => {
+      if (e.key === 'Escape') { tip.hidden = true; return; }
+      const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
+      if (!step || !(e.target instanceof HTMLElement) || !e.target.matches('.fp-cell')) return;
+      e.preventDefault();
+      const next = cells[cells.indexOf(e.target) + step];
+      if (next && !next.classList.contains('future')) {
+        e.target.tabIndex = -1; next.tabIndex = 0; next.focus();
+      }
+    };
     graph.onpointerleave = () => { tip.hidden = true; };
     graph.onscroll = () => { tip.hidden = true; };
   }
@@ -273,8 +340,8 @@ export function createFootprintCard(): HTMLElement {
     for (let i = 1; i <= days; i++) {
       const d = new Date(y, m, i), k = dayKey(d), future = d > today, rec = data[k], s = secondsOf(rec);
       const b = h('button', { type: 'button', class: 'fp-day-b', disabled: future, 'aria-pressed': String(picked === k), title: `${m + 1}月${i}日` }, String(i));
-      b.dataset.l = future ? '0' : lv(rec);
-      if (!future && s) b.title = `${m + 1}月${i}日 · ${fmt(s)} · ${SRC[sourceOf(rec) ?? 'local']}`;
+      paintDay(b, future ? 0 : s);
+      b.title = dayTitle(d, rec, future ? 0 : s);
       b.dataset.k = k;
       if (+d === +today) b.dataset.today = '';
       b.onclick = () => { picked = picked === k ? null : k; paint(activity); };
@@ -320,7 +387,8 @@ export function createFootprintCard(): HTMLElement {
     if (refreshFrame) cancelAnimationFrame(refreshFrame);
     chrome.storage.onChanged.removeListener(changed);
   }, { signal: lifetime.signal });
-  paint(activity);
+  // A failed first read is not an empty history. Preserve the status and recovery action.
+  el.replaceChildren(h('span', { class: 'fp-status', role: 'status' }, note), retry);
   queueMicrotask(() => { void refresh().then(() => runSync()); });
   return el;
 }

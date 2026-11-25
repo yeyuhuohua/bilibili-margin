@@ -5,6 +5,7 @@ import { openLightbox } from './lightbox';
 import { appUrl, openBili } from '../navigation';
 import { decorateSendButton } from './send-button';
 import { observeDynamicGlass } from './dynamic-glass';
+import { commentTools } from './comment-tools';
 import { toast } from './controls';
 
 const img = (src: string, w: number, hgt?: number) => h('img', { src: src ? `${src}@${w}w${hgt ? `_${hgt}h_1c` : ''}.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
@@ -424,21 +425,23 @@ function actions(d: Dyn): HTMLElement {
     const send = h('button', { type: 'button', class: 'dy-send', disabled: '' }, '发布') as HTMLButtonElement;
     let replyTo: { target: Reply; root: string; append: (reply: Reply | null, message: string, name: string) => void } | null = null;
     const replyLabel = h('span');
-    const clearReply = () => { replyTo = null; replyContext.hidden = true; ta.placeholder = '发一条友善的评论'; ta.focus({ preventScroll: true }); };
+    const clearReply = () => { replyTo = null; replyContext.hidden = true; ta.placeholder = '发一条友善的评论'; };
     const replyContext = h('div', { class: 'dy-reply-context', hidden: '' }, replyLabel,
-      h('button', { type: 'button', class: 'dy-reply-cancel', onclick: clearReply }, '取消回复'));
+      h('button', { type: 'button', class: 'dy-reply-cancel', onclick: () => { clearReply(); ta.focus({ preventScroll: true }); } }, '取消回复'));
     const chooseReply = (target: Reply, root: string, append: (reply: Reply | null, message: string, name: string) => void) => {
       replyTo = { target, root, append }; replyLabel.textContent = `回复 @${target.name}`; replyContext.hidden = false;
       ta.placeholder = `回复 @${target.name}`; ta.focus();
     };
+    const tools = commentTools(ta, say);
     let posting = false;
     const post = async () => {
       const msg = ta.value.trim();
-      if (!msg || posting || send.disabled || !d.cmtType || !d.cmtOid) return;
+      if ((!msg && !tools.hasPictures()) || posting || send.disabled || !d.cmtType || !d.cmtOid) return;
       const target = replyTo;
-      posting = true; send.disabled = true; send.setAttribute('aria-busy', 'true'); send.dataset.marginSending = '';
+      posting = true; tools.el.disabled = true; send.disabled = true; send.setAttribute('aria-busy', 'true'); send.dataset.marginSending = '';
       try {
-        const reply = await dynReply(d.cmtType!, d.cmtOid!, msg, target ? { root: target.root, parent: target.target.rpid } : undefined);
+        const reply = await dynReply(d.cmtType!, d.cmtOid!, msg, target ? { root: target.root, parent: target.target.rpid } : undefined, await tools.fields(msg));
+        tools.clear();
         if (ta.value.trim() === msg && replyTo === target) { ta.value = ''; clearReply(); }
         d.stat.comment++; cmt.textContent = `评论 ${fmtCount(d.stat.comment)}`;
         status.textContent = '';
@@ -446,14 +449,14 @@ function actions(d: Dyn): HTMLElement {
         else list.prepend(reply ? replyThread(reply, d.cmtType!, d.cmtOid!, () => gen === commentGen && !!cmtBox?.isConnected, d.mid, chooseReply)
           : h('div', { class: 'dy-r mine' }, h('div', { class: 'dy-r-b' }, h('b', {}, '我'), h('p', {}, msg))));
       } catch (err) { say(`发布失败：${(err as Error).message}`); }
-      finally { posting = false; send.disabled = false; send.removeAttribute('aria-busy'); delete send.dataset.marginSending; }
+      finally { posting = false; tools.el.disabled = false; send.disabled = false; send.removeAttribute('aria-busy'); delete send.dataset.marginSending; }
     };
     send.addEventListener('click', post);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); post(); } });
     const more = h('button', { type: 'button', class: 'dy-comment-more', hidden: '' }, '加载更多评论') as HTMLButtonElement;
     const collapse = h('button', { type: 'button', class: 'dy-comment-collapse', onclick: () => { closeCmt(); cmt.focus({ preventScroll: true }); } }, icon(ICONS.top), '收起评论');
     cmtBox = h('div', { class: 'dy-box dy-cbox', id: `dy-comments-${d.id}`, role: 'region', 'aria-label': `${d.author} 的动态评论` },
-      replyContext, h('div', { class: 'dy-box-row' }, ta, send), list, status, h('div', { class: 'dy-comment-footer' }, more, collapse));
+      replyContext, h('div', { class: 'dy-box-row' }, ta, send), tools.el, list, status, h('div', { class: 'dy-comment-footer' }, more, collapse));
     cmt.setAttribute('aria-controls', cmtBox.id);
     wrap.append(cmtBox); cmt.setAttribute('aria-expanded', 'true');
     observeDynamicGlass(cmtBox);

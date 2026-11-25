@@ -1,6 +1,8 @@
 import { optionalFetch } from './privacy';
 
 export interface ReleaseInfo { at: number; tag: string; name?: string; url: string }
+export class ReleaseRateLimited extends Error {}
+export const RELEASE_PERMISSION = { origins: ['https://github.com/*'] };
 const KEY = 'margin:update-check';
 function valid(value: unknown): value is ReleaseInfo {
   if (!value || typeof value !== 'object') return false;
@@ -18,10 +20,28 @@ export async function checkRelease(force = false): Promise<ReleaseInfo> {
   const cached: unknown = (await chrome.storage.local.get(KEY))[KEY];
   if (!force && valid(cached) && Date.now() >= cached.at && Date.now() - cached.at < 6 * 3600e3) return cached;
   const response = await optionalFetch('update', 'https://api.github.com/repos/jiuyang5354/bilibili-margin/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+  if (force && (response.status === 403 || response.status === 429)) {
+    const limited = response.status === 429 || response.headers.get('x-ratelimit-remaining') === '0'
+      || response.headers.has('retry-after') || /rate limit/i.test(await response.text());
+    if (limited) throw new ReleaseRateLimited('GitHub 更新接口已限流');
+  }
   if (!response.ok) throw new Error(`更新查询失败（HTTP ${response.status}）`);
   const data = await response.json();
   const info: ReleaseInfo = { at: Date.now(), tag: String(data.tag_name || '').replace(/^v/, ''), name: typeof data.name === 'string' ? data.name : undefined, url: data.html_url };
   if (!valid(info) || data.draft || data.prerelease) throw new Error('正式版信息暂不可用');
+  await chrome.storage.local.set({ [KEY]: info });
+  return info;
+}
+
+/** 走发布页跳转：不需要 API，版本号从最终地址里取 */
+export async function checkViaReleasePage(): Promise<ReleaseInfo> {
+  if (!await chrome.permissions.contains(RELEASE_PERMISSION)) throw new Error('未授权读取发布页');
+  const response = await optionalFetch('release-page', 'https://github.com/jiuyang5354/bilibili-margin/releases/latest', { method: 'HEAD' });
+  if (!response.ok) throw new Error('发布页暂时无法访问');
+  const match = /^https:\/\/github\.com\/jiuyang5354\/bilibili-margin\/releases\/tag\/v(\d+(?:\.\d+){1,3})$/.exec(response.url);
+  if (!match) throw new Error('正式版信息暂不可用');
+  const tag = match[1];
+  const info: ReleaseInfo = { at: Date.now(), tag, url: response.url };
   await chrome.storage.local.set({ [KEY]: info });
   return info;
 }

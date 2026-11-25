@@ -14,7 +14,8 @@ import { PageShell } from './shell';
 import { targetOfDyn } from '../filter-targets';
 import { uiReducedMotion as reducedMotion } from '../motion';
 
-const TYPES: [FeedType, string][] = [['all', '全部'], ['video', '视频投稿'], ['pgc', '追番追剧'], ['article', '专栏']];
+type FeedTab = FeedType | 'posts';
+const TYPES: [FeedTab, string][] = [['all', '全部'], ['posts', '图文'], ['video', '视频投稿'], ['pgc', '追番追剧'], ['article', '专栏']];
 const ext = { target: '_blank', rel: 'noopener' };
 const face = (src: string, cls: string, w = 96) => h('img', { class: cls, src: src ? `${src}@${w}w_${w}h_1c.webp` : '', alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
 
@@ -25,7 +26,7 @@ const face = (src: string, cls: string, w = 96) => h('img', { class: cls, src: s
  */
 export class FeedApp {
   readonly shell: PageShell;
-  private type: FeedType;
+  private type: FeedTab;
   private host = 0;
   private offset = '';
   private done = false;
@@ -42,7 +43,7 @@ export class FeedApp {
   constructor(settings: Settings) {
     this.shell = new PageShell(settings, 'feed');
     const t = new URLSearchParams(location.search).get('tab');
-    this.type = t === 'video' || t === 'pgc' || t === 'article' ? t : 'all';
+    this.type = t === 'posts' || t === 'video' || t === 'pgc' || t === 'article' ? t : 'all';
     this.render();
   }
 
@@ -59,14 +60,13 @@ export class FeedApp {
     const sidebar = this.shell.settings.feedLayout === 'sidebar';
     app.classList.toggle('fd-sidebar', sidebar);
     const left = app.querySelector('.fd-left');
-    const right = app.querySelector('.fd-right');
     const bar = app.querySelector('.fd-bar');
     if (sidebar) { if (this.strip.parentElement !== left) left?.append(this.strip); }
     else if (this.strip.nextElementSibling !== bar) bar?.before(this.strip);
     const live = app.querySelector('.fd-live');
-    const liveParent = sidebar ? right : left;
-    if (live && live.parentElement !== liveParent) liveParent?.append(live);
     const follows = app.querySelector<HTMLElement>('.fd-follows');
+    const firstFollow = sidebar ? this.strip : follows;
+    if (live && left && (live.parentElement !== left || (firstFollow && live.nextElementSibling !== firstFollow))) left.insertBefore(live, firstFollow);
     if (follows) follows.hidden = sidebar || !this.shell.settings.feedFollowList;
   }
 
@@ -135,7 +135,7 @@ export class FeedApp {
     const row = (u: { mid: number; name: string; face: string }) => {
       const b = h('button', {
         type: 'button', class: 'fd-follow-row', title: u.name, 'aria-pressed': String(u.mid === this.host),
-        onclick: () => this.setHost(u.mid),
+        onclick: () => this.selectUp(u.mid, true),
       }, face(u.face, 'fd-follow-face', 64), h('span', { class: 'fd-follow-name' }, u.name));
       b.dataset.mid = String(u.mid);
       return b;
@@ -199,6 +199,15 @@ export class FeedApp {
       list, more));
   }
 
+  /** 切换只看某个 UP（0 = 全部），同步头像条选中态。固定可见的入口（侧栏布局的头像条、左侧关注列表）点完回到顶部；
+   *  经典布局的头像条跟着内容滚，能点到它说明已经在顶部，不用滚。 */
+  private selectUp(mid: number, fromFixed: boolean): void {
+    this.host = this.host === mid ? 0 : mid;
+    if (fromFixed) this.shell.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' });
+    this.shell.app.querySelectorAll<HTMLElement>('.fd-follow-row, .fd-ups .fd-up[data-mid]').forEach((x) => x.setAttribute('aria-pressed', String(Number(x.dataset.mid) === this.host)));
+    void this.reload();
+  }
+
   private renderUps(ups: Up[]): void {
     if (!ups.length) return;
     const mk = (mid: number, name: string, img: Node, fresh = false) => {
@@ -206,9 +215,8 @@ export class FeedApp {
       b.dataset.mid = String(mid);
       if (fresh) b.classList.add('fresh');
       b.addEventListener('click', () => {
-        if (this.shell.settings.feedLayout === 'sidebar') this.shell.app.scrollTo({ top: 0, behavior: reducedMotion() ? 'instant' : 'smooth' });
+        this.selectUp(mid, this.shell.settings.feedLayout === 'sidebar');
         b.classList.remove('fresh');
-        this.setHost(mid);
         if (b.parentElement === row) {
           const item = b.getBoundingClientRect(), bounds = row.getBoundingClientRect();
           row.scrollBy({ left: item.left - bounds.left - (bounds.width - item.width) / 2, behavior: reducedMotion() ? 'instant' : 'smooth' });
@@ -272,13 +280,7 @@ export class FeedApp {
       h('li', {}, h('a', { href: `https://search.bilibili.com/all?keyword=${encodeURIComponent(x.keyword)}`, ...ext }, h('i', { class: i < 3 ? 'hot' : '' }, String(i + 1).padStart(2, '0')), h('span', {}, x.name))))));
   }
 
-  private setHost(mid: number): void {
-    this.host = this.host === mid ? 0 : mid;
-    this.shell.app.querySelectorAll<HTMLElement>('.fd-follow-row, .fd-ups .fd-up[data-mid]').forEach((x) => x.setAttribute('aria-pressed', String(Number(x.dataset.mid) === this.host)));
-    this.reload();
-  }
-
-  private setType(t: FeedType): void {
+  private setType(t: FeedTab): void {
     if (t === this.type) return;
     this.type = t;
     this.tabs.querySelectorAll<HTMLElement>('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
@@ -297,29 +299,37 @@ export class FeedApp {
   }
 
   private async load(): Promise<void> {
-    if (this.loading || this.done) return;
+    if (this.loading || this.done || this.status.firstElementChild) return;
     this.loading = true;
     const gen = this.gen;
     const sk = Array.from({ length: this.offset ? 1 : 3 }, () => h('article', { class: 'dy sk' }, h('div', { class: 'line short' }), h('div', { class: 'line' }), h('div', { class: 'line' })));
     this.list.append(...sk);
     try {
-      const r = await followFeed(this.host ? 'all' : this.type, this.offset, this.host);
+      const r = await followFeed(this.host || this.type === 'posts' ? 'all' : this.type, this.offset, this.host);
       if (gen !== this.gen) return;
       // 动态里转发的视频也按标签过滤：先预热标签，再编译保留条件
-      await this.shell.filter.prepare(r.list.map((d) => d.video?.bvid));
+      const items = this.type === 'posts'
+        ? r.list.filter(d => ['DYNAMIC_TYPE_WORD', 'DYNAMIC_TYPE_DRAW', 'DYNAMIC_TYPE_ARTICLE'].includes(d.type))
+        : r.list;
+      await this.shell.filter.prepare(items.map((d) => d.video?.bvid));
       if (gen !== this.gen) return;
       sk.forEach((n) => n.remove());
       const keep = compileDynFilter(this.shell.settings.filters, cachedTags);
-      r.list.filter(keep).forEach((d) => {
+      const shown = items.filter(keep);
+      shown.forEach((d) => {
         const card = dynCard(d, false, true, () => {
           card.toggleAttribute('data-margin-filtered', !keep(d) || !this.shell.filter.allows(targetOfDyn(d)));
         });
         card.toggleAttribute('data-margin-filtered', !this.shell.filter.allows(targetOfDyn(d)));
         this.list.append(card);
       });
+      this.done = !r.more || !r.offset || r.offset === this.offset;
       this.offset = r.offset;
-      this.done = !r.more || !r.offset;
-      if (!this.list.children.length) this.list.append(h('div', { class: 'ms-empty' }, h('p', {}, '这里还空着')));
+      if (this.type === 'posts' && !shown.length && !this.done) {
+        this.status.replaceChildren(h('button', { type: 'button', class: 'ghost', onclick: () => { this.status.replaceChildren(); void this.load(); } }, '继续查找图文'));
+        return;
+      }
+      if (this.done && !this.list.children.length) this.list.append(h('div', { class: 'ms-empty' }, h('p', {}, '这里还空着')));
       else if (this.done) this.status.textContent = '— 到底了 —';
     } catch (e) {
       if (gen !== this.gen) return;

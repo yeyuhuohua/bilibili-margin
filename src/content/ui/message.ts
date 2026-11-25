@@ -155,7 +155,7 @@ export class MessageApp {
       } catch { toast(this.shell.app, '操作失败，稍后再试'); }
       finally { markAll.disabled = false;markAll.textContent = '全部已读'; }
     });
-    this.nav.append(h('a', { class: 'ms-item', href: 'https://message.bilibili.com/?margin=off#/config', target: '_blank', rel: 'noopener' }, '消息设置'), markAll);
+    this.nav.append(h('a', { class: 'ms-item', href: 'https://message.bilibili.com/?margin=off#/config', target: '_blank', rel: 'noopener' }, '原版消息设置'), markAll);
     this.pane = h('section', { class: 'ms-pane' });
     this.shell.main.append(h('div', { class: 'ms' }, this.nav, this.pane));
     // hash 变化：切到已知视图就重渲染；hash 被清空 = 从顶栏「消息」重新进入本页

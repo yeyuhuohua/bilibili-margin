@@ -62,7 +62,7 @@ try{
     await note.waitFor({ timeout: 3000 });
     assert.match(await note.locator('..').textContent(), /你好，这是自动回复/);
     assert.equal(await note.count(), 1);
-    const settings = page.getByRole('link', { name: '消息设置', exact: true });
+    const settings = page.getByRole('link', { name: '原版消息设置', exact: true });
     assert.equal(await settings.getAttribute('href'), 'https://message.bilibili.com/?margin=off#/config');
     const [native] = await Promise.all([page.waitForEvent('popup'), settings.click()]);
     await native.waitForURL('https://message.bilibili.com/?margin=off#/config');

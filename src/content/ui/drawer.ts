@@ -107,7 +107,7 @@ export function createLaterDrawer(toastRoot: () => HTMLElement, filter?: FilterR
     sub.textContent = shown.length ? '右键视频卡片也能加进来' : '右键视频卡片 →「稍后再看」';
     if (!shown.length) { body.replaceChildren(h('div', { class: 'dw-empty' }, icon(ICONS.later), h('p', {}, list.length ? '都被屏蔽词藏起来了' : '列表是空的'))); return; }
     const rowFor = (it: LaterItem, i: number) => {
-      const href = `https://www.bilibili.com/list/watchlater?bvid=${it.bvid}`;
+      const href = `https://www.bilibili.com/list/watchlater?bvid=${it.bvid}&margin_resume=1`;
       const pct = it.progress === -1 ? 100 : it.duration ? Math.min(100, (it.progress / it.duration) * 100) : 0;
       const row = h('a', { class: 'dw-item', href, target: '_blank', rel: 'noopener', style: `--i:${Math.min(i, 12)}` },
         h('span', { class: 'dw-cover' },

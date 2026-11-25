@@ -104,7 +104,7 @@ export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpt
   }
   filters.append(f);
 
-  let url = '', lastKey = '', timer = 0, building = false;
+  let url = '', appliedKey = '', timer = 0, revision = 0, firstMap = true;
   const de = document.documentElement;
   const transparency = matchMedia('(prefers-reduced-transparency: reduce)');
   const canRefract = CSS.supports('backdrop-filter', 'url(#x)') && !/Firefox|^(?=.*Safari)(?!.*(?:Chrome|Chromium|Edg|OPR))/.test(navigator.userAgent);
@@ -117,53 +117,61 @@ export function attachGlass(el: HTMLElement, filters: SVGSVGElement, o: GlassOpt
   };
   // 尺寸来自 ResizeObserver 的 borderBoxSize，不读 offsetWidth（避免强制布局）
   let W = 0, H = 0;
-  const build = () => {
+  const build = (request: number) => {
     const w = W, h = H;
-    if (!liquid || w < 4 || h < 4) return;
-    const key = `${w}x${h}`;
-    if (key === lastKey) return;
-    lastKey = key;
-    building = true;
-    const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || h / 2;
-    const bezel = Math.min(h / 2, w / 2, 22);
+    const limit = Math.min(w, h) / 2;
+    const cssRadius = parseFloat(getComputedStyle(el).borderTopLeftRadius);
+    const radius = Number.isFinite(cssRadius) ? Math.max(0, Math.min(cssRadius, limit)) : limit;
+    const key = `${w}x${h}r${radius}`;
+    if (key === appliedKey) return;
+    const bezel = Math.min(limit, 22);
     void mapUrl(w, h, radius, bezel, o.profile).then((u) => {
-      building = false;
-      if (disposed || !liquid || key !== lastKey) return;
-      if (!u) return;
+      if (!u || disposed || request !== revision) return;
+      appliedKey = key;
       url = u;
       img.setAttribute('href', url);
       paint();
     });
   };
+  const scheduleBuild = () => {
+    // Invalidate in-flight blobs now, not after the resize/radius debounce.
+    const request = ++revision;
+    clearTimeout(timer);
+    if (!liquid || W < 4 || H < 4) return;
+    if (firstMap) { firstMap = false; build(request); }
+    else timer = window.setTimeout(() => build(request), 80);
+  };
   const resize = (en?: ResizeObserverEntry) => {
     const b = en?.borderBoxSize?.[0];
-    if (b) { W = Math.round(b.inlineSize); H = Math.round(b.blockSize); }
-    if (!liquid) return;
-    const w = W, h = H;
-    if (w < 4 || h < 4) return;
+    if (b) {
+      const w = Math.round(b.inlineSize), h = Math.round(b.blockSize);
+      if (w === W && h === H) return;
+      W = w; H = h;
+    }
+    scheduleBuild();
+    if (!liquid || W < 4 || H < 4) return;
     // Keep the existing map stretched with the control during its width animation.
     // Generate exact optics once the dimensions settle instead of on every frame.
-    img.setAttribute('width', String(w)); img.setAttribute('height', String(h));
-    const scale = h * (o.strength ?? .55);
+    img.setAttribute('width', String(W)); img.setAttribute('height', String(H));
+    const scale = H * (o.strength ?? .55);
     displacements.forEach((node, index) => node.setAttribute('scale', String(scale + (o.profile === 'lens' ? [1, 0, -1][index] : 0))));
-    clearTimeout(timer);
-    if (!url && !building) build();
-    else if (`${w}x${h}` !== lastKey) timer = window.setTimeout(build, 80);
   };
   const sizes = new ResizeObserver(([en]) => resize(en)); sizes.observe(el);
   const sync = () => {
     const next = canRefract && de.dataset.marginGlass === 'liquid' && !transparency.matches;
     if (next !== liquid) {
-      liquid = next;clearTimeout(timer);lastKey = '';building = false;
-      if (liquid) resize();
+      liquid = next;
+      resize();
     }
     paint();
   };
   const mode = new MutationObserver(sync); mode.observe(de,{attributes:true,attributeFilter:['data-margin-glass']});
+  document.addEventListener('margin:radius', scheduleBuild);
   transparency.addEventListener('change',sync);
   paint();
   return () => {
     disposed = true; clearTimeout(timer); sizes.disconnect(); mode.disconnect();
+    document.removeEventListener('margin:radius', scheduleBuild);
     transparency.removeEventListener('change', sync); f.remove(); el.style.backdropFilter = previous;
     if (previousMaterial === null) el.removeAttribute('data-material'); else el.setAttribute('data-material', previousMaterial);
   };

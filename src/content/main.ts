@@ -107,7 +107,8 @@ function hideOriginal(): HTMLStyleElement {
   return hide;
 }
 
-const isHome = () => location.hostname === 'www.bilibili.com' && /^\/(?:[a-z]{2}(?:-[A-Za-z]{2,4})?\/?)?(?:index\.html)?$/.test(location.pathname);
+// /tv/ is the drama channel, even though "tv" has the shape of a locale prefix.
+const isHome = () => location.hostname === 'www.bilibili.com' && /^\/(?!tv(?:\/|$))(?:[a-z]{2}(?:-[A-Za-z]{2,4})?\/?)?(?:index\.html)?$/.test(location.pathname);
 
 const isWatch = () => location.hostname === 'www.bilibili.com' && /^\/(?:[a-z]{2}(?:-[A-Za-z]{2,4})?\/)?(?:video\/(?:BV|av)|list\/(?:ml\d|watchlater|\d))/i.test(location.pathname);
 const isSearch = () => location.hostname === 'search.bilibili.com';
@@ -420,8 +421,21 @@ function applyFont(s: Settings): void {
   set('--margin-mono', on && !s.monoNum ? sans : null);
   // 视频 CDN 节点：页面主环境的 cdn.js 同步读 localStorage（v0.47.2）
   try { if (s.enabled && s.cdn) localStorage.setItem('margin:cdn', s.cdn); else localStorage.removeItem('margin:cdn'); } catch { /* 隐私模式 */ }
+  // 连播方式扩展：页面主环境的连播脚本只读这个开关，官方配置一次都不写（v0.61）
+  try {
+    const ext = s.enabled && s.autoplayExt === true ? '1' : '0';
+    if (localStorage.getItem('margin:autoplay-ext') !== ext) localStorage.setItem('margin:autoplay-ext', ext);
+    if (de.getAttribute('data-margin-autoplay-ext') !== ext) {
+      de.setAttribute('data-margin-autoplay-ext', ext);
+      de.dispatchEvent(new CustomEvent('margin:autoplay-ext', { bubbles: true, detail: ext }));
+    }
+  } catch { /* 隐私模式 */ }
   set('--margin-zoom', on && s.zoom !== 100 ? String(s.zoom / 100) : null);
-  set('--margin-rk', on && s.radius !== 100 ? String(s.radius / 100) : null);
+  const radiusScale = on && s.radius !== 100 ? String(s.radius / 100) : '';
+  if (de.style.getPropertyValue('--margin-rk') !== radiusScale) {
+    set('--margin-rk', radiusScale);
+    document.dispatchEvent(new Event('margin:radius'));
+  }
   set('--margin-player-rk', on && !s.playerCorners ? '0' : null);
   set('--margin-cfs', on && s.commentSize !== 14 ? `${s.commentSize}px` : null);
 }
@@ -469,5 +483,24 @@ function checkConflicts(): void {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later, { once: true }); else later();
 }
 if (!offByUrl()) checkConflicts();
+
+// The original editor is opened by the detail page's own menu, not a standalone URL.
+if (window.top === window && location.hostname === 't.bilibili.com' && /^\/\d+\/?$/.test(location.pathname) && offByUrl() && location.hash === '#margin-edit') {
+  history.replaceState(history.state, '', location.pathname + location.search);
+  const selector = '#app > .content > .card > .bili-dyn-item > .bili-dyn-item__main > .bili-dyn-item__header .bili-dyn-more';
+  let opened: Element | null = null;
+  const observer = new MutationObserver(showEditor);
+  function showEditor() {
+    const menu = document.querySelector(selector);
+    if (!menu) return;
+    const edit = Array.from(menu.querySelectorAll<HTMLElement>('.bili-cascader-options__item-label')).find(el => /^(编辑|编辑动态)$/.test(el.textContent?.trim() || ''));
+    if (edit) { observer.disconnect(); edit.click(); return; }
+    const trigger = menu.querySelector('.bili-dyn-more__btn');
+    if (trigger && opened !== trigger) { opened = trigger; trigger.dispatchEvent(new MouseEvent('mouseenter')); }
+  }
+  observer.observe(document.documentElement, { subtree: true, childList: true });
+  showEditor();
+  setTimeout(() => observer.disconnect(), 8000);
+}
 
 start().catch((e) => console.error("[MARGIN]", e));

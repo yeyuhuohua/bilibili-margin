@@ -1,4 +1,4 @@
-import { getWbi } from './http';
+import { getJSON, getWbi } from './http';
 export { searchHistory, rememberSearch, forgetSearch } from './search-history';
 /** 搜索联想、热搜、稍后再看——都是 B 站网页端自己在用的接口（只允许 www.bilibili.com 跨域） */
 export interface Suggest { term: string; html: string }
@@ -60,9 +60,12 @@ export async function watchLater(): Promise<LaterItem[] | null> {
     progress: v.progress ?? 0, author: v.owner?.name ?? '', mid: v.owner?.mid ?? 0, addAt: v.add_at ?? 0,
   }));
 }
-export async function removeWatchLater(aid: number): Promise<boolean> {
+export async function removeWatchLater(videoId: number | string): Promise<boolean> {
   const token = csrf();
   if (!token) return false;
+  const aid = typeof videoId === 'number' ? videoId
+    : (await getJSON<{ aid: number }>('/x/web-interface/view', { bvid: videoId })).aid;
+  if (!Number.isSafeInteger(aid) || aid <= 0) return false;
   const r = await fetch('https://api.bilibili.com/x/v2/history/toview/del', {
     method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ aid: String(aid), csrf: token }),

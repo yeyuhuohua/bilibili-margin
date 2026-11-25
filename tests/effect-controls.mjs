@@ -72,13 +72,15 @@ try {
       for (const theme of ['light', 'dark']) {
         await patch({ theme });
         await page.locator(`${host} .app[data-theme="${theme}"]`).waitFor({ state: 'attached' });
-        const styles = await page.locator(`${host} .app`).evaluate(app => {
-          const elements = ['.search', '.et', '.sheet'];
-          return elements.map(selector => {
-            const el = app.querySelector(selector), style = getComputedStyle(el);
+        const launcher = name === 'search' ? '.top button.top-command' : '.top form.search';
+        const styles = await page.locator(`${host} .app`).evaluate((app, launcher) => {
+          return [launcher, '.et', '.sheet'].map(selector => {
+            const el = app.querySelector(selector);
+            if (!el) throw new Error(`Missing control for flat-surface check: ${selector}`);
+            const style = getComputedStyle(el);
             return { selector, backdrop: style.backdropFilter, transition: style.transitionDuration, background: style.backgroundColor };
           });
-        });
+        }, launcher);
         assert(styles.every(style => style.backdrop === 'none'), JSON.stringify(styles));
         assert(styles.every(style => style.transition.split(',').every(value => parseFloat(value) <= .001)), JSON.stringify(styles));
         await page.screenshot({ path: join(out, `${name}-${theme}.png`) });

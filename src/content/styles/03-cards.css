@@ -10,19 +10,23 @@
 .card .meta > .stat { display: inline-flex; align-items: center; gap: 4px; }
 .card .meta > .author > svg, .card .meta > .stat > svg { flex: none; width: 14px; height: 14px; color: var(--faint); }
 .home-grid .card .meta { gap: 6px; overflow: visible; }
-.home-grid .card .meta > .author { margin-bottom: 2px; font-size: 13px; }
+.home-grid .card .meta > .author { margin-bottom: 2px; font-size: 13px; color: var(--muted); }
 .home-grid .card .meta > .stat { white-space: nowrap; }
-.home-grid .card .meta > .pubtime { margin: 0 0 0 auto; max-width: 100%; overflow-wrap: anywhere; }
-.card-block { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgb(0 0 0 / .55); opacity: 0; transform: translateY(-4px); transition: opacity .2s var(--ease-out), transform .2s var(--ease-out), background .2s var(--ease-out); z-index: 3; }
-.card-block svg { width: 13px; height: 13px; }
-.card:hover .card-block, .card-block:focus-visible { opacity: 1; transform: none; backdrop-filter: blur(10px); }
-.card-block:hover { background: rgb(220 50 60 / .85); }
+.home-grid .card .meta > .pubtime { margin: 0 0 0 auto; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-grid .card .body { container-type: inline-size; }
+.home-grid .card .reason { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+@container (max-width: 255px) {
+  .home-grid .card .meta > .pubtime { flex-basis: 100%; text-align: end; }
+}
+.card:has(> .card-more) { position: relative; }
+.card-more { position: absolute; top: 8px; left: 8px; z-index: 3; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 50%; color: #fff; background: rgb(0 0 0 / .62); opacity: 0; pointer-events: none; }
+.card-more svg { width: 15px; height: 15px; }
+.card:hover > .card-more, .card-more:focus-visible { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .card-more { opacity: 1; pointer-events: auto; } }
 .pv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s var(--ease-out); z-index: 1; background: #000; }
 .cover.playing .pv, .dy-vcover.playing .pv { opacity: 1; }
 .pv-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform-origin: left; transform: scaleX(0); z-index: 2; }
 .cover.playing .dur { opacity: 0; }
-.cover.playing .card-block { width: 28px; padding: 0; justify-content: center; }
-.cover.playing .card-block span { display: none; }
 .coop { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; font: 500 11px/1.5 var(--sans); color: #fff; background: rgb(0 0 0 / .62); pointer-events: none; }
 .cover.playing .coop { opacity: 0; }
 /* v0.51：充电专属等封面角标（空间接口的 elec_arc_badge）；右上角与「稍后再看」同位置，悬停时淡出让位 */
@@ -53,7 +57,8 @@
 .update-version { margin: 20px 0 12px; font: 500 20px/1.4 var(--sans); color: var(--ink); }
 .update-notes { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .update-notes li + li { margin-top: 10px; }
-.update-actions { display: flex; justify-content: flex-end; margin-top: 24px; }
+.update-layer section + section { margin-top: 16px; }
+.update-actions { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 24px; }
 .sheet-body { scrollbar-width: thin; scrollbar-color: var(--line) transparent; flex: 1; overflow-y: auto; padding: 8px 24px 28px; overscroll-behavior: contain; }
 .fav-body { min-height: 0; }
 .fav-footer { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 24px; border-top: 1px solid var(--line); }

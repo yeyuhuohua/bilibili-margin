@@ -1,7 +1,5 @@
 /* 玻璃文件夹：按 21st「Glass Folder Cards」源码原生移植 */
 .gf-root {
-  --gf-px: 0;
-  --gf-py: 0;
   --gf-ease: cubic-bezier(.2, .8, .2, 1);
   --gf-spring: cubic-bezier(.34, 1.36, .5, 1);
   --gf-hinge: 1;
@@ -9,8 +7,7 @@
   --gf-spread: 0px;
   --gf-fan: 0deg;
   --gf-stack: 15px;
-  --gf-ink: #141416;
-  --gf-ink-soft: rgba(20, 20, 22, .55);
+
   position: relative;
   display: inline-block;
   flex: none;
@@ -20,7 +17,7 @@
   -webkit-tap-highlight-color: transparent;
   isolation: isolate;
 }
-.app[data-theme="dark"] .gf-root { --gf-ink: #f5f5f7; --gf-ink-soft: rgba(245, 245, 247, .58); }
+
 .gf-root:hover, .gf-root:focus-within { --gf-hinge: .86; --gf-lift: -96px; --gf-spread: 16px; --gf-fan: 3.2deg; --gf-stack: 30px; }
 /* 扇形收窄：最外侧那张转完也不越过文件夹左右边，不压到旁边的卡 */
 .gf-root[data-open] { --gf-hinge: .86; --gf-lift: -96px; --gf-spread: 16px; --gf-fan: 3.2deg; --gf-stack: 30px; }
@@ -225,7 +222,7 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
   width: 340px;
   height: 198px;
   z-index: 10;
-  overflow: hidden;
+  pointer-events: none;
   transform-origin: 50% 100%;
   transform: scaleY(var(--gf-hinge));
   transition: transform .8s var(--gf-spring), translate 1s var(--gf-ease), opacity 1s var(--gf-ease);
@@ -237,60 +234,46 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
   70% { scale: .996 1.006; }
   100% { scale: 1; }
 }
-.gf-frost {
-  /* Freeze the blurred snapshot while the real thumbnails unfold above it. */
-  --gf-lift: 42px; --gf-spread: 0px; --gf-fan: 0deg; --gf-stack: 15px;
-  position: absolute;
-  left: 0;
-  top: -74px;
-  width: 340px;
-  height: 272px;
-  pointer-events: none;
-  filter: blur(22px) saturate(1.5);
-  transform-origin: 50% 272px;
-  transform: scaleY(calc(1 / var(--gf-hinge)));
-  transition: transform .8s var(--ease-out) var(--gf-spring);
+/* A 14-unit transparent bevel follows the die-cut. Keep its backdrop root open:
+   clipping/filtering the parent would isolate it from the actual photo and fan. */
+.gf-lip {
+  position: absolute; inset: 0 0 auto; height: calc(100% * 68 / 198);
+  display: none; pointer-events: none;
 }
-.gf-frost > * { pointer-events: none; }
-/* 副本模糊到边缘会变透明，垫一层底色，免得真实的视频从玻璃底部透出来 */
-.gf-front { background: linear-gradient(180deg, #e9e9ec, #dcdce0); }
-.app[data-theme="dark"] .gf-root .gf-front { background: linear-gradient(180deg, #232327, #121214); }
-.gf-frost .gf-sheet { transition: none; animation: none; box-shadow: none; }
-.gf-frost .gf-art { transition: none; }
-.gf-tint {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .5) 42%, rgba(252, 252, 252, .93) 100%);
+.gf-edge-tint { fill: rgb(245 251 255 / .28); }
+.app[data-theme="dark"] .gf-edge-tint { fill: rgb(218 233 241 / .17); }
+@media not (prefers-reduced-transparency: reduce) {
+  /* Clip paths can leak a rectangular backdrop tile in scaled Chromium drawers.
+     Mask the filtered output itself, never the parent or the photograph. */
+  .app[data-glass="liquid"]:not(.margin-ui-still) .gf-lip--prism { display: block; mask: url(#gf-pocket-mask); backdrop-filter: url(#gf-prism); }
 }
-.app[data-theme="dark"] .gf-root .gf-tint {
-  background: linear-gradient(180deg, rgba(18, 18, 20, .18) 0%, rgba(14, 14, 16, .62) 46%, rgba(8, 8, 10, .94) 100%);
+.gf-front-rim { width: 100%; height: 100%; }
+.gf-plate { mask: url(#gf-pocket-shoulder); }
+.gf-paper { fill: color-mix(in srgb, var(--surface) 89%, var(--muted)); }
+.gf-hem { stroke: color-mix(in srgb, var(--surface) 70%, transparent); stroke-width: 1.4; }
+.gf-outline { stroke: rgb(255 255 255 / .69); stroke-width: 1.6; }
+.app[data-theme="dark"] .gf-outline { stroke: rgb(230 239 246 / .43); }
+.app[data-glass="flat"] :is(.gf-paper,.gf-edge-tint) { fill: var(--surface); }
+.app[data-glass="flat"] :is(.gf-polish,.gf-hem) { display: none; }
+.app[data-glass="flat"] .gf-plate { mask: none; }
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .app .gf-front .gf-edge-tint { fill: var(--surface); }
+  .app .gf-lip { backdrop-filter: none !important; }
+  .gf-plate { mask: none; }
+  .gf-polish { display: none; }
 }
-.gf-spec {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(260px 200px at 50% 30%, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 70%);
-  mix-blend-mode: soft-light;
-  opacity: .9;
-  transition: transform .6s var(--gf-ease);
-  pointer-events: none;
-}
-.app[data-theme="dark"] .gf-root .gf-spec { mix-blend-mode: screen; opacity: .16; }
-.gf-front-rim { width: 340px; height: 198px; }
-.gf-root:is(:hover,:focus-within) .gf-front-rim { filter: var(--gf-water); }
-.app:is([data-glass="flat"],.margin-ui-still) .gf-front-rim { filter: none !important; }
-.gf-front-rim path { stroke-width: 2.4; transition: stroke-width .3s var(--gf-ease); }
-.app[data-theme="dark"] .gf-root .gf-front-rim { opacity: .55; }
 
 .gf-hit {
   all: unset;
   position: absolute;
   inset: 0;
   z-index: 1;
+  pointer-events: auto;
+  clip-path: url(#gf-pocket-face);
   cursor: pointer;
 }
 .gf-hit:focus-visible ~ .gf-label .gf-title { text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
-.gf-front:has(.gf-hit:focus-visible) .gf-front-rim path { stroke-width: 5; }
+.gf-front:has(.gf-hit:focus-visible) .gf-outline { stroke: var(--accent-text); stroke-width: 4; }
 
 .gf-label {
   position: absolute;
@@ -298,27 +281,26 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 200px;
+  left: 26px; right: 94px; bottom: 30px;
   pointer-events: none;
-  color: var(--gf-ink);
+  color: var(--ink);
 }
-.gf-root[data-place="bottom-left"] .gf-label { left: 28px; bottom: 32px; }
-.gf-root[data-place="top-left"] .gf-label { left: 28px; top: 34px; }
-.gf-root[data-place="top-right"] .gf-label { right: 32px; top: 52px; align-items: flex-start; }
 .gf-title {
   font-size: 18px;
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.3;
   letter-spacing: -.012em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 .gf-meta {
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: .03em;
-  color: var(--gf-ink-soft);
+  color: var(--muted);
   white-space: nowrap;
   animation: gf-roll .5s var(--gf-ease) both;
 }
@@ -326,6 +308,17 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
   from { opacity: 0; translate: 0 7px; filter: blur(3px); }
   to { opacity: 1; translate: 0 0; filter: blur(0); }
 }
+
+/* The personal favlist has two direct-open buttons, not a miniature interactive drawer. */
+.sp-favorite-folder { position: relative; }
+.sp-favorite-folder .cover { aspect-ratio: 1.55; overflow: visible; border-radius: 0; background: none; }
+.sp-folder-art { position: absolute; inset: 0; clip-path: url(#gf-pocket-back); background: color-mix(in srgb, var(--canvas) 72%, var(--muted)); }
+.sp-folder-art > svg { position: absolute; width: 28px; height: 28px; left: 12%; top: 16%; color: var(--muted); }
+.sp-favorite-folder .gf-front { inset: 31% 0 0; width: auto; height: auto; transform: none; }
+.sp-favorite-folder .dur, .sp-favorite-folder .title { position: absolute; left: 7%; right: 7%; z-index: 11; padding: 0; background: none; text-align: start; }
+.sp-favorite-folder .dur { bottom: 9%; color: var(--muted); font: 12px/1.4 var(--mono); }
+.sp-favorite-folder .title { bottom: calc(9% + 21px); min-height: 0; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.sp-favorite-folder .cover:focus-visible .gf-outline { stroke: var(--accent-text); stroke-width: 4; }
 
 /* ---- the key: + or ··· ------------------------------------------------------ */
 .gf-key {
@@ -364,7 +357,6 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 .gf-key--more {
   color: #111113;
   background: linear-gradient(180deg, rgba(255, 255, 255, .92) 0%, rgba(226, 226, 230, .82) 100%);
-  backdrop-filter: blur(10px);
   box-shadow:
     inset 0 1px 0 #fff,
     inset 0 -2px 4px rgba(0, 0, 0, .06),

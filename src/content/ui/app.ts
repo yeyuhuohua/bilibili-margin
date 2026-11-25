@@ -34,9 +34,10 @@ import { createFloatingMenu } from './floating-menu';
 import { ThemeWriter } from './theme-writer';
 import css from '../styles/index';
 import { mountUpdateNotice } from './update-notice';
+import { mountUpdateReminder } from './update-reminder';
 import { attachNavigationGlass } from './navigation-glass';
 
-type Tab = 'rcmd' | 'popular' | 'following' | 'classic';
+type Tab = Settings['homeDefaultTab'];
 type Snap = { tab: Tab; items: Video[]; page: number; appIdx: number; followOffset: string; done: boolean; batchStart: number };
 
 export class MarginApp {
@@ -57,7 +58,7 @@ export class MarginApp {
   private stopPreview: () => void = () => {};
   private dash!: HTMLElement;
   private wx: HTMLElement | null = null;
-  private tab: Tab = 'rcmd';
+  private tab: Tab;
   private recommendations = new RecommendationFeed();
   private recommendationRequest = new AbortController();
   private recommendationScene: RecommendScene = 'scroll';
@@ -98,6 +99,7 @@ export class MarginApp {
   private themeWriter = new ThemeWriter();
 
   constructor(private settings: Settings) {
+    this.tab = settings.homeDefaultTab;
     this.filter = new FilterRuntime(settings);
     this.host = h('div', { id: 'margin-root' });
     this.root = this.host.attachShadow({ mode: 'open' });
@@ -168,7 +170,7 @@ export class MarginApp {
     this.dash.hidden = !s.footprint && !s.weather;
   }
 
-  private cardOpts() { return { onBlock: (x: Video) => this.blockUp(x), onDislike: (x: Video, el: HTMLElement) => this.nope(x, el), hide: new Set<string>(this.settings.homeHide), inlineTime: true }; }
+  private cardOpts() { return { more: true, hide: new Set<string>(this.settings.homeHide), inlineTime: true }; }
 
   /** 复用最近两轮常见长度的列表，限制引用数，长时间翻页时可以回收旧节点。 */
   private cardFor(v: Video, index: number): HTMLElement {
@@ -404,6 +406,7 @@ export class MarginApp {
     hashOpen();
     addEventListener('hashchange', hashOpen);
     mountUpdateNotice(this.app);
+    mountUpdateReminder(this.app);
 
     this.load();
   }
@@ -624,19 +627,16 @@ export class MarginApp {
     void this.filter.prepare(this.items.map((v) => v.bvid)).then(() => {
       if (gen !== this.gen) return;
       const shown = this.items.filter((v) => !this.gone.has(v.bvid) && this.filter.allows(targetOfVideo(v)));
-      if (top !== undefined) {
-        clearTimeout(this.anchorTimer);
-        this.app.style.overflowAnchor = 'none';
-      }
+      const restoreTop = top ?? this.app.scrollTop;
+      clearTimeout(this.anchorTimer);
+      this.app.style.overflowAnchor = 'none';
       this.stopPreview();
       const cards = shown.map((v, i) => this.cardFor(v, i));
       cards.forEach(c => c.classList.add('still'));
       this.grid.replaceChildren(...cards);
       this.grid.style.minHeight = '';
-      if (top !== undefined) {
-        this.app.scrollTo({ top, behavior: 'instant' });
-        this.anchorTimer = window.setTimeout(() => { this.app.style.overflowAnchor = ''; }, 600);
-      }
+      this.app.scrollTo({ top: restoreTop, behavior: 'instant' });
+      this.anchorTimer = window.setTimeout(() => { this.app.style.overflowAnchor = ''; }, 600);
       this.fillIfShort();
     });
   }
@@ -724,6 +724,7 @@ export class MarginApp {
     void this.filter.prepare(win.map((v) => v.bvid)).then(() => {
       if (token !== this.batchRender || !this.batchOn()) return;
       const shown = win.filter((v) => !this.gone.has(v.bvid) && this.filter.allows(targetOfVideo(v)));
+      const restoreTop = top ?? this.app.scrollTop;
       // 换批时关掉滚动锚定：旧卡片被整体换掉会让浏览器重新选锚点，把 scrollTop 挪走
       clearTimeout(this.anchorTimer);
       this.app.style.overflowAnchor = 'none';
@@ -733,7 +734,7 @@ export class MarginApp {
       this.grid.replaceChildren(...cards);
       this.padBatch();
       this.status.replaceChildren();
-      if (top !== undefined) this.app.scrollTo({ top, behavior: 'instant' });
+      this.app.scrollTo({ top: restoreTop, behavior: 'instant' });
       this.anchorTimer = window.setTimeout(() => { this.app.style.overflowAnchor = ''; }, 600);
     });
   }

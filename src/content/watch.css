@@ -160,6 +160,17 @@ html.margin-watch .up-panel-container {
   padding: 16px 16px; margin-bottom: 16px; height: auto !important;
 }
 html.margin-watch .up-info-container { margin: 0 !important; }
+/* 原站按窗口宽度决定是否提供展开按钮；空间不足时，按卡片实际宽度换行。 */
+html.margin-watch .membersinfo-normal > .header:not(:has(.fold-btn.unfold)) + .container {
+  flex-wrap: wrap !important;
+  max-height: none !important;
+}
+/* 宽屏原生滚动条每次平移四个成员；改为流式排列，以免窄侧栏跳过成员。 */
+html.margin-watch .membersinfo-wide .scroll-panel { width: 100%; }
+html.margin-watch .membersinfo-wide .scroll-inside {
+  width: 100%; flex-wrap: wrap; transform: none !important;
+}
+html.margin-watch .membersinfo-wide .container > :is(.van-icon-general_back_s, .van-icon-general_enter_s, .general-mask-left, .general-mask-right) { display: none !important; }
 html.margin-watch:not(.margin-wide):not(.margin-webscreen) :is(.right-container, .playlist-container--right) { padding-top: var(--m-author-pad, 0px) !important; }
 html.margin-watch .up-detail-top .up-name { font-weight: 600 !important; color: var(--m-ink) !important; }
 html.margin-watch .up-avatar-wrap .bili-avatar { box-shadow: 0 0 0 1px var(--m-line); border-radius: 50%; }
@@ -187,6 +198,11 @@ html.margin-watch .video-pod, html.margin-watch .base-video-sections-v1, html.ma
   background: var(--m-surface) !important; border: 1px solid var(--m-line) !important; border-radius: var(--m-radius) !important;
 }
 
+/* 「接下来播放」和推荐列表共用一块读面。留出卡片悬停的负边距，不给整栏铺底或裁剪预览。 */
+html.margin-watch .right-container .recommend-list-v1 {
+  box-sizing: border-box; padding: 12px; border-radius: var(--m-radius);
+  background: var(--m-surface); box-shadow: var(--ring);
+}
 html.margin-watch .recommend-list-v1 .rec-title, html.margin-watch .next-play .rec-title {
   font: 600 16px/1 var(--m-serif) !important; letter-spacing: .04em; color: var(--m-ink) !important;
 }
@@ -385,8 +401,7 @@ html.margin-watch .upinfo-btn-panel > .default-btn { transition: transform .15s 
 html.margin-watch .upinfo-btn-panel > .default-btn:active { transform: scale(.97); }
 
 /* 弹幕列表：一行 44px 的标题条 */
-html.margin-watch #danmukuBox .bui-collapse-header { height: 44px !important; line-height: 44px !important; padding: 0 16px !important; }
-html.margin-watch #danmukuBox .bui-collapse-header :is(.danmaku-title, .bui-collapse-title, span) { font-size: 14px !important; font-weight: 600; color: var(--m-ink) !important; }
+html.margin-watch #danmukuBox .bui-collapse-header :is(.danmaku-title, .bui-collapse-title, .bui-dropdown-name) { font-size: 14px !important; font-weight: 600; color: var(--m-ink) !important; }
 
 /* 选集：编号目录 + 进度 */
 html.margin-watch .video-pod { padding: 16px 8px 8px !important; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }

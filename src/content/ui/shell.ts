@@ -1,5 +1,6 @@
 import type { Settings } from '../../shared/settings';
 import { mountUpdateNotice } from './update-notice';
+import { mountUpdateReminder } from './update-reminder';
 import { attachNavigationGlass } from './navigation-glass';
 import { loadSettings } from '../../shared/settings';
 import { BackgroundLayer } from '../bg/background';
@@ -93,6 +94,7 @@ export class PageShell {
     this.app.addEventListener('margin:sheet', () => { const on = !!this.app.querySelector('.sheet-layer[data-open="true"]'); this.app.classList.toggle('sheeted', on); });
     this.root.append(this.app);
     mountUpdateNotice(this.app);
+    mountUpdateReminder(this.app);
     const lg = filtersIn(this.root);
     attachNavigationGlass(this.head, lg);
     this.applyTheme();

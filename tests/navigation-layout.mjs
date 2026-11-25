@@ -29,7 +29,7 @@ try {
  await page.setViewportSize({width:1600,height:1000});
  await seed({feedLayout:'sidebar'});await page.goto('https://t.bilibili.com/');
  await page.locator('#margin-root .fd-left .fd-ups-row .fd-up').first().waitFor();
- await page.locator('#margin-root .fd-right .fd-live').waitFor();
+ await page.locator('#margin-root .fd-left .fd-live + .fd-ups').waitFor();
  const up=page.locator('#margin-root .fd-ups-row .fd-up').first();
  await up.click();assert.equal(await up.getAttribute('aria-pressed'),'true');
  assert.equal(await page.locator('#margin-root .fd-left .fd-ups').count(),1);
@@ -43,7 +43,7 @@ try {
  await page.locator('#margin-root .fm-bar').click();
  await page.locator('#margin-root .fm-item[aria-label="回到顶部"]').click();
  await page.screenshot({path:join(out,'sidebar-light.png')});
- checks.push('146: live card/UP strip switch parents, reload persists, search/selection/back-to-top remain usable');
+ checks.push('146: live card precedes follows in both layouts, reload persists, search/selection/back-to-top remain usable');
  await page.locator('#margin-root .top [aria-label="设置"]').click();
  await page.getByRole('tab',{name:'搜索与顶栏',exact:true}).click();
  const toggle=page.getByRole('switch',{name:'顶栏显示文字',exact:true});await toggle.click();

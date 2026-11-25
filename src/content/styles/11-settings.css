@@ -36,7 +36,7 @@
 @keyframes stg-sec-in { from { opacity: 0; transform: translateY(6px); } }
 .stg-sec-h h3 { margin: 0; font: 500 20px/1.3 var(--serif); letter-spacing: .01em; }
 .stg-sec-h p { margin: 4px 0 8px; font: 12px/1.6 var(--sans); color: var(--muted); }
-.stg-sub { margin: 24px 0 4px; font: 500 12px/1 var(--sans); letter-spacing: .04em; color: var(--faint); }
+.stg-sub { margin: 24px 0 6px; font: 600 15px/1.4 var(--sans); letter-spacing: .025em; color: var(--ink); }
 .stg-main [hidden] { display: none !important; }
 
 .stg-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--ink); font: 12px/1.6 var(--sans); }

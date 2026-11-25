@@ -32,6 +32,24 @@
 .search input::placeholder { color: var(--faint); }
 .search input::-webkit-search-cancel-button { display: none; }
 .search kbd { font: 11px/1 var(--mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--faint); }
+/* The native results field owns the query. Group this compact launcher with the tools, not in the input's position. */
+.app.wt[data-kind="search"] .top { display: flex; gap: clamp(8px, 1.5vw, 20px); }
+.app.wt[data-kind="search"] .brand { margin-inline-end: auto; }
+.app.wt[data-kind="search"] .top .acts { min-width: 0; margin-left: 0; }
+.top-command {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; min-width: 44px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: calc(12px * var(--margin-rk, 1)); background: var(--surface); color: var(--ink);
+  font: 500 13px/1 var(--sans); white-space: nowrap; transition: border-color .15s, color .15s;
+}
+.top-command kbd { padding: 3px 5px; border-radius: calc(4px * var(--margin-rk, 1)); background: var(--chip); color: var(--muted); font: 11px/1 var(--mono); }
+.top-command:hover { color: var(--accent-text); border-color: currentColor; }
+.top-command:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+@media (max-width: 820px) { .app.wt[data-kind="search"] .et { min-width: 0; overflow-x: auto; scrollbar-width: none; } }
+@media (max-width: 560px) {
+  .app.wt[data-kind="search"] .top { gap: 8px; padding-inline: 8px; }
+  .app.wt[data-kind="search"] .acts { gap: 4px; }
+  .top-command { padding: 0 8px; } .top-command kbd { display: none; }
+}
 .acts { display: flex; align-items: center; gap: 10px; justify-self: end; }
 /* Expandable Tabs（21st，原生移植） */
 .et { --et-ease: cubic-bezier(.22, 1, .36, 1); display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .05); }

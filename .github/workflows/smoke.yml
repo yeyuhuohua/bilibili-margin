@@ -41,6 +41,10 @@ jobs:
           node tests/dynamic-inline-comments.mjs
           node tests/dynamic-inline-reply.mjs
           node tests/dynamic-composer-extension.mjs
+      - name: Folder pocket optics and cover-independent labels
+        run: node tests/folder-pocket.mjs
+        env:
+          SMOKE_OUT: smoke-artifacts/folder-pocket
       - name: Card actions, enable switch, private space and update controls
         run: node tests/reported-20261118.mjs
         env:
@@ -86,6 +90,10 @@ jobs:
         run: node tests/pr-completion.mjs
         env:
           SMOKE_OUT: smoke-artifacts/pr-completion
+      - name: Homepage and activity feed preferences
+        run: |
+          node tests/feed-preferences.mjs
+          node tests/feed-follow-select.mjs
       - name: Recommendation batch navigation
         run: node tests/feed-batches.mjs
         env:
@@ -117,8 +125,10 @@ jobs:
         run: node tests/accent-controls.mjs
         env:
           SMOKE_OUT: smoke-artifacts/accent-controls
-      - name: Watch Later creator filters and groups
-        run: pnpm run test:watch-later
+      - name: Watch Later creator filters, groups and cover toggles
+        run: |
+          pnpm run test:watch-later
+          node tests/card-watch-later.mjs
         env:
           SMOKE_OUT: smoke-artifacts/watch-later-groups
       - name: Manual danmaku jump suggestions
@@ -131,6 +141,8 @@ jobs:
         run: pnpm run test:danmaku-airborne
       - name: Background frame pacing
         run: pnpm run test:frame-budget
+      - name: Background shader uptime
+        run: node tests/shader-uptime.mjs
       - name: UI interaction performance
         run: pnpm run test:performance-ui
         env:
@@ -158,6 +170,8 @@ jobs:
       - name: Transparent header over high-contrast backgrounds
         run: |
           pnpm run test:header-surface
+          SMOKE_OUT=smoke-artifacts/header-material node tests/header-material.mjs
+          SMOKE_OUT=smoke-artifacts/native-search-material node tests/native-search-material.mjs
           SMOKE_OUT=smoke-artifacts/native-header node tests/native-header.mjs
         env:
           SMOKE_OUT: smoke-artifacts/header-surface
@@ -269,6 +283,7 @@ jobs:
         run: |
           node tests/settings-page.mjs
           node tests/navigation-layout.mjs
+          node tests/settings-dependencies.mjs
         env:
           SMOKE_OUT: smoke-artifacts/settings-page
       - if: always()

@@ -29,8 +29,10 @@ const SERVICES = {
   'weather-cn': ['www.nmc.cn', '/rest/'],
   sponsor: ['bsbsb.top', '/api/skipSegments/'],
   update: ['api.github.com', '/repos/jiuyang5354/bilibili-margin/releases/latest'],
+  'release-page': ['github.com', '/jiuyang5354/bilibili-margin/releases/latest'],
 } as const;
 type Service = keyof typeof SERVICES;
+
 const pending = new Set<AbortController>();
 let watching = false;
 
@@ -39,8 +41,9 @@ export async function optionalFetch(service: Service, address: string, init: Req
   const url = new URL(address);
   const [host, path] = SERVICES[service];
   const validPath = service === 'sponsor' ? /^\/api\/skipSegments\/[a-f0-9]{4}$/.test(url.pathname)
-    : service === 'weather-cn' ? /^\/rest\/(?:province(?:\/A[A-Z]{2})?|weather)$/.test(url.pathname) : url.pathname === path;
-  if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !validPath || url.hash) throw new Error('外部请求地址不受支持');
+    : service === 'weather-cn' ? /^\/rest\/(?:province(?:\/A[A-Z]{2})?|weather)$/.test(url.pathname)
+    : url.pathname === path;
+  if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !validPath || url.hash || (service === 'release-page' && url.search)) throw new Error('外部请求地址不受支持');
   // Firefox content-script Xrays may expose keys() without a usable Symbol.iterator.
   let badQuery = false;
   url.searchParams.forEach((_value, key) => { if (/token|cookie|auth|csrf|access_key|uid/i.test(key)) badQuery = true; });
@@ -48,7 +51,7 @@ export async function optionalFetch(service: Service, address: string, init: Req
     url.searchParams.forEach((value, key) => { if (url.pathname !== '/rest/weather' || key !== 'stationid' || !/^[a-zA-Z0-9]{5}$/.test(value)) badQuery = true; });
     if (url.pathname === '/rest/weather' && !url.searchParams.has('stationid')) badQuery = true;
   }
-  if ((init.method && init.method !== 'GET') || init.body || badQuery) throw new Error('外部请求包含不允许的参数');
+  if ((init.method && init.method !== 'GET' && !(service === 'release-page' && init.method === 'HEAD')) || init.body || badQuery) throw new Error('外部请求包含不允许的参数');
   const headers = new Headers(init.headers);
   let badHeader = false;
   headers.forEach((_value, key) => { if (!['accept', 'x-ext-version'].includes(key)) badHeader = true; });
@@ -70,7 +73,7 @@ export async function optionalFetch(service: Service, address: string, init: Req
   const timer = setTimeout(abort, 8000);
   pending.add(controller);
   try {
-    return await fetch(url.href, { ...init, headers, credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', signal: controller.signal });
+    return await fetch(url.href, { ...init, headers, credentials: 'omit', referrerPolicy: 'no-referrer', redirect: service === 'release-page' ? 'follow' : 'error', signal: controller.signal });
   } finally {
     clearTimeout(timer);
     pending.delete(controller);

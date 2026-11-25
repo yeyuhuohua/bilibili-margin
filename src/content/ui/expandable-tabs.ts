@@ -1,7 +1,7 @@
 import { h, icon } from './dom';
 import { loadSettings, onSettingsChange } from '../../shared/settings';
 
-// 关闭悬停预览后，滑块只在点选时移动。
+// 此开关只管指针预览；键盘焦点仍应可见。
 let hoverOn = true;
 loadSettings().then((s) => { hoverOn = s.headHover; }).catch(() => {});
 onSettingsChange((s) => { hoverOn = s.headHover; });
@@ -22,6 +22,7 @@ export interface ExpandableTabs {
   thumb: HTMLElement;
   buttons: HTMLElement[];
   select(i: number | null): void;
+  place(): void;
   /** 角标：0 隐藏；数字超过 99 显示 99+；dot=true 只显示小圆点 */
   badge(id: string, n: number, dot?: boolean): void;
 }
@@ -29,35 +30,32 @@ export interface ExpandableTabs {
 /** 21st「Expandable Tabs」的原生移植；按钮保持固定宽度，滑块预览悬停项。 */
 export function createExpandableTabs(items: TabItem[], onChange?: (i: number | null) => void): ExpandableTabs {
   const el = h('nav', { class: 'et', 'aria-label': '快捷入口' });
-  // 液态玻璃滑块：事件发生时定位，CSS 负责可打断的短过渡。
+  // 事件只定位指示片；折射留在外壳，CSS 负责可打断的短过渡。
   const thumb = h('span', { class: 'et-thumb', 'aria-hidden': 'true' });
   el.append(thumb);
   const buttons: HTMLElement[] = [];
   const byId = new Map<string, HTMLElement>();
   let selected: number | null = null;
   let hoverT = 0;
-  /** 悬停预览的项（-1 = 没有）：只移动指示条，不选中、不改变任何宽度（#11） */
-  let hover = -1;
+  // 预览不等于选中：鼠标离开恢复键盘焦点，焦点离开恢复点选项。
+  let hover: number | null = null, focused: number | null = null;
 
   const place = () => {
-    const i = hover >= 0 ? hover : selected;
+    const i = hover ?? focused ?? selected;
     const b = i === null ? null : buttons[i];
-    if (!b || !b.getClientRects().length) return;
+    if (!b || !b.getClientRects().length) { thumb.removeAttribute('data-on'); return; }
     thumb.style.translate = `${b.offsetLeft}px 0`;
     thumb.style.width = `${b.offsetWidth}px`;
     thumb.style.top = `${b.offsetTop}px`;
     thumb.style.height = `${b.offsetHeight}px`;
+    thumb.setAttribute('data-on', '');
   };
 
   const select = (i: number | null) => {
     if (i === selected) return;
     selected = i;
     buttons.forEach((b, j) => b.toggleAttribute('data-selected', j === i));
-    if (i === null) thumb.removeAttribute('data-on');
-    else {
-      place();
-      thumb.setAttribute('data-on', '');
-    }
+    place();
     onChange?.(i);
   };
 
@@ -68,13 +66,16 @@ export function createExpandableTabs(items: TabItem[], onChange?: (i: number | n
     const b = it.href
       ? h('a', { class: 'act et-btn', href: it.href, target: '_blank', rel: 'noopener', 'aria-label': it.title, title: it.title }, icon(it.icon), label)
       : h('button', { class: 'act et-btn', type: 'button', 'aria-label': it.title, title: it.title }, icon(it.icon), label);
-    b.addEventListener('click', () => { clearTimeout(hoverT); hover = -1; if (selected === idx) place(); else select(idx); it.run?.(); });
-    // 悬停只预览，不执行动作；离开后回到点选的那一项。
+    b.addEventListener('click', () => { clearTimeout(hoverT); hover = null; if (selected === idx) place(); else select(idx); it.run?.(); });
+    b.addEventListener('focus', () => {
+      if (!b.matches(':focus-visible')) return;
+      clearTimeout(hoverT); hover = null; focused = idx; place();
+    });
+    b.addEventListener('blur', () => { if (focused === idx) { focused = null; place(); } });
     b.addEventListener('pointerenter', (e) => {
       if ((e as PointerEvent).pointerType === 'touch' || !hoverOn) return;
       clearTimeout(hoverT);
       hover = idx;
-      thumb.setAttribute('data-on', '');
       place();
     });
     if (it.id) byId.set(it.id, b);
@@ -85,9 +86,8 @@ export function createExpandableTabs(items: TabItem[], onChange?: (i: number | n
   el.addEventListener('pointerleave', () => {
     clearTimeout(hoverT);
     hoverT = window.setTimeout(() => {
-      hover = -1;
-      if (selected === null) thumb.removeAttribute('data-on');
-      else place();
+      hover = null;
+      place();
     }, 120);
   });
 
@@ -106,5 +106,5 @@ export function createExpandableTabs(items: TabItem[], onChange?: (i: number | n
     b.setAttribute('aria-label', `${b.querySelector('span')?.textContent ?? ''}（${n > 99 ? '99+' : n} 条新）`);
   };
 
-  return { el, thumb, buttons, select, badge };
+  return { el, thumb, buttons, select, badge, place };
 }

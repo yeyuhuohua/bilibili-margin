@@ -8,8 +8,9 @@ import { openBili } from '../navigation';
 
 /** 视频卡片右键菜单：新标签打开、稍后再看、复制链接 / BV 号、UP 主空间、屏蔽 UP */
 export function bindCardMenu(container: HTMLElement, cm: ContextMenu, toastRoot: () => HTMLElement, opts: { onBlock?: (v: Video) => void; onLater?: () => void; onDislike?: (v: Video, card: HTMLElement) => void } = {}): void {
-  container.addEventListener('contextmenu', (e) => {
-    if (e.shiftKey) return;
+  function open(e: MouseEvent): void {
+    const trigger = (e.target as Element).closest<HTMLElement>('.card-more');
+    if (e.type === 'click' ? !trigger : e.shiftKey) return;
     const card = (e.target as Element).closest('.card');
     const v = card && cardData.get(card);
     if (!v) return;
@@ -33,7 +34,14 @@ export function bindCardMenu(container: HTMLElement, cm: ContextMenu, toastRoot:
     const neg: MenuEntry[] = [];
     if (opts.onDislike && v.trackId) neg.push({ label: '不感兴趣', icon: ICONS.close, run: () => opts.onDislike!(v, card as HTMLElement) });
     if (opts.onBlock) neg.push({ label: `不看「${v.author}」`, icon: ICONS.block, danger: true, run: () => opts.onBlock!(v) });
+    if (e.type === 'click' && trigger) {
+      const rect = trigger.getBoundingClientRect();
+      cm.show(rect.left, rect.bottom + 4, neg, trigger);
+      return;
+    }
     if (neg.length) items.push('separator', ...neg);
     cm.show(e.clientX, e.clientY, items);
-  });
+  }
+  container.addEventListener('contextmenu', open);
+  container.addEventListener('click', open);
 }

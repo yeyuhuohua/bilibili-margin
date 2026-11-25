@@ -4,6 +4,27 @@
   let origin = null;
   const boxOf = event => event.composedPath().find(node => node instanceof HTMLElement && node.localName === 'bili-comment-box');
   const active = () => document.documentElement.classList.contains('margin-skin');
+  document.addEventListener('paste', event => {
+    if (!event.isTrusted || !active() || !event.clipboardData?.files.length) return;
+    const path = event.composedPath(), box = boxOf(event);
+    if (!path.some(node => node instanceof HTMLElement && (node.isContentEditable || node.localName === 'textarea'))) return;
+    const button = box?.shadowRoot?.querySelector('bili-icon[icon="BDC/image_line/3"]')?.closest('button');
+    const input = box?.shadowRoot?.querySelector('bili-comment-pictures-upload')?.uploader?.el;
+    if (!button || button.matches(':disabled,.disabled') || !button.getClientRects().length || !(input instanceof HTMLInputElement)) return;
+    const files = new DataTransfer();
+    for (const file of event.clipboardData.files) if (file.type.startsWith('image/')) files.items.add(file);
+    if (!files.files.length) return;
+    // Let the native tool perform its usual access checks and start its upload queue.
+    const supply = click => {
+      click.preventDefault();
+      input.files = files.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    input.addEventListener('click', supply, { once: true });
+    try { button.click(); } finally { input.removeEventListener('click', supply); }
+  }, true);
   document.addEventListener('click', event => {
     if (!active()) return;
     const box = boxOf(event);

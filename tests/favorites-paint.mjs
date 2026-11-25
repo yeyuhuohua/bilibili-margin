@@ -52,17 +52,22 @@ print(json.dumps(counts))`,join(out,recording?'recording-size.png':'hover.png'),
  assert(labelCheck.length>=6&&labelCheck.every(n=>n>=8),'Rasterized folder labels disappeared despite visible DOM: '+JSON.stringify(labelCheck));
  if(process.env.MEASURE_FOLDER_HOVER){
   await cdp.send('Performance.enable');await page.mouse.move(10,100);await page.waitForTimeout(1000);
-  const snapshot=()=>first.locator('.gf-frost').evaluate(el=>({image:el.querySelector('.gf-art')?.style.transform||'',thumb:getComputedStyle(el.querySelector('.gf-sheet')).transform}));
+  const snapshot=()=>first.evaluate(card=>{
+   const lip=card.querySelector('.gf-lip'); // Also allow the old released build as a measurement baseline.
+   return {filter:lip?getComputedStyle(lip).backdropFilter:getComputedStyle(card.querySelector('.gf-frost')).filter,
+    media:card.querySelector('.gf-front').querySelectorAll('img,canvas').length,
+    thumb:getComputedStyle(card.querySelector('.gf-tilt > .gf-files .gf-sheet')).transform};
+  });
   const closed=await snapshot();await first.locator('.gf-hit').hover();await page.waitForTimeout(1000);const opened=await snapshot();
-  await first.locator('.gf-frost').evaluate(el=>{window.frostMutations=0;window.frostCounter=new MutationObserver(rs=>window.frostMutations+=rs.length);window.frostCounter.observe(el,{subtree:true,attributes:true,attributeFilter:['style']});});
+  await first.evaluate(card=>{window.pocketMutations=0;window.pocketCounter=new MutationObserver(rs=>window.pocketMutations+=rs.length);for(const el of [card.querySelector('.gf-front'),card.getRootNode().getElementById('gf-pocket-defs')].filter(Boolean))window.pocketCounter.observe(el,{subtree:true,attributes:true,childList:true});});
   const values=async()=>Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value]));
   const before=await values();await cdp.send('Tracing.start',{categories:'devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-cc.debug',transferMode:'ReturnAsStream'});
   const frames=await first.evaluate(el=>new Promise(resolve=>{const b=el.getBoundingClientRect(),hit=el.querySelector('.gf-hit'),stamps=[];let n=0;function tick(t){stamps.push(t);hit.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerType:'mouse',clientX:b.x+b.width*(.2+.6*(n%40)/39),clientY:b.y+b.height*.7}));if(++n<150)requestAnimationFrame(tick);else resolve(stamps.slice(1).map((v,i)=>v-stamps[i]));}requestAnimationFrame(tick);}));
   const completed=new Promise(r=>cdp.once('Tracing.tracingComplete',r));await cdp.send('Tracing.end');const {stream}=await completed;let trace='';for(;;){const chunk=await cdp.send('IO.read',{handle:stream});trace+=chunk.data;if(chunk.eof)break;}await cdp.send('IO.close',{handle:stream});
   const after=await values(),events=JSON.parse(trace).traceEvents||[],sum=name=>events.filter(e=>e.name===name&&e.ph==='X').reduce((s,e)=>s+(e.dur||0)/1000,0);
-  const sorted=[...frames].sort((a,b)=>a-b),perf={closed,opened,frostStyleWrites:await page.evaluate(()=>{frostCounter.disconnect();return frostMutations;}),frames:frames.length,p95FrameIntervalMs:sorted[Math.floor(sorted.length*.95)],framesOver25ms:frames.filter(n=>n>25).length,paintMs:sum('Paint'),rasterMs:sum('RasterTask'),paintEvents:events.filter(e=>e.name==='Paint').length,taskMs:(after.TaskDuration-before.TaskDuration)*1000,styleMs:(after.RecalcStyleDuration-before.RecalcStyleDuration)*1000,scope:'Same isolated Chromium workload; trace/headless frame intervals are not physical device FPS.'};
+  const sorted=[...frames].sort((a,b)=>a-b),perf={closed,opened,pocketWrites:await page.evaluate(()=>{pocketCounter.disconnect();return pocketMutations;}),frames:frames.length,p95FrameIntervalMs:sorted[Math.floor(sorted.length*.95)],framesOver25ms:frames.filter(n=>n>25).length,paintMs:sum('Paint'),rasterMs:sum('RasterTask'),paintEvents:events.filter(e=>e.name==='Paint').length,taskMs:(after.TaskDuration-before.TaskDuration)*1000,styleMs:(after.RecalcStyleDuration-before.RecalcStyleDuration)*1000,scope:'Same isolated Chromium workload; trace/headless frame intervals are not physical device FPS.'};
   writeFileSync(join(out,'hover-'+process.env.MEASURE_FOLDER_HOVER+'.json'),JSON.stringify(perf,null,2));console.log(JSON.stringify({hover:perf}));
-  if(process.env.MEASURE_FOLDER_HOVER!=='baseline'){assert.equal(perf.frostStyleWrites,0,'Pointer movement must not invalidate blurred snapshot images');assert.equal(closed.thumb,opened.thumb,'Blurred thumbnail snapshot must remain stationary through expansion');}
+  if(process.env.MEASURE_FOLDER_HOVER!=='baseline'){assert.equal(perf.pocketWrites,0,'Pointer movement must not rebuild the pocket or its optics');assert.equal(opened.media,0,'The front pocket must not clone cover or fan media');assert.notEqual(closed.thumb,opened.thumb,'The real thumbnail must still rise on hover');}
  }
  assert(await first.evaluate(el=>el.hasAttribute('data-entered')&&['.gf-front','.gf-back','.gf-label'].every(s=>el.querySelector(s).checkVisibility({opacityProperty:true,visibilityProperty:true}))),'First folder body and label must be visible, not only its menu key');
  await dialog.getByRole('button',{name:'关闭',exact:true}).click();await page.locator('#margin-watch-top').getByRole('button',{name:'收藏',exact:true}).click();await page.waitForTimeout(500);

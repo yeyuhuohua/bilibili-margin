@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, REDESIGN_PAGES, REDESIGN_LABELS, type Settings, type Theme } from '../shared/settings';
-import { checkRelease, newerRelease } from '../shared/releases';
+import { checkRelease, checkViaReleasePage, RELEASE_PERMISSION, newerRelease } from '../shared/releases';
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
 
@@ -11,9 +11,48 @@ function paint(s: Settings): void {
 }
 
 (async () => {
+  if (location.hash === '#release-check') {
+    const title = document.createElement('h1'), status = document.createElement('p'), button = document.createElement('button');
+    const manual = document.createElement('a');
+    title.textContent = '检查映间更新';
+    manual.href = 'https://github.com/jiuyang5354/bilibili-margin/releases/latest';
+    manual.textContent = '直接查看官方发布页';
+    status.setAttribute('role', 'status');
+    status.textContent = 'GitHub 更新接口已限流。可授权映间读取官方发布页的版本号。';
+    button.textContent = '授权并检查';
+    button.disabled = true;
+    document.body.replaceChildren(title, status, button, document.createElement('hr'), manual);
+    const settings = await loadSettings();
+    if (!settings.enabled || !settings.privacyExternal) {
+      status.textContent = '可选外部服务已关闭。';
+      button.hidden = true;
+      return;
+    }
+    if (await chrome.permissions.contains(RELEASE_PERMISSION)) button.textContent = '查询官方发布页';
+    button.disabled = false;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        if (!await chrome.permissions.request(RELEASE_PERMISSION)) {
+          status.textContent = '未授权，可直接查看官方发布页。';
+          return;
+        }
+        const release = await checkViaReleasePage();
+        manual.href = release.url;
+        status.textContent = newerRelease(release.tag, chrome.runtime.getManifest().version)
+          ? '有新版本，可前往官方发布页下载。' : '当前已安装此版本或更新版本。';
+      } catch (error) { status.textContent = (error as Error).message || '检查失败，请重试。'; }
+      finally { button.disabled = false; }
+    };
+    return;
+  }
   const manifest = chrome.runtime.getManifest();
   $('#ver').textContent = manifest.version_name || manifest.version;
   let s = await loadSettings();
+  const hours = s.updateInterval;
+  (document.getElementById('cycle') as HTMLElement).textContent = hours
+    ? `更新提醒：${hours === 24 ? '每天' : hours === 168 ? '每周' : hours < 24 ? `每 ${hours} 小时` : `每 ${hours / 24} 天`}`
+    : '更新提醒已关闭，可在设置里开启';
   for (const page of REDESIGN_PAGES) {
     const row = document.createElement('div'); row.className = 'row';
     const label = document.createElement('span'); label.textContent = REDESIGN_LABELS[page];
@@ -55,7 +94,7 @@ function paint(s: Settings): void {
 // 从 Edge 加载项商店安装的版本带 update_url，由浏览器自动更新，不显示提示。
 void (async () => {
   const mf = chrome.runtime.getManifest() as chrome.runtime.Manifest & { update_url?: string };
-  if (mf.update_url || !(await loadSettings()).privacyExternal) return;
+  if (location.hash === '#release-check' || mf.update_url || !(await loadSettings()).privacyExternal) return;
   let info;
   try { info = await checkRelease(); } catch { return; }
   if (newerRelease(info.tag, mf.version)) {

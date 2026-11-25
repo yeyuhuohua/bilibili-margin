@@ -8,7 +8,7 @@ import { h, icon } from './dom';
  */
 export type MenuEntry = 'separator' | { label: string; icon: string; shortcut?: string; danger?: boolean; disabled?: boolean; run: () => void };
 
-export interface ContextMenu { el: HTMLElement; show: (x: number, y: number, items: MenuEntry[]) => void; close: () => void }
+export interface ContextMenu { el: HTMLElement; show: (x: number, y: number, items: MenuEntry[], trigger?: HTMLElement) => void; close: () => void }
 
 export function createContextMenu(): ContextMenu {
   const el = h('div', { class: 'cm', role: 'menu', hidden: '', tabindex: '-1' });
@@ -30,7 +30,9 @@ export function createContextMenu(): ContextMenu {
     closeT = window.setTimeout(() => { el.hidden = true; el.dataset.state = ''; }, 140);
   }
 
-  function show(x: number, y: number, items: MenuEntry[]): void {
+  let opener: HTMLElement | undefined;
+  function show(x: number, y: number, items: MenuEntry[], trigger?: HTMLElement): void {
+    opener = trigger;
     clearTimeout(closeT);
     btns = [];
     el.replaceChildren(...items.map((it) => {
@@ -65,7 +67,7 @@ export function createContextMenu(): ContextMenu {
     else if (e.key === 'Home') { e.preventDefault(); focusAt(en[0]); }
     else if (e.key === 'End') { e.preventDefault(); focusAt(en[en.length - 1]); }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btns[active]?.click(); }
-    else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); close(); }
+    else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); close(); opener?.focus({ preventScroll: true }); }
     else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
       ta += e.key.toLowerCase(); clearTimeout(taTimer); taTimer = window.setTimeout(() => (ta = ''), 500);
       const hit = en.find((i) => btns[i].textContent!.toLowerCase().startsWith(ta));

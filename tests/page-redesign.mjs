@@ -56,7 +56,7 @@ try {
   await popup.locator('summary').click();
   const toggle = popup.getByRole('switch', { name: '动态重设计', exact: true });
   await toggle.waitFor(); assert.equal(await toggle.getAttribute('aria-checked'), 'false'); await toggle.click();
-  assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+  await toggle.and(popup.locator('[aria-checked="true"]')).waitFor();
   await popup.getByRole('switch', { name: '首页重设计', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('#margin-root,#margin-hide') && !!document.body && getComputedStyle(document.body).display !== 'none');
   await popup.getByRole('switch', { name: '首页重设计', exact: true }).click();

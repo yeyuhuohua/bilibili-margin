@@ -120,15 +120,21 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 0;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
   border-radius: 50%;
-  background: none;
+  background: var(--surface);
   color: var(--muted);
   cursor: pointer;
   transition: color .2s var(--ease-out), background .2s var(--ease-out);
 }
-.hd-settings:hover { color: var(--ink); background: var(--chip); }
+.hd-settings:is(:hover, :focus-visible) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--surface)); }
 .hd-settings svg { width: 18px; height: 18px; }
+.home .hd-settings { width: 44px; height: 44px; }
+@media (max-width: 900px) {
+  .home .top .acts { gap: 6px; }
+}
 
 /* 收藏夹：新建卡（和玻璃文件夹同宽同高，虚线框；点开变表单） */
 .fav-new { width: 236px; height: 222px; margin-top: 36px; border-radius: 16px; }
@@ -448,7 +454,6 @@
 .card-later:active { transform: scale(.92); }
 .card-later[data-state="ok"] { background: var(--accent); }
 .card-later.err { background: rgb(220 50 60 / .85); }
-.card-block { right: auto !important; left: 8px; }
 /* 卡片信息行：UP 主 · 播放 · 弹幕。数字不缩，UP 主名可省略 */
 .meta > * { flex: none; }
 .meta > .author { flex: 0 1 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; }
@@ -493,19 +498,6 @@
    侧板本来就是 90% 不透明，去掉模糊、改成实底，观感几乎不变 */
 .app.wt .sheet, .sheet[aria-label="收藏夹"] { backdrop-filter: none; background: var(--surface); }
 .idcl-fixed .idcl-card { cursor: pointer; }
-/* v0.46 卡片左上角操作组：不感兴趣 + 屏蔽 UP（悬停出现；不用毛玻璃，免得每张悬停卡都多一层模糊） */
-.card-acts { position: absolute; top: 8px; left: 8px; z-index: 3; display: flex; gap: 6px; pointer-events: none; }
-.card-acts > button { pointer-events: auto; }
-.card-acts .card-block { position: static; }
-.card-nope { display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgb(0 0 0 / .62); opacity: 0; transform: translateY(-4px); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), background-color 200ms var(--ease-out); }
-.card-nope svg { width: 12px; height: 12px; }
-/* 窄卡片上和「屏蔽 UP」「稍后再看」挤不下：只留图标，文字在 title 里 */
-.card-nope { width: 26px; padding: 0; justify-content: center; }
-.card-nope span { display: none; }
-.card:hover .card-nope, .card-nope:focus-visible { opacity: 1; transform: none; }
-.card-nope:hover { background: rgb(0 0 0 / .82); }
-.card:hover .card-acts .card-block { backdrop-filter: none; background: rgb(0 0 0 / .62); }
-.card:hover .card-acts .card-block:hover { background: rgb(220 50 60 / .85); }
 .card.gone { opacity: 0; scale: .96; transition: opacity 200ms var(--ease-out), scale 200ms var(--ease-out); pointer-events: none; }
 /* v0.47：刻度条可拖 */
 .sr-track { touch-action: none; user-select: none; }

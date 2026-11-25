@@ -58,16 +58,17 @@ try {
       assert.equal(await cover.getAttribute('title'), null, 'cover title creates a browser tooltip over the preview');
       assert(await cover.getAttribute('aria-label'), 'cover link must retain an accessible name');
     });
-    if (name === 'home') await check('93-preview-block-icon', async () => {
+    if (name === 'home') await check('222-preview-block-label', async () => {
       const cover = page.locator(`${host} .card .cover`).first();
       await cover.hover();
+      const button = cover.locator('..').locator('.card-more');
+      const width = (await button.boundingBox()).width;
       await cover.evaluate(node => node.classList.add('playing'));
-      const button = cover.locator('.card-block');
-      assert.equal(await button.locator('span').isVisible(), false);
+      assert(await button.isVisible());
       assert(await button.getAttribute('aria-label'));
-      assert((await button.boundingBox()).width <= 29);
+      assert.equal((await button.boundingBox()).width, width);
       await cover.evaluate(node => node.classList.remove('playing'));
-      assert(await button.locator('span').isVisible());
+      assert(await button.isVisible());
     });
     if (name === 'watch') for (const theme of ['light', 'dark']) await check(`96-native-picture-popup-${theme}`, async () => {
       await worker.evaluate(theme => chrome.storage.local.set({ 'margin:settings': { intro: false, theme, bg: { mode: 'off' } } }), theme);

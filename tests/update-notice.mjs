@@ -11,7 +11,8 @@ const out=resolve('delivery/update-notice');mkdirSync(out,{recursive:true});
 const folder=resolve('dist');
 const manifest=JSON.parse(readFileSync(join(folder,'manifest.json'),'utf8'));
 const current=manifest.version,display=manifest.version_name;
-const notes=JSON.parse(readFileSync('src/shared/updates.ts','utf8').match(/UPDATE_NOTES\s*=\s*(\[[\s\S]*?\]);/)[1]);
+const section=readFileSync('CHANGELOG.md','utf8').split(/^## /m).find(s=>s.startsWith(`[v${display}]`));
+const notes=[...section.matchAll(/^- (.+)/gm)].map(m=>m[1].trim());
 const built=await build({configFile:false,publicDir:false,logLevel:'error',build:{write:false,minify:false,lib:{entry:'src/background/updates.ts',name:'updateProbe',formats:['iife']}}});
 const handler=(Array.isArray(built)?built[0]:built).output.find(x=>x.type==='chunk').code;
 const profile=mkdtempSync(join(tmpdir(),'margin-upgrade-'));
@@ -37,6 +38,7 @@ try {
   const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto('https://www.bilibili.com/');const dialog=page.getByRole('dialog',{name:'映间已更新',exact:true});
   await dialog.waitFor({timeout:7000});assert.equal(await dialog.locator('.update-version').innerText(),display);
+  assert.deepEqual(await dialog.locator('h3').allTextContents(),[...section.matchAll(/^### (.+)/gm)].map(m=>m[1].trim()));
   assert.deepEqual(await dialog.locator('li').allTextContents(),notes);results.push('upgraded home displays installed version and bundled notes');
   await page.screenshot({path:join(out,'dark.png')});
   const box=await dialog.boundingBox();assert(Math.abs(box.x+box.width/2-640)<2);assert(box.width<=520);

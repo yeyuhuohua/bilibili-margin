@@ -93,7 +93,7 @@ export function apiBody(u) {
   if (u.includes('fav/folder/')) return { code: 0, data: 0 };
   if (u.includes('nav/stat')) return { code: 0, data: { following: 218, follower: 1342, dynamic_count: 57 } };
   if (u.includes('/x/relation/followings')) return { code: 0, data: { total: 12,
-    list: P.slice(0, 12).map((v, i) => ({ mid: 100 + i, uname: v.name, face: v.face })),
+    list: P.slice(0, 12).map((v) => ({ mid: v.mid, uname: v.name, face: v.face })),
   } };
   if (u.includes('feed/all/update')) return { code: 0, data: { update_num: 6 } };
   if (u.includes('web-dynamic/v1/detail')) return { code: 0, data: { item: {

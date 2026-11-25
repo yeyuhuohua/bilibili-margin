@@ -49,7 +49,7 @@ try {
     }
   });
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
-  await worker.evaluate(() => chrome.storage.local.set({ 'margin:settings': { intro: false, theme: 'dark' } }));
+  await worker.evaluate(() => chrome.storage.local.set({ 'margin:settings': { intro: false, theme: 'dark', glass: 'liquid' } }));
   const content = page.locator('#margin-root .main > .grid .sp-content-card');
   for (const [path, tab, expected] of [['article', 'article', '第一页图文'], ['upload/opus', 'article', '第一页图文'], ['audio', 'audio', '第 1 页音频'], ['upload/audio', 'audio', '第 1 页音频']]) {
     await page.goto(`https://space.bilibili.com/2/${path}`);
@@ -109,6 +109,30 @@ try {
   results.push('stale article response ignored after tab switch');
   await page.locator('#margin-root .sp-bar [data-tab="video"]').click();
   await page.locator('#margin-root .main > .grid .card:not(.sk)').first().waitFor();
+  for (const theme of ['dark', 'light']) {
+    await worker.evaluate(theme => chrome.storage.local.set({ 'margin:settings': { intro: false, theme, glass: 'liquid' } }), theme);
+    await page.reload();
+    const app = page.locator('#margin-root .app[data-glass="liquid"]');
+    const tabs = app.locator('.sp-bar:not(.stuck) .tabs');
+    await tabs.waitFor();
+    const paint = await tabs.evaluate(el => ({
+      background: getComputedStyle(el).backgroundColor,
+      shadow: getComputedStyle(el).boxShadow,
+      line: getComputedStyle(el.querySelector('[aria-selected="true"]'), '::after').height,
+    }));
+    assert.equal(paint.background, 'rgba(0, 0, 0, 0)', theme + ' space tab background');
+    assert.equal(paint.shadow, 'none', theme + ' space tab shadow');
+    assert.equal(paint.line, '2px');
+    await app.locator('.main > .grid .card:not(.sk)').first().waitFor();
+    await app.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    const pinned = app.locator('.sp-bar.stuck .tabs');
+    await pinned.waitFor();
+    assert.notEqual(await pinned.evaluate(el => getComputedStyle(el).backgroundColor), paint.background);
+    await app.evaluate(el => { el.scrollTop = 0; });
+    await tabs.waitFor();
+    assert.equal(await tabs.evaluate(el => getComputedStyle(el).backgroundColor), paint.background);
+  }
+  results.push('liquid tabs stay clear until pinned in light and dark themes');
   for (const width of [1920, 1280, 1100]) {
     await page.setViewportSize({ width, height: 900 });
     const overflow = await page.locator('#margin-root .sp-bar').evaluate(el => el.scrollWidth - el.clientWidth);

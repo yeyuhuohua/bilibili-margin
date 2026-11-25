@@ -5,6 +5,7 @@ import { forgetSearch, hotSearch, rememberSearch, searchHistory, searchUrl, sugg
 import { h, highlight, icon, ICONS } from './dom';
 import { acceptTextDrop } from './text-drop';
 import { WATCH_SEARCH_KEY } from '../watch-search-keys';
+import { commandKeys } from './command-shortcut';
 
 /**
  * 命令面板：21st「Command Palette」（rafa-porto，Raycast 风格）的原生移植。
@@ -28,11 +29,16 @@ export function createCommandPalette(commands: Command[]): Palette {
   const input = h('input', { type: 'text', placeholder: '搜索视频、UP 主', autocomplete: 'off', spellcheck: 'false', 'aria-label': '搜索', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'cp-list' }) as HTMLInputElement;
   const list = h('div', { class: 'cp-list', id: 'cp-list', role: 'listbox', 'aria-label': '搜索' });
   const side = h('div', { class: 'cp-side', role: 'listbox', 'aria-label': '命令' });
-  const panel = h('div', { class: 'cp-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': '搜索与命令' },
+  const keyHint = h('span', { class: 'cp-hint' });
+  const syncKeyHint = (enabled: boolean) => {
+    keyHint.replaceChildren(...commandKeys(enabled).flatMap((key, i) => i ? [h('i', {}, '+'), h('kbd', {}, key)] : [h('kbd', {}, key)]), h('span', {}, '随时唤出'));
+  };
+  syncKeyHint(true);
+  const panel = h('div', { class: 'cp-panel', id: 'margin-command-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': '搜索与命令' },
     h('div', { class: 'cp-input' }, icon(ICONS.search), input, h('kbd', {}, 'Esc')),
     h('div', { class: 'cp-body' }, list, side),
     h('div', { class: 'cp-foot' },
-      h('span', { class: 'cp-hint' }, h('kbd', {}, 'Ctrl'), h('i', {}, '+'), h('kbd', {}, 'K'), h('span', {}, '随时唤出')),
+      keyHint,
       h('span', { class: 'cp-hint' }, h('span', {}, '选择'), h('kbd', {}, '↑'), h('kbd', {}, '↓'), h('b', {}, '|'), h('span', {}, '切换搜索 / 命令'), h('kbd', {}, 'Tab'), h('b', {}, '|'), h('span', {}, '执行'), h('kbd', {}, '↵')),
     ),
   );
@@ -328,7 +334,9 @@ export function createCommandPalette(commands: Command[]): Palette {
       cleanupMorph();
       hideTimer = window.setTimeout(() => { if (el.dataset.open === 'false') el.hidden = true; }, reducedMotion() ? 0 : 220);
     }
-    (lastFocus as HTMLElement | null)?.blur?.();
+    // Only the plain button can safely regain focus; focusing the old search field would reopen the palette.
+    if (lastFocus instanceof HTMLButtonElement && lastFocus.getAttribute('aria-controls') === panel.id && lastFocus.isConnected) lastFocus.focus({ preventScroll: true });
+    else (lastFocus as HTMLElement | null)?.blur?.();
   }
 
   addEventListener('pagehide', () => close(true));
@@ -337,8 +345,8 @@ export function createCommandPalette(commands: Command[]): Palette {
 
   let cmdK = true;
   searchHistory();
-  loadSettings().then((st) => { cmdK = st.cmdK; animK = 100 / st.paletteSpeed; }).catch(() => {});
-  onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
+  loadSettings().then((st) => { cmdK = st.cmdK; syncKeyHint(cmdK); animK = 100 / st.paletteSpeed; }).catch(() => {});
+  onSettingsChange((n, p) => { if (n.searchStyle !== p.searchStyle) close(); if (n.cmdK !== p.cmdK) syncKeyHint(n.cmdK); cmdK = n.cmdK; animK = 100 / n.paletteSpeed; });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && el.dataset.open === 'true') { e.preventDefault(); close(); return; }
     if (isCommandShortcut(e)) { e.preventDefault(); el.dataset.open === 'true' ? close() : open(); return; }

@@ -1,7 +1,7 @@
 import type { Settings } from '../../shared/settings';
 import { invalidateFollowStatus } from '../api/follow-status';
 import { block, follow, followTags, setUserTags, userTags, spaceInfo, spaceLive, spaceRecent, spaceVideos, spaceCollections, spaceCollectionVideos, createSpaceSearch, type SpaceCollection, type SpaceInfo, type VideoKind, type VideoOrder } from '../api/space';
-import { spaceDynamics } from '../api/dyn';
+import { deleteSpaceDynamic, spaceDynamics } from '../api/dyn';
 import { videoCard, skeleton } from './card';
 import { dynCard, dynData } from './dyn';
 import { segmented, toast } from './controls';
@@ -18,9 +18,10 @@ import { targetOfVideo, targetOfDyn } from '../filter-targets';
 import type { FilterTarget } from '../filter';
 import { openBili } from '../navigation';
 import { spaceArticles, spaceAudio, type SpaceContent } from '../api/space-content';
-import { publicFolders, publicFolder, folderVideos, type Folder } from '../api/fav';
+import { publicFolders, publicFolder, folderPlayUrl, folderUrl, folderVideos, type Folder } from '../api/fav';
 import { nav } from '../api/http';
 import { favoriteActions } from './favorite-actions';
+import { ensureFolderPocket, folderPocketLayers } from './folder-pocket';
 
 type Tab = 'video' | 'dynamic' | 'coin' | 'like' | 'collections' | 'article' | 'audio' | 'favorites';
 type Layout = 'grid' | 'list';
@@ -220,7 +221,8 @@ export class SpaceApp {
       menu.hidden = false;
       setTimeout(() => document.addEventListener('pointerdown', outside, true));
     };
-    menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); followBtn.focus(); } });
+    let menuTrigger = followBtn;
+    menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); menuTrigger.focus(); } });
     const item = (label: string, fn: () => void, danger = false) => h('button', { class: `sp-mi${danger ? ' danger' : ''}`, type: 'button', role: 'menuitem', onclick: fn }, label);
     const setFollowing = (on: boolean) => { invalidateFollowStatus(i.mid); followBtn.classList.toggle('on', on); followBtn.textContent = on ? '已关注' : '+ 关注'; };
     const groups = async () => {
@@ -246,6 +248,7 @@ export class SpaceApp {
     };
     followBtn.setAttribute('aria-haspopup', 'menu');
     followBtn.addEventListener('click', async () => {
+      menuTrigger = followBtn;
       const token = csrf();
       if (!token) { openBili('https://passport.bilibili.com/login'); return; }
       if (followBtn.classList.contains('on')) {
@@ -272,10 +275,16 @@ export class SpaceApp {
     const moreBtn = h('button', { class: 'sp-more', type: 'button', 'aria-label': '更多操作', 'aria-haspopup': 'menu', title: '更多' }, icon(ICONS.more));
     moreBtn.addEventListener('click', () => {
       if (!menu.hidden) { closeMenu(); return; }
-      const token = csrf();
-      if (!token) { openBili('https://passport.bilibili.com/login'); return; }
-      openMenu([item(`拉黑 ${i.name}`, async () => {
+      menuTrigger = moreBtn;
+      const report = item('前往原版空间举报', () => {
         closeMenu();
+        moreBtn.focus();
+        openBili(`https://space.bilibili.com/${i.mid}?margin=off`);
+      });
+      openMenu([report, item(`拉黑 ${i.name}`, async () => {
+        closeMenu();
+        const token = csrf();
+        if (!token) { openBili('https://passport.bilibili.com/login'); return; }
         if (!confirm(`确定把 ${i.name} 加入黑名单？拉黑后对方不能关注你、给你发私信和评论。`)) return;
         const ok = await block(i.mid, true, token).catch(() => false);
         toast(this.shell.app, ok ? '已加入黑名单，可在 B 站设置 → 黑名单管理里移出' : '操作失败，请稍后再试');
@@ -311,6 +320,7 @@ export class SpaceApp {
         return b;
       };
       acts.replaceChildren(
+        h('a', { class: 'sp-msg', href: 'https://space.bilibili.com/' + i.mid + '?margin=off', target: '_blank', rel: 'noopener' }, '原版本人视角'),
         tile('收藏夹', ICONS.fav, () => openPanel('fav', 'https://www.bilibili.com/#fav')),
         tile('历史记录', ICONS.history, () => openPanel('hist', 'https://www.bilibili.com/history')),
         tile('稍后再看', ICONS.later, () => openPanel('later', 'https://www.bilibili.com/#later')));
@@ -424,6 +434,15 @@ export class SpaceApp {
       h('button', { class: 'ghost small', type: 'button', onclick: () => {
         this.folder = null; history.replaceState(null, '', `/${this.mid}/favlist`); this.reload();
       } }, icon(ICONS.back), '收藏夹'), h('h2', {}, folder.title));
+    const link = { target: '_blank', rel: 'noopener' };
+    if (folder.count > 0) {
+      this.collectionHead.append(h('a', { class: 'btn small fav-play-all', href: folderPlayUrl(folder), ...link }, '播放全部'));
+    }
+    void nav().then(user => {
+      if (this.folder === folder && user.isLogin && user.mid === folder.mid) {
+        this.collectionHead.append(h('a', { class: 'ghost small', href: folderUrl(folder) + '&margin=off', ...link }, '原版批量管理'));
+      }
+    }).catch(() => { /* 登录状态不可用时只提供播放入口 */ });
     this.reload();
   }
 
@@ -441,11 +460,14 @@ export class SpaceApp {
 
   private folderCard(folder: Folder): HTMLElement {
     const open = () => this.openFolder(folder);
-    return h('article', { class: 'card sp-collection' },
+    ensureFolderPocket(this.list);
+    return h('article', { class: 'card sp-collection sp-favorite-folder' },
       h('button', { class: 'cover', type: 'button', 'aria-label': `打开${folder.title}`, onclick: open },
-        folder.cover ? h('img', { src: folder.cover, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : icon(ICONS.folder),
+        h('span', { class: 'sp-folder-art', 'aria-hidden': 'true' }, folder.cover
+          ? h('img', { src: folder.cover, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }) : icon(ICONS.folder)),
+        h('span', { class: 'gf-front', 'aria-hidden': 'true' }, ...folderPocketLayers()),
         h('span', { class: 'dur' }, `${folder.count} 个内容${folder.isPrivate ? ' · 私密' : ''}`)),
-      h('button', { class: 'title', type: 'button', onclick: open }, folder.title));
+      h('button', { class: 'title', type: 'button', title: folder.title, onclick: open }, folder.title));
   }
 
   /** 搜索命中合集时，在结果上方给一条入口：点开就是该合集的完整列表（GitHub #113） */
@@ -547,6 +569,7 @@ export class SpaceApp {
               folder.count = Math.max(0, folder.count - 1);
               if (gen === this.gen) {
                 card.remove();
+                if (!folder.count) this.collectionHead.querySelector('.fav-play-all')?.remove();
                 if (!this.list.children.length && this.done) this.status.replaceChildren(h('span', {}, '暂无可播放视频'));
               }
             }));
@@ -627,12 +650,30 @@ export class SpaceApp {
         this.done = r.list.length === 0 || this.list.children.length >= r.total;
         if (!this.list.children.length) this.status.replaceChildren(h('span', {}, this.collection ? '暂无公开视频' : this.kind === 'charging' ? (this.q ? `没有找到「${this.q}」相关的充电视频` : '没有充电专属视频') : '还没有投稿'));
       } else {
-        const r = await spaceDynamics(this.mid, this.offset);
+        const [r, viewer] = await Promise.all([spaceDynamics(this.mid, this.offset), nav().catch(() => null)]);
         if (gen !== this.gen) return;
         skNodes.forEach((n) => (n as Element).remove());
         this.offset = r.offset;
         r.list.forEach((d) => {
           const card = dynCard(d);
+          if (viewer?.isLogin && this.mid === viewer.mid && d.mid === viewer.mid && /^\d+$/.test(d.id) && (d.editable || d.deleteParams)) {
+            const tools = h('span', { class: 'dy-manage' });
+            if (d.editable) tools.append(h('a', { class: 'ghost small', href: 'https://t.bilibili.com/' + d.id + '?margin=off#margin-edit', target: '_blank', rel: 'noopener' }, '编辑'));
+            if (d.deleteParams) {
+              const remove = h('button', { type: 'button', class: 'ghost small' }, '删除') as HTMLButtonElement;
+              remove.onclick = async () => {
+                if (remove.disabled || !confirm('确定删除这条动态吗？删除后无法恢复。')) return;
+                remove.disabled = true;
+                try {
+                  await deleteSpaceDynamic(d);
+                  card.remove();
+                  if (gen === this.gen && this.done && !this.list.children.length) this.status.replaceChildren(h('span', {}, '还没有动态'));
+                } catch (e) { remove.disabled = false; toast(this.shell.app, (e as Error).message); }
+              };
+              tools.append(remove);
+            }
+            card.querySelector(':scope > .dy-eyebrow > .dy-open')?.replaceWith(tools);
+          }
           card.toggleAttribute('data-margin-filtered', !this.allows(targetOfDyn(d)));
           this.list.append(card);
         });

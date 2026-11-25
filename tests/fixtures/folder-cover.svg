@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="728" height="592" viewBox="0 0 728 592">
+  <title>北岸档案 · 离线测试封面 / NORTH SHORE</title>
+  <defs>
+    <linearGradient id="sky" x2=".8" y2="1"><stop stop-color="#1d565c"/><stop offset="1" stop-color="#8fbeb3"/></linearGradient>
+    <linearGradient id="sea" x2=".25" y2="1"><stop stop-color="#345e64"/><stop offset="1" stop-color="#153f48"/></linearGradient>
+    <pattern id="windows" width="22" height="15" patternUnits="userSpaceOnUse"><rect width="22" height="15" fill="#17434a"/><rect x="3" y="1" width="14" height="10" fill="#e1bd89"/></pattern>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h728v592H0z"/>
+  <circle cx="530" cy="181" r="87" fill="#efae78"/>
+  <path d="M0 285l108-39 69 12 134-51 124 51 105-30 138 49 50-6v122H0z" fill="#5e8e87"/>
+  <path d="M0 306l156-53 112 36 129-44 88 34 178-37 65 24v94H0z" fill="#38686b"/>
+  <path fill="url(#sea)" d="M0 301q148-8 272 1t456-2v292H0z"/>
+  <g fill="none" stroke="#acbdac" stroke-width="2" opacity=".64"><path d="M50 353h243m24-4h177m-381 34h233m32 11h154m-198 42h173m-327 10h97m185-86h146"/></g>
+  <path d="M439 302l8-109h23l10 109z" fill="#ebd9ba"/><path d="M443 249h31l2 26h-35z" fill="#bd6452"/>
+  <path d="M442 192h34v9h-34zm1-24h31v6h-31z" fill="#1f4549"/><path d="M447 174h24v17h-24z" fill="url(#windows)"/>
+  <path d="M439 170l20-19 19 19z" fill="#824e46"/><path d="M459 153v-10" stroke="#173d43" stroke-width="3"/>
+  <path d="M0 434q170-18 290-69t238-63l77 22q-208 14-360 94L0 543z" fill="#303f42"/>
+  <path d="M0 426q159-15 288-68t232-63m-517 113q166-24 282-68t236-56" fill="none" stroke="#f0dfb5" stroke-width="3"/>
+  <path d="M36 402v21m55-32v23m54-36v24m54-43v26m54-47v25m55-46v24m53-41v22m53-39v22m50-32v18m43-26v15" fill="none" stroke="#e9d3aa" stroke-width="4"/>
+  <g fill="#f3ede0" font-family="Arial,sans-serif"><text x="46" y="142" font-size="14" letter-spacing="5">FIELD RECORDINGS</text><text x="44" y="194" font-size="44" font-weight="bold" letter-spacing="2">NORTH SHORE</text><text x="515" y="67" font-size="14" letter-spacing="4">COAST / 03</text></g>
+  <g fill="#e1dfca" opacity=".8"><path d="M228 85q12-5 17 3 9-8 19-6-11 2-18 11-7-7-18-8zm67 18q8-3 12 2 7-6 14-5-9 3-14 9-4-5-12-6z"/></g>
+</svg>

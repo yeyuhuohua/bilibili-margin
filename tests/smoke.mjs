@@ -23,7 +23,7 @@ const R = "document.getElementById('margin-root')?.shadowRoot";
 const PAGES = [
   ['home', 'https://www.bilibili.com/', `(() => { const r = ${R}; if (!r) return ['#margin-root'];
     const miss = []; if (r.querySelectorAll('.grid .card').length < 4) miss.push('.grid .card ×4');
-    for (const s of ['header', '.fp-card .fp-cells', '.hero-search, .hs', '.dash']) if (!r.querySelector(s)) miss.push(s);
+    for (const s of ['header', '.fp-card :is(.fp-cells, .fp-week)', '.hero-search, .hs', '.dash']) if (!r.querySelector(s)) miss.push(s);
     // 发布时间的绝对时间要单独一行显示
     const dates = [...r.querySelectorAll('.grid .card .pubtime')].map((e) => e.textContent.trim())
       .filter((t) => t.length === 19 && t[4] === '-' && t[10] === ' ' && t[13] === ':' && t[16] === ':');
@@ -209,6 +209,23 @@ for (const theme of THEMES) {
         samples.push({kind,idle,scrolling,sheet,playing});
       }
       writeFileSync(join(OUT,'background-activity.json'),JSON.stringify({mode:'forced GL test path, not physical GPU FPS',samples},null,2));return miss;
+    });
+
+    await feature('home-block-preview', async () => {
+      await reset(); await page.goto(HOME,{waitUntil:'domcontentloaded'});
+      const cover=page.locator('#margin-root .card .cover').first();
+      const button=cover.locator('..').locator('.card-more');
+      await cover.hover();
+      const before=await button.boundingBox();
+      await cover.evaluate(el=>el.classList.add('playing'));
+      const after=await button.boundingBox();
+      if (!before || !after || Math.abs(before.width-after.width)>1 || !await button.isVisible())
+        return ['block button or label shrank during preview'];
+      const pages=ctx.pages().length;
+      await button.click();
+      await page.getByRole('menuitem', {name: /^不看「/}).click();
+      await page.getByText(/^已屏蔽「/).first().waitFor();
+      return ctx.pages().length===pages ? [] : ['block opened a video'];
     });
 
     await feature('home-classic-layout', async () => {
@@ -568,8 +585,9 @@ for (const theme of THEMES) {
           p.frames++;
         }, 16);
       });
-      // 使用浏览器计算的内容四边形命中位置，避免 3D 外接矩形中心与实际链接错位。
-      await link.hover({ force: true });
+      // 从同一卡面上的非交互标签移入链接，避免从头像一步跳到 3D 翻面容器。
+      await page.locator('#margin-root .idcl-back .idcl-connect > span').hover();
+      await link.hover();
       await sleep(500);
       const state = await page.evaluate(() => { clearInterval(window.marginLinkTimer); return window.marginLinkProbe; });
       const miss = [];
@@ -2157,6 +2175,10 @@ for (const theme of THEMES) {
         await chrome.storage.local.set({ 'margin:activity': a, 'margin:activity-bf': Date.now() });
       });
       await page.goto('https://www.bilibili.com/', { waitUntil: 'domcontentloaded' });
+      const foot = page.locator('#margin-root .fp-card');
+      await foot.locator(':is(.fp-week,.fp-cells)').first().waitFor();
+      const expand = foot.getByRole('button', { name: '展开全年' });
+      if (await expand.isVisible()) await expand.click();
       await page.waitForFunction(() => document.getElementById('margin-root')?.shadowRoot?.querySelector('.fp-cells .fp-cell'), null, { timeout: 15000 });
       await sleep(800);
       miss = await page.evaluate(() => {

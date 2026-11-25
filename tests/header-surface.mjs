@@ -20,7 +20,7 @@ try {
   const sw = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker'), page = ctx.pages()[0];
   page.on('pageerror', e => errors.push(e.message));
   for (const theme of ['light', 'dark']) for (const glass of ['soft', 'liquid']) {
-    await sw.evaluate(s => chrome.storage.local.set({ 'margin:settings': s }), { theme, glass, intro: false });
+    await sw.evaluate(s => chrome.storage.local.set({ 'margin:settings': s }), { theme, glass, radius: glass === 'soft' ? 0 : 100, intro: false });
     for (const [name, url, host] of [
       ['home', 'https://www.bilibili.com/', '#margin-root'],
       ['watch', 'https://www.bilibili.com/video/BV1mdxN68E7F/', '#margin-watch-top'],
@@ -33,6 +33,13 @@ try {
         const app = document.querySelector(host)?.shadowRoot?.querySelector('.app');
         return app?.getAttribute('data-theme') === theme && app?.getAttribute('data-glass') === glass;
       }, { host, theme, glass });
+      const corners = await header.locator('.ts').evaluate(el => {
+        const thumb = el.querySelector('.ts-sm'), edge = el.querySelector('.ts-edge');
+        return [getComputedStyle(el.querySelector('.ts-c')).borderRadius, getComputedStyle(thumb).borderRadius,
+          getComputedStyle(edge, '::after').borderRadius];
+      });
+      const expected = glass === 'soft' ? '0px' : '999px';
+      assert.deepEqual(corners, [expected,expected,expected], name + '/' + theme + '/' + glass);
       await app.evaluate(e => {
         e.dataset.bg = 'image'; e.scrollTop = 240;
         const probe = document.createElement('div');
@@ -85,6 +92,69 @@ try {
   });
   assert(offsets.scroll > 0 && [offsets.x, offsets.y, offsets.orb].every(diff => Math.abs(diff) < 1), JSON.stringify(offsets));
   results.push({name:'aligned nav hover and theme switch after horizontal scrolling', ...offsets});
+  // A settings reorder can move the selected anchor while the nav width stays fixed.
+  await page.mouse.move(0,0);
+  const selected = quick.locator('.et-btn').filter({hasText:'分区'}).first();
+  await selected.evaluate(b => {
+    b.dispatchEvent(new PointerEvent('pointerenter',{pointerType:'mouse'}));
+  });
+  await sw.evaluate(async () => {
+    const key = 'margin:settings';
+    const old = (await chrome.storage.local.get(key))[key];
+    await chrome.storage.local.set({[key]:{...old,headOrder:['直播','大会员','分区']}});
+  });
+  await page.waitForFunction(() => {
+    const nav = document.querySelector('#margin-root').shadowRoot.querySelector('.et');
+    const b = [...nav.querySelectorAll('.et-btn')].find(el => el.querySelector('span').textContent === '分区');
+    return b.style.order === '2' && Math.abs(nav.querySelector('.et-thumb').getBoundingClientRect().x-b.getBoundingClientRect().x)<1;
+  },null,{timeout:3000});
+  // Follow the filter actually painted by the theme track, not a fallback in <defs>.
+  const track = page.locator('#margin-root .ts-c[style*="url("]');
+  const filterId = await track.evaluate(el => el.style.backdropFilter.match(/#([\w-]+)/)[1]);
+  const imageSelector = `#margin-root #${filterId} feImage`;
+  const map = page.locator(imageSelector), roundUrl = await map.getAttribute('href');
+  assert.match(roundUrl, /^blob:/);
+  const box = await track.boundingBox();
+  let previousUrl = roundUrl;
+  for (const radius of [0,50,100,150]) {
+    await sw.evaluate(async radius => {
+      const key = 'margin:settings';
+      const settings = (await chrome.storage.local.get(key))[key];
+      await chrome.storage.local.set({[key]:{...settings,radius}});
+    }, radius);
+    await page.waitForFunction(radius => {
+      const thumb = document.querySelector('#margin-root').shadowRoot.querySelector('.ts-sm');
+      const expected = 999 * radius / 100;
+      return parseFloat(getComputedStyle(thumb).borderRadius) === expected &&
+        parseFloat(getComputedStyle(thumb.querySelector('.ts-edge'),'::after').borderRadius) === expected;
+    }, radius);
+    const { width, height } = await track.boundingBox();
+    assert.deepEqual([width, height], [box.width, box.height], 'radius test must not resize the glass');
+    if (radius === 0 || radius === 50) {
+      await page.locator(`${imageSelector}:not([href="${previousUrl}"])`).waitFor({ state: 'attached', timeout: 5000 });
+      previousUrl = await map.getAttribute('href');
+      const alpha = await map.evaluate(async node => {
+        const img = new Image(); img.src = node.getAttribute('href'); await img.decode();
+        const ctx = document.createElement('canvas').getContext('2d'); ctx.drawImage(img, 0, 0);
+        return ctx.getImageData(0, 0, 1, 1).data[3];
+      });
+      assert.equal(alpha, radius === 0 ? 255 : 0, `lens corner at radius setting ${radius}`);
+      if (radius === 50) assert.equal(previousUrl, roundUrl, 'equivalent clamped radii must reuse the original map');
+    }
+  }
+  console.log('PASS fixed-size liquid lens: square and round map pixels; clamped radius reuses original URL');
+  await sw.evaluate(async () => {
+    const key = 'margin:settings', old = (await chrome.storage.local.get(key))[key];
+    await chrome.storage.local.set({[key]:{...old,headLabels:true}});
+  });
+  await page.setViewportSize({width:1920,height:960});
+  for (const url of ['https://www.bilibili.com/video/BV1mdxN68E7F/','https://live.bilibili.com/3']) {
+    await page.goto(url,{waitUntil:'domcontentloaded'});
+    const menu = page.locator('#margin-watch-top .et-labels');
+    await menu.waitFor();
+    assert.ok(await menu.evaluate(el=>el.scrollWidth <= el.clientWidth + 1),'wide header clipped its shortcuts');
+    assert.equal(await page.locator('#margin-watch-top .upload').evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
+  }
   assert.deepEqual(errors, []);
 } finally {
   writeFileSync(join(out, 'results.json'), JSON.stringify({ results, errors }, null, 2));

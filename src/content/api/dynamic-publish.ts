@@ -9,10 +9,10 @@ export function validateDynamicImage(file: Pick<File, 'type' | 'size'>): void {
 export async function requireDynamicLogin(): Promise<void> {
   if (!(await nav(true))?.isLogin || !csrf()) throw new Error('请先登录 B 站，再回来发布；草稿会保留');
 }
-export async function uploadDynamicImage(file: File): Promise<DynamicPicture> {
+export async function uploadDynamicImage(file: File, biz: 'draw' | 'new_dyn' = 'draw'): Promise<DynamicPicture> {
   validateDynamicImage(file);
   if (!csrf()) throw new Error('登录状态已失效，请先登录 B 站');
-  const form = new FormData(); form.append('file_up', file); form.append('category', 'daily'); form.append('biz', 'draw'); form.append('csrf', csrf());
+  const form = new FormData(); form.append('file_up', file); form.append('category', 'daily'); form.append('biz', biz); form.append('csrf', csrf());
   const response = await fetch('https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs', { method: 'POST', credentials: 'include', body: form, signal: AbortSignal.timeout(20_000) });
   if (!response.ok) throw new Error(`图片上传失败（HTTP ${response.status}）`);
   const reply = await response.json();

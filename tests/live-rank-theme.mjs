@@ -28,7 +28,7 @@ try {
     .gift-rank-list-item{display:flex;gap:16px;align-items:center;height:44px;color:var(--Ga9)}.score{margin-left:auto}
     .guard-rank-cntr.thousand .list .item .uname .live-skin-main-a-text{color:var(--text_white)!important}
     .own{padding:10px;background:var(--Ga0);color:var(--Ga9)}.fans-medal{color:white;background:#a11a50;border-radius:3px;padding:2px 4px}
-  </style></head><body><main class="app-body"><div id="player-ctnr"><video></video><div class="danmaku-test" style="color:rgb(255,255,0)">播放器弹幕</div></div><aside id="aside-area-vm">
+  </style></head><body><main class="app-body"><div id="player-ctnr"><video></video><div class="danmaku-test" style="color:rgb(255,255,0)">播放器弹幕</div></div><div id="gift-control-vm"><button class="gift-panel-switch" style="background-color:#f1f2f3"><i class="arrow"></i></button><button class="m-guard-ent"><span class="guard-info"><span class="title" style="color:#18191c">大航海</span></span></button><button class="m-recharge-ent"><span class="balance-info"><span class="title" style="color:#18191c">688</span></span></button></div><aside id="aside-area-vm">
     <section id="rank-list-vm" class="rank-list-section"><div id="rank-list-ctnr-box" class="rank-list-ctnr">
       <div class="tabs"><div class="tab-list"><span class="item active">高能榜</span><span class="item">大航海</span></div></div>
       <div class="rank-list-content guard-rank-cntr"><div class="list"><div class="item gift-rank-list-item"><span class="rank">1</span><span class="fans-medal">粉丝牌</span><span class="uname name"><a class="live-skin-main-a-text" href="https://space.bilibili.com/1">排行榜用户</a></span><span class="score">1280</span></div></div></div>
@@ -40,6 +40,12 @@ try {
     await worker.evaluate(theme => chrome.storage.local.set({ 'margin:settings': { intro: false, theme, bg: { mode: 'off' } } }), theme);
     await page.goto('https://live.bilibili.com/3');
     await page.locator('#margin-watch-top .top').waitFor();
+    if (theme === 'dark') {
+      const colors = await page.locator('#gift-control-vm button').evaluateAll(nodes => nodes.map(node => [
+        getComputedStyle(node.querySelector('.title') || node).color,getComputedStyle(node).backgroundColor,
+      ]));
+      for (const [fg,bg] of colors) assert.ok((luminance(fg)+.05)/(luminance(bg)+.05)>=4.5, JSON.stringify(colors));
+    }
     for (const skin of [false, true]) {
       await page.evaluate(skin => {
         document.querySelector('.tabs').classList.toggle('isThousand', skin);

@@ -78,6 +78,7 @@ html.margin-reduce .sp-menu { animation: none; }
 .sp-bar .tabs { flex-wrap: wrap; }
 .sp-collection-head { display: flex; align-items: center; gap: 16px; padding: 16px 0; }
 .sp-collection-head[hidden] { display: none; }
+.sp-collection-head:has(.fav-play-all, a.ghost) { flex-wrap: wrap; }
 .sp-collection-head h2 { margin: 0; font: 500 22px/1.4 var(--serif); overflow-wrap: anywhere; }
 .sp-collection-head .ghost { flex: none; }
 /* 搜索结果上方的合集入口（GitHub #113）：合集名命中时直接从搜索进合集 */
@@ -118,6 +119,7 @@ html.margin-reduce .sp-menu { animation: none; }
 .dy-charge svg { width: 16px; height: 16px; flex: none; }
 .dy-charging { border-left: 3px solid #fb7299; padding-left: 16px; }
 .dy.nested > .dy-charge { margin-bottom: 12px; }
+.dy-manage { display: inline-flex; margin-left: auto; gap: 6px; }
 .dy-open { margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--faint); transition: background-color .2s var(--ease-out), color .2s var(--ease-out); }
 .dy-open:hover { background: var(--chip); color: var(--ink); }
 .dy-open svg { width: 15px; height: 15px; }
@@ -712,3 +714,11 @@ a.wh-card:hover { box-shadow: var(--ring), var(--sh-sm); transform: translateY(-
 }
 .dy[data-href] .dy-acts { cursor: default; }
 .dy-r.mine .dy-r-b { padding-left: 40px; }
+
+.dy-comment-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; border: 0; margin: 6px 0; padding: 0; }
+.dy-comment-tools :is(.dy-picker,.dy-attachments):not(:empty) { flex-basis: 100%; }
+.dy-picker { padding: 8px; border-radius: 8px; background: var(--surface); }
+.dy-picker[hidden] { display: none; }
+.dy-emoji-choices { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; margin-top: 6px; }
+.dy-emoji-choices button { min-width: 30px; min-height: 30px; }
+.dy-emoji-choices img { width: 24px; height: 24px; object-fit: contain; }

@@ -93,7 +93,10 @@ try {
     ['message', 'https://message.bilibili.com/'], ['space', 'https://space.bilibili.com/2/']]) {
     await check(`148 ${name} settings centered at matching 960x680 size`, async () => {
       await page.goto(url); await page.getByRole('button', { name: '设置', exact: true }).first().click();
-      const panel = page.getByRole('dialog', { name: '设置', exact: true }); await panel.waitFor(); await page.waitForTimeout(300);
+      const panel = page.locator('.stg-layer[data-open="true"]').getByRole('dialog', { name: '设置', exact: true });
+      await panel.waitFor();
+      // Measure the open panel, not a frame of its entrance translation.
+      await panel.evaluate(el => Promise.all(el.getAnimations().filter(a => a.transitionProperty === 'transform').map(a => a.finished)));
       const b = await panel.boundingBox(); assert(Math.abs(b.x - 800) < 1 && Math.abs(b.y - 380) < 1 && Math.abs(b.width - 960) < 1 && Math.abs(b.height - 680) < 1, JSON.stringify(b));
     });
   }

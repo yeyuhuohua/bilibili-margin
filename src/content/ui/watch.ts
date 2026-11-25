@@ -4,6 +4,7 @@ import { loadSettings } from '../../shared/settings';
 import { h, ICONS, guardTyping } from './dom';
 import { toast } from './controls';
 import { addWatchLater } from '../api/search';
+import { resumeWatchLater } from '../api/watchlater-resume';
 import { createFavorites } from './favorites';
 import { createHeader, type Header, SITE_LINKS } from './header';
 import { attachPreview } from './preview';
@@ -59,6 +60,8 @@ export class WatchSkin {
   constructor(private settings: Settings, private kind: SkinKind = 'watch') {
     const de = document.documentElement;
     const isWatch = kind === 'watch';
+    if (isWatch && /^\/list\/watchlater\/?$/.test(location.pathname)) void resumeWatchLater();
+    if (isWatch) this.bg.cap(30);
     // 全局换皮样式（watch.css + pages.css）由入口脚本在 document_start 挂上（见 main.ts skinStyle），这里只补类名
     de.classList.add('margin-skin', `margin-${kind}`);
 
@@ -74,8 +77,6 @@ export class WatchSkin {
     const root = this.host.attachShadow({ mode: 'open' });
     guardTyping(this.host);
     root.append(h('style', {}, css));
-    // 搜索页本身有大号搜索框，顶栏那个就不再重复（Ctrl+K / / 仍可唤出命令面板）
-    if (kind === 'search') root.append(h('style', {}, '.top .search { visibility: hidden; pointer-events: none; }'));
 
     this.filter = new FilterRuntime(settings);
     this.panel = createSettingsPanel(() => this.settings, () => this.bg.shader);
@@ -105,6 +106,7 @@ export class WatchSkin {
     const cm = createContextMenu();
     this.head = createHeader({
       onTheme: () => this.toggleTheme(),
+      commandOnly: kind === 'search',
       onSettings: () => this.panel.sheet.open(),
       onSearch: (q, origin) => palette.open(q, origin),
       msgRemind: () => this.settings.msgRemind,
@@ -169,7 +171,7 @@ export class WatchSkin {
   private async openMusic(): Promise<void> {
     try {
       this.music ??= import('./music-mode').then(module => module.createMusicMode(active => {
-        this.bg.cap(active ? 24 : 0);
+        this.bg.cap(active ? 24 : 30);
         this.screenSync?.();
       }, () => { void this.toggleTheme(); }));
       (await this.music).open();
@@ -299,15 +301,21 @@ export class WatchSkin {
       }
     };
     // v0.43 网页全屏可滚动：播放器改成贴在文档顶端的 absolute，下面的评论接着排
+    let webHeading: ResizeObserver | null = null;
+    let webFrame = 0;
     const webScroll = (on: boolean) => {
       if (!on) {
+        webHeading?.disconnect(); webHeading = null;
+        cancelAnimationFrame(webFrame); webFrame = 0;
         if (de.classList.contains('margin-webscroll')) { de.classList.remove('margin-webscroll'); for (const k of ['y', 'x', 'w', 'h']) de.style.removeProperty(`--m-ws-${k}`); }
         return;
       }
       const wrap = document.querySelector<HTMLElement>('.player-wrap, #bilibili-player-wrap, .bilibili-player-wrap');
       if (!wrap) return;
-      const was = de.classList.contains('margin-webscroll');
-      requestAnimationFrame(() => {
+      if (webFrame) return;
+      webFrame = requestAnimationFrame(() => {
+        webFrame = 0;
+        const was = de.classList.contains('margin-webscroll');
         if (playerScreen() !== 'web' || document.fullscreenElement || !this.settings.webScroll) return;
         if (!was) de.classList.add('margin-webscroll');
         // 先按 0 偏移算 player-wrap 的文档坐标，再把播放器拉回文档左上角
@@ -318,6 +326,13 @@ export class WatchSkin {
         de.style.setProperty('--m-ws-x', `${-left}px`);
         de.style.setProperty('--m-ws-w', `${de.clientWidth}px`);
         de.style.setProperty('--m-ws-h', `${Math.max(0, innerHeight - top)}px`);
+        if (!webHeading) {
+          const title = document.querySelector('.video-info-container');
+          if (title) {
+            webHeading = new ResizeObserver(() => webScroll(true));
+            webHeading.observe(title);
+          }
+        }
         if (!was) scrollTo({ top: 0 });
       });
     };
@@ -357,6 +372,29 @@ export class WatchSkin {
     };
     // v0.49 无极倍速（B 站评论建议）：X 减 0.1×、C 加 0.1×（0.1–16×），Z 在当前倍速和 1× 之间来回切
     let lastRate = 1;
+    const videoKey = () => location.pathname + '?p=' + (new URLSearchParams(location.search).get('p') || '1');
+    let shortcut: { video: HTMLVideoElement; key: string; nativeDefault: number; rate: number } | undefined;
+    const releaseShortcut = () => {
+      if (!shortcut) return;
+      const { video, nativeDefault, rate } = shortcut;
+      video.removeEventListener('ratechange', checkShortcut);
+      video.removeEventListener('loadstart', checkShortcut);
+      if (video.defaultPlaybackRate === rate) video.defaultPlaybackRate = nativeDefault;
+      shortcut = undefined;
+    };
+    const checkShortcut = () => {
+      if (!shortcut) return;
+      const { video, rate, key } = shortcut;
+      if (key !== videoKey() || !this.settings.speedKeys) {
+        const inherited = video.playbackRate === rate && video.defaultPlaybackRate === rate;
+        releaseShortcut();
+        if (inherited) video.playbackRate = video.defaultPlaybackRate;
+        lastRate = 1;
+      } else if (video.playbackRate !== rate || video.defaultPlaybackRate !== rate) {
+        // 原生播放器已选择倍速，后续加载交回原站。
+        releaseShortcut();
+      }
+    };
     document.addEventListener('keydown', (e) => {
       if (!this.settings.speedKeys || e.ctrlKey || e.metaKey || e.altKey || e.repeat && e.key.toLowerCase() === 'z') return;
       const k = e.key.toLowerCase();
@@ -365,13 +403,19 @@ export class WatchSkin {
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       const v = document.querySelector<HTMLVideoElement>('.bpx-player-video-wrap video, .bilibili-player-video video, video');
       if (!v) return;
+      checkShortcut();
+      if (shortcut && shortcut.video !== v) { releaseShortcut(); lastRate = 1; }
       e.preventDefault(); e.stopPropagation();
       const cur = Math.round(v.playbackRate * 10) / 10;
       let n: number;
       if (k === 'z') { if (cur === 1) n = lastRate === 1 ? 1 : lastRate; else { lastRate = cur; n = 1; } }
       else n = Math.min(16, Math.max(0.1, Math.round((cur + (k === 'c' ? 0.1 : -0.1)) * 10) / 10));
       if (k !== 'z' && n !== 1) lastRate = n;
+      shortcut = { video: v, key: videoKey(), nativeDefault: shortcut?.nativeDefault ?? v.defaultPlaybackRate, rate: n };
+      v.defaultPlaybackRate = n;
       v.playbackRate = n;
+      v.addEventListener('ratechange', checkShortcut);
+      v.addEventListener('loadstart', checkShortcut);
       volTip(`${n.toFixed(1)}×`);
     }, true);
     this.screenSync = () => sync(true);

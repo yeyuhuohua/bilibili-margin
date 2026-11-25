@@ -15,11 +15,23 @@ const radiusPlugin = {
   },
 };
 
+const manifest = JSON.parse(await readFile('public/manifest.json', 'utf8'));
+const changelog = await readFile('CHANGELOG.md', 'utf8');
+const sections = changelog.split(/^## /m);
+const currentNotes = sections.find(s => s.startsWith(`[v${manifest.version_name}]`)) ?? sections.find(s => s.startsWith('未发布'));
+const groups = (currentNotes ?? '').split(/^### /m).slice(1).map(section => {
+  const [heading, ...lines] = section.split(/\r?\n/);
+  return { title: heading.trim(), items: lines.filter(line => line.startsWith('- ')).map(line => line.slice(2).trim()) };
+}).filter(group => group.items.length);
+if (!groups.length) throw new Error('Missing categorized release notes for ' + manifest.version_name);
+const define = { __MARGIN_RELEASE_NOTES__: JSON.stringify(groups) };
+
 // 经典脚本（IIFE）：内容脚本入口、弹窗、后台 service worker
 const entries = [
   { name: 'content', entry: 'src/content/main.ts' },
   { name: 'popup', entry: 'src/popup/popup.ts' },
   { name: 'background', entry: 'src/background/sw.ts' },
+  { name: 'autoplayExt', entry: 'src/content/autoplay-ext.ts' },
 ];
 // 按路由动态 import 的页面模块（ES，共享代码自动拆成 pages/chunk-*.js）
 const PAGES = ['home', 'watch', 'space', 'message', 'history', 'feed', 'detail', 'space-hooks', 'danmaku-jump', 'danmaku-airborne', 'channel-carousel', 'search-exact'];
@@ -29,7 +41,7 @@ await mkdir('dist', { recursive: true });
 
 for (const { name, entry } of entries) {
   await build({
-    configFile: false,
+    configFile: false, define,
     publicDir: false,
     logLevel: 'warn',
     plugins: [wgslVitePlugin({ minify: { whitespace: true } }), radiusPlugin],
@@ -44,7 +56,7 @@ for (const { name, entry } of entries) {
 }
 
 await build({
-  configFile: false,
+  configFile: false, define,
   publicDir: false,
   logLevel: 'warn',
   plugins: [wgslVitePlugin({ minify: { whitespace: true } }), radiusPlugin],
@@ -64,7 +76,7 @@ await build({
 
 // 流光（WebGPU / vgpu，约 200KB）单独打包，只有用户选到这款背景时才由内容脚本动态 import
 await build({
-  configFile: false,
+  configFile: false, define,
   publicDir: false,
   logLevel: 'warn',
   plugins: [wgslVitePlugin({ minify: { whitespace: true } }), radiusPlugin],

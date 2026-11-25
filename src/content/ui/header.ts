@@ -17,15 +17,15 @@ import { openBili } from '../navigation';
 import { acceptTextDrop } from './text-drop';
 import { hotSearch } from '../api/search';
 import { onUiMotionChange, uiReducedMotion } from '../motion';
+import { commandKeys } from './command-shortcut';
 
 /** 顶栏左上角的小电视：开场动画结束时图标就飞落到这里 */
 function tv(): HTMLElement { const s = h('span', { class: 'tv', 'aria-hidden': 'true' }); setMarkup(s, BILI_TIGHT); liveTv(s); return s; }
 
 export interface Header {
   el: HTMLElement;
-  input: HTMLInputElement;
   sunMoon: SunMoon;
-  /** 液态玻璃块：搜索框、快捷入口胶囊、选中滑块 */
+  /** 顶栏的玻璃外壳，不含内部滑块或普通命令按钮。 */
   glass: HTMLElement[];
   thumb: HTMLElement;
   /** 消息提醒开关（v0.47）：关闭时不再轮询 unread / 动态更新，并清掉两个角标 */
@@ -43,13 +43,10 @@ export const SITE_LINKS: TabSpec[] = [
   { title: '创作中心', icon: ICONS.creator, href: 'https://member.bilibili.com/platform/home' },
 ];
 
-/** 首页和播放页共用的顶栏：标志、搜索、Expandable Tabs、日月主题按钮、投稿、头像 */
-export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch?: (q: string, origin?: HTMLElement) => void; onSettings?: () => void; msgRemind?: () => boolean; filter?: FilterRuntime }): Header {
-  let msgOn = o.msgRemind?.() ?? true;
+type OpenSearch = (q: string, origin?: HTMLElement) => void;
+
+function searchField(onSearch?: OpenSearch): HTMLFormElement {
   let searchStyle: Settings['searchStyle'] = 'classic';
-  const user = h('a', { class: 'user', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '登录');
-  const userSlot = h('div', { class: 'um-wrap' }, user);
-  const upload = h('a', { class: 'upload', href: 'https://member.bilibili.com/platform/upload/video/frame', target: '_blank', rel: 'noopener' }, icon(ICONS.upload), h('span', {}, '投稿'));
 
   const input = h('input', { type: 'search', placeholder: '搜索视频、UP 主', autocomplete: 'off', 'aria-label': '搜索' }) as HTMLInputElement;
   const search = h('form', {
@@ -60,10 +57,10 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
       if (q) openBili(`https://search.bilibili.com/all?keyword=${encodeURIComponent(q)}`);
     },
   }, icon(ICONS.search), input, h('kbd', {}, '/'));
-  if (o.onSearch) {
+  if (onSearch) {
     // 顶栏搜索框只做入口：点一下、或开始打字，就交给命令面板
     input.readOnly = true;
-    const openP = () => { const q = input.value; input.value = ''; input.blur(); o.onSearch!(q, searchStyle === 'new' ? search : undefined); };
+    const openP = () => { const q = input.value; input.value = ''; input.blur(); onSearch(q, searchStyle === 'new' ? search : undefined); };
     search.addEventListener('pointerdown', (e) => { e.preventDefault(); openP(); });
     input.addEventListener('focus', openP);
     const words = h('span', { class: 'search-ph-ws' });
@@ -84,8 +81,7 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
       stopRotation?.();
       if (searchStyle !== 'new' || uiReducedMotion() || !names.length) return;
       stopRotation = every(3200, () => {
-        if (!el.isConnected) { stopRotation?.(); return; }
-        if (!search.isConnected) return;
+        if (!search.isConnected) { stopRotation?.(); return; }
         const rect = search.getBoundingClientRect();
         if (input.value || rect.bottom <= 0 || rect.top >= innerHeight || getComputedStyle(search).opacity === '0') return;
         index = (index + 1) % names.length;
@@ -110,11 +106,44 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
   }
 
   acceptTextDrop(search, (text) => {
-    if (o.onSearch) { o.onSearch(text, searchStyle === 'new' ? search : undefined); return; }
+    if (onSearch) { onSearch(text, searchStyle === 'new' ? search : undefined); return; }
     input.value = text;
     input.focus();
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+
+  search.dataset.tip = '搜索';
+  if (!onSearch) addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const typing = e.composedPath().some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement || (n instanceof HTMLElement && n.isContentEditable));
+    if (!typing) { e.preventDefault(); input.focus(); }
+  });
+  return search;
+}
+
+function commandButton(open: OpenSearch) {
+  const key = h('kbd', { 'aria-hidden': 'true' });
+  const el = h('button', { class: 'top-command', type: 'button', 'aria-label': '打开命令面板', 'aria-haspopup': 'dialog', 'aria-controls': 'margin-command-dialog', 'data-tip': '打开命令面板', onclick: () => open('') }, '命令', key);
+  acceptTextDrop(el, text => open(text));
+  return el;
+}
+
+/** 常规页面保留搜索胶囊；搜索结果页保留站点原生输入，只挂载一个次级命令按钮。 */
+export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch?: OpenSearch; commandOnly?: boolean; onSettings?: () => void; msgRemind?: () => boolean; filter?: FilterRuntime }): Header {
+  let msgOn = o.msgRemind?.() ?? true;
+  const user = h('a', { class: 'user', href: 'https://passport.bilibili.com/login', target: '_blank', rel: 'noopener' }, '登录');
+  const userSlot = h('div', { class: 'um-wrap' }, user);
+  const upload = h('a', { class: 'upload', href: 'https://member.bilibili.com/platform/upload/video/frame', target: '_blank', rel: 'noopener' }, icon(ICONS.upload), h('span', {}, '投稿'));
+  const command = o.commandOnly && o.onSearch ? commandButton(o.onSearch) : null;
+  const search = command ?? searchField(o.onSearch);
+  const syncShortcut = (enabled: boolean) => {
+    search.dataset.kbd = commandKeys(enabled && !!o.onSearch).join(' ');
+    if (command) {
+      command.querySelector('kbd')!.textContent = search.dataset.kbd;
+      command.setAttribute('aria-keyshortcuts', enabled ? 'Control+K Meta+K /' : '/');
+    }
+  };
+  syncShortcut(true);
 
   const tabsNav = createExpandableTabs(o.tabs.map(tab => tab === 'separator' ? tab : { ...tab, icon: HEADER_ICONS[tab.title] ?? tab.icon }));
   // 直播 / 消息 / 动态 / 历史 / 收藏 / 稍后：停留 1.5 秒弹出悬停列表
@@ -143,10 +172,14 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
       b.style.order = personal || siteIdx.has(t) ? String(order.indexOf(t)) : '30';
     }
     tabsNav.el.querySelectorAll<HTMLElement>('.et-sep').forEach((x) => { x.style.order = '20'; x.hidden = personal || tabsNav.buttons.every((b) => b.hidden || !siteIdx.has(b.querySelector('span')?.textContent ?? '')); });
-    tabsNav.el.querySelector<HTMLElement>('.et-thumb')?.style.setProperty('order', '-1');
+    tabsNav.thumb.style.order = '-1';
+    if (tabsNav.thumb.hasAttribute('data-on')) tabsNav.place();
   };
-  loadSettings().then(applyPrefs).catch(() => {});
-  onSettingsChange((n, p) => { if (n.headLabels !== p.headLabels || n.headHide.join() !== p.headHide.join() || n.headOrder.join() !== p.headOrder.join()) applyPrefs(n); });
+  loadSettings().then(st => { applyPrefs(st); syncShortcut(st.cmdK); }).catch(() => {});
+  onSettingsChange((n, p) => {
+    if (n.cmdK !== p.cmdK) syncShortcut(n.cmdK);
+    if (n.headLabels !== p.headLabels || n.headHide.join() !== p.headHide.join() || n.headOrder.join() !== p.headOrder.join()) applyPrefs(n);
+  });
   // 屏蔽词/隐藏广告变化后，悬停列表的 60 秒缓存要失效
   o.filter?.onChange(() => popHandles.forEach((p) => p.invalidate()));
   const sunMoon = createSunMoon(o.onTheme);
@@ -209,16 +242,6 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
   };
 
   if (!user.classList.contains('in')) user.dataset.tip = '登录 B 站';
-  search.dataset.tip = '搜索';
-  search.dataset.kbd = o.onSearch ? 'Ctrl K' : '/';
   attachTooltips(el);
-
-  if (!o.onSearch) addEventListener('keydown', (e) => {
-    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
-    const typing = e.composedPath().some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement || (n instanceof HTMLElement && n.isContentEditable));
-    if (typing) return;
-    e.preventDefault();
-    input.focus();
-  });
-  return { el, input, sunMoon, glass: [search, tabsNav.el, sunMoon.glass], thumb: tabsNav.thumb, setMsgRemind };
+  return { el, sunMoon, glass: [...(command ? [] : [search]), tabsNav.el, sunMoon.glass], thumb: tabsNav.thumb, setMsgRemind };
 }

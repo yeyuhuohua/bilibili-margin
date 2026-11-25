@@ -4,7 +4,168 @@
 
 New entries are grouped under Added, Changed, and Fixed, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version headings link to their GitHub releases. The display version and the browser update version are recorded separately so the latter can keep increasing for automatic updates.
 
-## Unreleased
+## [v0.6.109](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.109) · 2026-11-24 · Watch Later resume, feed navigation and settings
+
+### Added
+
+- Reopening a multipart video or series from Watch Later can resume a verified episode from the 30 most recent Bilibili video history entries. Explicit links and manual selections take priority.
+- Choose which feed opens on the homepage. The new Posts filter in the activity feed includes text, image posts and articles.
+
+### Fixed
+
+- Homepage cards group negative feedback actions in the More menu and preserve the scroll position when filtering.
+- Mesh and Aurora backgrounds prefer high precision and bound noise inputs on devices limited to medium precision.
+- Switching creators from the left follow list on the activity feed now returns to the top and highlights the selection in the top avatar strip, matching the sidebar layout; previously the page kept its scroll position.
+
+### Changed
+
+- Settings that depend on another switch are greyed out and cannot be changed while that switch is off: weather, community advertisement skipping and update reminders while external services are disabled; the opening animation and the draggable account card while reduced motion is on; the draggable account card while UI effects are off. The state is applied as soon as settings open.
+- Animated wallpaper on video pages renders at up to 30 fps, or 24 fps in listening mode.
+
+## [v0.6.103](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.103) · 2026-11-23 · Video credits, profile reporting and Watch Later
+
+### Fixed
+
+- Collaborator credits wrap to the available sidebar width. The standard player keeps its expand and collapse controls and shows everyone when those controls are absent. Widescreen shows the full team.
+- The More menu on another user's profile now opens that user's original Bilibili profile so you can report the account there.
+
+### Changed
+
+- The Watch Later title and count appear directly over the wallpaper. Filters and actions form separate groups that wrap on narrow windows.
+
+## [v0.6.100](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.100) · 2026-11-23 · Watch Later undo and raised footprint tiles
+
+### Added
+
+- Click the checkmark on a video cover to undo adding it to Watch Later. If removal fails, the checkmark stays available for retry.
+- The footprint heatmap marks days with at least three hours of activity with raised glass tiles in the year, month, and compact week views.
+
+## [v0.6.97](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.97) · 2026-11-23 · Space post actions and update reminders
+
+### Added
+
+- Since the previous public release (0.6.88), unpacked installs can enable scheduled update reminders under Privacy & Data. Reminders default to off and use the new alarms permission. Turning them off clears the schedule, reminder and badge.
+- Optional per-context autoplay and emoji, mentions and image paste in dynamic comments are included. Web fullscreen realigns the progress bar when the title changes height.
+- Open the native editor or confirm deletion from your own space feed when the post allows the action (#240).
+
+### Changed
+
+- Settings group headings have larger, heavier text and higher contrast (#239).
+
+### Fixed
+
+- Keep the home exit control opaque on hover and keyboard focus, and keep the settings button square in narrow headers (#237).
+
+## [v0.6.92](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.92) · 2026-11-22 · Update reminders
+
+Display version 0.6.92, browser update version 0.60.92.
+
+### Added
+
+- Settings → Privacy & data → Update reminders: pick how often to check (off / 1 hour / 6 hours / 12 hours / daily / 3 days / weekly), **off by default**. On each tick it looks for the latest stable release, marks the extension icon with 新 when a newer one exists, and reminds you once in the page.
+- The reminder links to the official release page. Installing stays the same: download the archive, overwrite the extension folder and reload the extension — the extension never touches that folder and downloads nothing.
+- The extension popup shows the current reminder interval.
+
+### Changed
+
+- Store installs are updated by the browser itself, so the reminder only concerns unpacked installs: the background does not query at all once it sees `update_url`.
+
+### Permissions
+
+Adds `alarms` for the scheduled check. The badge and the in-page reminder need no extra permission; no notification permission and no sensitive permissions are introduced.
+
+## [v0.6.91](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.91) · 2026-11-22
+
+### Added
+
+- Opt-in playback controls for individual scenarios. Feed comments support emoji, mentions from followed accounts and pasted images. Native comment boxes accept image paste when the native upload tool is available.
+- Added a native owner-view shortcut on your own space.
+
+### Fixed
+
+- Live channels appear above followed accounts. Scrollable web fullscreen tracks video heading height changes.
+
+## [v0.6.90](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.90) · 2026-11-22 · Manual update checks
+
+Display version 0.6.90, browser update version 0.60.90.
+
+### Fixed
+
+- When GitHub rate-limits a manual update check, you can grant optional access to look up the official release page. Automatic checks never request this permission (#234).
+
+## [v0.6.89](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.89) · 2026-11-22 · TV channel and control alignment
+
+Display version 0.6.89, browser update version 0.60.89.
+
+### Fixed
+
+- The TV drama channel now opens its own page from the header instead of loading the home feed (#230).
+- Align the home settings button with the theme switch, give timestamps a separate row on narrow cards, and restore the native danmaku list header spacing and arrow alignment (#233).
+
+## [v0.6.88](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.88) · 2026-11-22 · Native search, glass surfaces and first-day footprints
+
+Display version 0.6.88, browser update version 0.60.88.
+
+### Changed
+
+- On search results, the page's native query field is the only full search box. The header now has a compact Commands button. Clicking it or pressing `Ctrl K` / `⌘ K` or `/` opens the palette without replacing the current query.
+- Liquid-glass navigation uses a directional rim instead of an even white outline in dark mode. Favorite folders refract their covers only along the pocket lip; labels, palette results and player-sidebar text sit on stable surfaces. Soft glass remains the default.
+- The seven-day footprint summary welcomes users on their first recorded active day without treating a returning user with older records as new.
+
+## [v0.6.87](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.87) · 2026-11-22 · Playback speed
+
+Display version 0.6.87, browser update version 0.60.87.
+
+### Fixed
+
+- Keep the speed chosen with X, C or Z when the same video reloads in the player. A subsequent speed change in the native player takes precedence (#225).
+
+## [v0.6.86](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.86) · 2026-11-22 · Compact footprints and glass corners
+
+Display version 0.6.86, browser update version 0.60.86.
+
+### Changed
+
+- The homepage shows the last seven days of activity when only 0–2 days are active over the past year and no year/month view was explicitly chosen. Expanding the calendar remembers your choice. With three active days the full view appears automatically. Activity counting is unchanged (#226).
+
+### Fixed
+
+- Liquid-glass controls update their refraction when the corner setting changes, including when switching to square corners (#226).
+
+## [v0.6.85](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.85) · 2026-11-21 · Favorite folder actions
+
+Display version 0.6.85, browser update version 0.60.85.
+
+### Added
+
+- Start continuous playback from a favorite folder on a profile. Owners can also open the same folder on Bilibili to use its native bulk management tools.
+
+### Changed
+
+- The message settings link now explicitly identifies Bilibili's native settings, which open in a new tab (#218).
+
+## [v0.6.84](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.84) · 2026-11-21 · Card actions, live navigation and update notes
+
+Display version 0.6.84, browser update version 0.60.84.
+
+### Changed
+
+- Scroll to the end of the header live list to load the next batch, with a manual retry on failure (#223).
+- Group the update notice by category, show only this version and link to the full changelog (#213).
+
+### Fixed
+
+- Reposition the visible header hover indicator when shortcuts are reordered (#219).
+- Keep the block-creator label and hit area stable when a home cover preview starts (#222).
+- Use available width for labeled video and live headers, keep Upload on one line, and improve contrast for live gift controls in dark mode (#223).
+
+## [v0.6.83](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.83) · Square theme switch
+
+Display version 0.6.83, browser update version 0.60.83.
+
+### Fixed
+
+- In the square corner setting, the theme switch thumb and glass highlight now match the square track. The other corner settings retain the circular thumb. (#221)
 
 ## [v0.6.82](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.82) · Home search corners and Japanese README
 

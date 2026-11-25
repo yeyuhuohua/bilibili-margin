@@ -1,8 +1,10 @@
-import { UPDATE_NOTES, UPDATE_PENDING, UPDATE_SEEN } from '../../shared/updates';
+import { UPDATE_PENDING, UPDATE_SEEN } from '../../shared/updates';
 import { h } from './dom';
 import { createSheet, type Sheet } from './sheet';
 import { introActive, onIntroEnd } from './intro/gate';
 import { toast } from './controls';
+
+declare const __MARGIN_RELEASE_NOTES__: { title: string; items: string[] }[];
 
 /** Local release notes only: no remote check, new tab or startup network request. */
 export function mountUpdateNotice(app: HTMLElement): void {
@@ -31,8 +33,9 @@ export function mountUpdateNotice(app: HTMLElement): void {
       notice.el.classList.add('update-layer');
       const done = h('button', { type: 'button', class: 'btn', onclick: () => notice?.close() }, '知道了');
       notice.body.append(h('p', { class: 'update-version' }, manifest.version_name || manifest.version),
-        h('ul', { class: 'update-notes' }, ...UPDATE_NOTES.map(text => h('li', {}, text))),
-        h('div', { class: 'update-actions' }, done));
+        ...__MARGIN_RELEASE_NOTES__.map(group => h('section', {}, h('h3', {}, group.title),
+          h('ul', { class: 'update-notes' }, ...group.items.map(text => h('li', {}, text))))),
+        h('div', { class: 'update-actions' }, h('a', { class: 'ghost small', href: 'https://github.com/jiuyang5354/bilibili-margin/blob/main/CHANGELOG.md', target: '_blank', rel: 'noopener' }, '完整更新日志'), done));
       app.append(notice.el); notice.open();
     } catch { /* A storage failure must not prevent the page from starting. */ }
     finally { checking = false; }

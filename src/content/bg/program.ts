@@ -13,9 +13,11 @@ export class ShaderProgram {
   private position: number;
   private lastTheme = Number.NaN;
   private configured = false;
+  private readonly mediumPrecision: boolean;
   /** 流光：WebGPU 画好的帧（上传成的纹理）；为 null 时着色器画自带的近似版 */
   tex: WebGLTexture | null = null;
   constructor(private gl: WebGLRenderingContext, readonly id: ShaderId) {
+    this.mediumPrecision = !gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)?.precision;
     const sh = (type: number, src: string) => { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn('[MARGIN] shader', id, gl.getShaderInfoLog(s)); return s; };
     const prog = gl.createProgram()!;
     gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
@@ -64,7 +66,7 @@ export class ShaderProgram {
     } else {
       const a = PALETTES.light[this.id]!, b = PALETTES.dark[this.id]!;
       gl.uniform2f(L.u_res, w, h);
-      gl.uniform1f(L.u_t, t);
+      gl.uniform1f(L.u_t, this.mediumPrecision ? t % 4096 : t);
       if (colorsChanged) {
         gl.uniform3fv(L.u_bg, mix3(Array.from(a.bg), Array.from(b.bg)));
         gl.uniform3fv(L.u_c1, mix3(Array.from(a.c[0]), Array.from(b.c[0])));

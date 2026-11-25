@@ -249,7 +249,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
   // 分页：滚到离底部 120px 内追加下一页；列表不够高时一直补到出现滚动条
   // 用 IntersectionObserver 看列表末尾的哨兵，滚动时不读布局
   const tail = spec.canLoadMore ? h('button', { class: 'dp-more', type: 'button' }, '加载更多') : h('i', { class: 'dp-tail', 'aria-hidden': 'true' });
-  let tailSeen = false;
+  let tailSeen = false, retryRequired = false;
   const fill = () => {
     if (done || busy || !spec.more || !open) return;
     if (!tail.isConnected) list.append(tail);
@@ -274,7 +274,7 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     }).catch(() => {
       if (current !== generation) return;
       sk.remove(); done = !spec.canLoadMore;
-      if (spec.canLoadMore) tail.textContent = '加载失败，重试';
+      if (spec.canLoadMore) { retryRequired = true; tail.textContent = '加载失败，重试'; }
       else {
         const retry = h('button', { type: 'button', class: 'dp-more' }, '加载失败，重试');
         retry.onclick = () => { retry.remove(); done = false; tailSeen = true; fill(); };
@@ -283,7 +283,17 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     })
       .finally(() => { if (current === generation) { busy = false; if (spec.canLoadMore) (tail as HTMLButtonElement).disabled = false; requestAnimationFrame(fill); } });
   };
-  if (spec.canLoadMore) tail.addEventListener('click', () => { tailSeen = true; fill(); });
+  if (spec.canLoadMore) {
+    tail.addEventListener('click', () => { retryRequired = false; tailSeen = true; fill(); });
+    const nearEnd = () => {
+      if (open && !busy && !done && !retryRequired && list.scrollHeight - list.scrollTop - list.clientHeight <= 24) {
+        tailSeen = true; fill();
+      }
+    };
+    list.addEventListener('scroll', () => { if (list.scrollTop > 0) nearEnd(); }, { passive: true });
+    // A tall window can fit the entire first batch, so no scroll event fires.
+    list.addEventListener('wheel', e => { if (e.deltaY > 0 && list.scrollHeight <= list.clientHeight + 1) nearEnd(); }, { passive: true });
+  }
   else if (spec.more) new IntersectionObserver((es) => { tailSeen = es[es.length - 1].isIntersecting; if (tailSeen) fill(); }, { root: list, rootMargin: '0px 0px 160px 0px' }).observe(tail);
 
   const load = () => {
@@ -292,7 +302,8 @@ export function attachHoverList(btn: HTMLElement, spec: PopSpec, filter?: Filter
     closeDetail();
     detailCache.clear();
     const current = ++generation;
-    busy = true; done = true;
+    busy = true; done = true; retryRequired = false;
+    if (spec.canLoadMore) { tailSeen = false; tail.textContent = '加载更多'; (tail as HTMLButtonElement).disabled = false; }
     list.replaceChildren(...Array.from({ length: spec.compact ? 5 : 4 }, () => h('div', { class: 'dp-skel' })));
     spec.load(videosOnly).then(async (rows) => {
       if (current !== generation) return;
@@ -533,7 +544,7 @@ export const POPS: Record<string, (o: { onDyn?: () => void; msgRemind?: () => bo
     ...previewPages(async () => {
       const l = await watchLater();
       return l && { more: false, rows: l.map((x) => ({
-        href: `https://www.bilibili.com/list/watchlater?bvid=${x.bvid}`, title: x.title, who: x.author, sub: dur(x.duration), cover: x.cover,
+        href: `https://www.bilibili.com/list/watchlater?bvid=${x.bvid}&margin_resume=1`, title: x.title, who: x.author, sub: dur(x.duration), cover: x.cover,
         progress: x.duration > 0 ? (x.progress < 0 ? 1 : x.progress / x.duration) : undefined,
         remove: () => removeWatchLater(x.aid),
       })) };

@@ -51,18 +51,15 @@
 .cp-panel {
   position: relative; z-index: 1; width: min(860px, calc(100vw - 48px)); height: min(560px, 72vh); display: flex; flex-direction: column; overflow: hidden;
   border-radius: 16px; color: var(--ink);
-  /* 与顶栏搜索框同一套液态玻璃：底色、镜面描边和折射一致，收起时才不会突然变成另一种材质 */
-  background-color: color-mix(in srgb, var(--c-glass) 12%, color-mix(in srgb, var(--canvas) 34%, transparent));
-  backdrop-filter: blur(16px) saturate(1.2);
-  box-shadow: var(--lg-rim);
+  /* 两栏共用一个实底；不要让视频或壁纸穿过联想结果、命令和键盘选中行。 */
+  background: var(--surface);
+  box-shadow: var(--ring), var(--sh-md);
   opacity: 0; transform: translateY(-20px) scale(.9);
   transition: opacity .2s var(--ease-out), transform .3s var(--ease-spring);
 }
 .cp[data-open="true"] .cp-panel { opacity: 1; transform: none; }
 .cp[data-open="false"] .cp-panel { transition-duration: .16s; transition-timing-function: ease-in; }
-@media (prefers-reduced-transparency: reduce) {
-  .cp-panel { background-color: var(--surface); backdrop-filter: none; }
-}
+.app[data-glass="liquid"] .cp-panel { box-shadow: var(--lg-rim); }
 /* 搜索框展开：外壳只负责裁剪，面板按最终布局摆好，外壳从搜索框尺寸长到面板尺寸。
    内容随可视区域逐步露出，既不缩放文字，也不在动画期间逐帧重排 */
 .cp-shell { display: contents; }
@@ -81,7 +78,7 @@
 }
 .cp.cp-clipping[data-open="false"] .cp-shell { transition-duration: calc(240ms * var(--cp-k, 1)); }
 .cp.cp-clipping[data-open="false"] .cp-scrim { transition-delay: calc(140ms * var(--cp-k, 1)); transition-duration: calc(100ms * var(--cp-k, 1)); }
-/* 收回结束时由脚本在同一帧换回搜索框，两端材质一致，不再叠一层淡出 */
+/* 收回结束时由脚本在同一帧换回搜索框，不再叠一层淡出 */
 /* 输入行与顶栏搜索框逐项对齐：高度、左右内边距、图标和字号一致，
    形变到最小时两层文字完全重合 */
 .cp-input {

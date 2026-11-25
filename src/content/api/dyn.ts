@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { DynamicPicture } from './dynamic-publish';
 import { getJSON, postForm, postJSON } from './http';
 import { parseCountText, parseDurationText } from '../parse';
 import type { Video } from './feed';
@@ -33,6 +34,7 @@ export interface Dyn {
   orig?: Dyn | null;
   stat: { comment: number; forward: number; like: number };
   url: string;
+  editable?: boolean; deleteParams?: Record<string, unknown>;
   /** v0.50 动态页直接互动：自己是否已赞、评论区 type/oid */
   liked?: boolean; cmtType?: number; cmtOid?: string;
 }
@@ -85,6 +87,12 @@ export function toDyn(it: any): Dyn | null {
       url: reserveUrl(blocked?.button?.jump_url) || reserveUrl(blocked?.jump_url) || out.url,
       button: String(blocked?.button?.text ?? '').trim() || '查看详情',
     };
+  }
+  const menu = m.module_more?.three_point_items;
+  if (Array.isArray(menu)) {
+    out.editable = it.basic?.editable === true && menu.some(item => item.type === 'THREE_POINT_EDIT');
+    const remove = menu.find(item => item.type === 'THREE_POINT_DELETE');
+    if (remove) out.deleteParams = remove.params ?? {};
   }
   if (major.archive) {
     const v = major.archive;
@@ -179,6 +187,11 @@ export async function dynReserve(id: string, reserve: DynReserve): Promise<strin
   if (result.desc_update !== undefined && reserve.desc2) reserve.desc2.text = result.desc_update;
   if (result.reserve_update !== undefined) reserve.reserve_total = result.reserve_update;
   return result.toast || (result.final_btn_status === 2 ? '预约成功' : '已取消预约');
+}
+
+export async function deleteSpaceDynamic(d: Dyn): Promise<void> {
+  if (!d.deleteParams || !/^\d+$/.test(d.id)) throw new Error('当前动态不可删除');
+  await postJSON('/x/dynamic/feed/operate/remove', { ...d.deleteParams, dyn_id_str: d.id }, { platform: 'web' });
 }
 
 export async function spaceDynamics(mid: number, offset: string): Promise<{ list: Dyn[]; offset: string; more: boolean }> {
@@ -292,7 +305,7 @@ export function toReply(r: any): Reply {
     rpid: String(r.rpid_str ?? r.rpid), name: m.uname ?? '', face: https(m.avatar), mid: Number(r.mid ?? m.mid) || 0,
     text: r.content?.message ?? '',
     pics: (Array.isArray(r.content?.pictures) ? r.content.pictures : [])
-      .map((p: any) => https(p?.img_src)).filter((url: string) => /^https:\/\//.test(url)),
+      .map((p: any) => https(p?.img_src)).filter((url: string) => /^https:\/\/([a-z0-9-]+\.)*(hdslb\.com|biliimg\.com)\//i.test(url)),
     emotes: Object.fromEntries(Object.entries(r.content?.emote ?? {}).map(([k, v]: [string, any]) => [k, https(v?.url)]).filter(([, url]) => url)),
     richText: String(r.content?.message ?? '').split(/(\[[^\]\r\n]+\])/g).filter(Boolean).map((text) => {
       const emoji = https(r.content?.emote?.[text]?.url);
@@ -337,8 +350,10 @@ export async function dynSubReplies(type: number, oid: string, root: string, pn:
   const list: Reply[] = (d.replies ?? []).map(toReply);
   return { list, more: list.length > 0 && pn * (d.page?.size || ps) < (d.page?.count ?? 0) };
 }
-export async function dynReply(type: number, oid: string, message: string, target?: { root: string; parent: string }): Promise<Reply | null> {
-  const data = await postForm<any>('/x/v2/reply/add', { type, oid, message, plat: 1, ...target });
+export async function dynReply(type: number, oid: string, message: string, target?: { root: string; parent: string }, extra?: { mentions: Record<string, number>; pictures: DynamicPicture[] }): Promise<Reply | null> {
+  const data = await postForm<any>('/x/v2/reply/add', { type, oid, message, plat: 1, ...target,
+    ...(extra && Object.keys(extra.mentions).length ? { at_name_to_mid: JSON.stringify(extra.mentions) } : {}),
+    ...(extra?.pictures.length ? { pictures: JSON.stringify(extra.pictures) } : {}), });
   return data?.reply?.rpid_str || data?.reply?.rpid ? toReply(data.reply) : null;
 }
 

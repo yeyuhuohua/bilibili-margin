@@ -49,7 +49,8 @@ try {
       return { width: r.width, height: r.height, radius: getComputedStyle(thumb).borderTopLeftRadius, visible: alpha.some((value, i) => i % 4 === 3 && value > 0) };
     });
     assert.ok(initial.visible);
-    assert.equal(initial.radius, '50%');
+    const radiusPx = initial.radius.endsWith('%') ? initial.width * parseFloat(initial.radius) / 100 : parseFloat(initial.radius);
+    assert.ok(radiusPx >= initial.width / 2, 'default thumb must be circular');
     assert.ok(Math.abs(initial.width - initial.height) < .1);
     for (const theme of ['light', 'dark']) {
       for (const glass of ['liquid', 'soft', 'flat']) {

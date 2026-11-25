@@ -24,6 +24,13 @@ export const HOME_SECTION_NAMES: Record<HomeSection, string> = {
   footer: '页脚',
 };
 
+/**
+ * 更新提醒的检查周期（小时）：0 = 不检查。默认关闭。
+ * Chrome 的 alarms 最短 30 分钟，这里最小给到 1 小时，避免频繁打扰和触发 GitHub 限流。
+ */
+export const UPDATE_INTERVALS = [0, 1, 6, 12, 24, 72, 168] as const;
+export const UPDATE_INTERVAL_DEFAULT = 0;
+
 export interface Filters {
   /** 标题关键词；写成 /正则/ 时按正则匹配 */
   keywords: string[];
@@ -63,6 +70,8 @@ export interface Settings {
   weather: boolean;
   /** 可选的天气、社区跳过与更新查询需要主动允许。 */
   privacyExternal: boolean;
+  /** 更新提醒的检查周期（小时）：0 = 不检查，默认关闭。 */
+  updateInterval: number;
   /** 最近搜索只保存在扩展存储，最多 8 条、保留 30 天。 */
   searchHistory: boolean;
   /** 点收藏夹直接展开全部视频（关掉时先扇形弹出最近 4 个） */
@@ -78,6 +87,7 @@ export interface Settings {
   replyTree: boolean;
   /** 首页每行几个视频：0 = 按窗口宽度自动，4 / 5 = 固定 */
   cols: 0 | 4 | 5 | 6;
+  homeDefaultTab: 'rcmd' | 'popular' | 'following' | 'classic';
   homeWidth: 'current' | 'compact' | 'fluid';
   /** 点击「推荐 / 热门 / 关注老片」分类标签刷新列表 */
   tabRefresh: boolean;
@@ -123,6 +133,8 @@ export interface Settings {
   wide: boolean;
   /** 播放器独立圆角，关闭时不影响页面卡片 */
   playerCorners: boolean;
+  /** 连播方式扩展：按合集/分P/番剧/推荐分别控制连播；默认关闭，开启后才接管 */
+  autoplayExt: boolean;
   /** 隐藏广告与推广（v0.47），默认开启；只做展示层过滤 */
   hideAds: boolean;
   /** 社区广告片段自动跳过，默认关闭；只读小电视空降助手数据 */
@@ -177,6 +189,7 @@ export const DEFAULTS: Settings = {
   footprint: true,
   weather: true,
   privacyExternal: false,
+  updateInterval: UPDATE_INTERVAL_DEFAULT,
   searchHistory: false,
   favDirect: true,
   favColumns: 3,
@@ -185,6 +198,7 @@ export const DEFAULTS: Settings = {
   speedKeys: true,
   replyTree: true,
   cols: 0,
+  homeDefaultTab: 'rcmd',
   homeWidth: 'current',
   tabRefresh: false,
   batchNav: false,
@@ -210,6 +224,7 @@ export const DEFAULTS: Settings = {
   searchStyle: 'classic',
   wide: false,
   playerCorners: true,
+  autoplayExt: false,
   hideAds: true,
   sponsorSkip: false,
   danmakuJump: false,
@@ -269,6 +284,7 @@ function merge(raw: Partial<Settings> | undefined): Settings {
     headLabels: r.headLabels === true,
     feedLayout: r.feedLayout === 'sidebar' ? 'sidebar' : 'classic',
     zoom: r.zoom === 110 || r.zoom === 120 ? r.zoom : 100,
+    homeDefaultTab: r.homeDefaultTab === 'popular' || r.homeDefaultTab === 'following' || r.homeDefaultTab === 'classic' ? r.homeDefaultTab : 'rcmd',
     homeWidth: r.homeWidth === 'compact' || r.homeWidth === 'fluid' ? r.homeWidth : 'current',
     tabRefresh: r.tabRefresh === true,
     batchNav: r.batchNav === true,
@@ -286,9 +302,11 @@ function merge(raw: Partial<Settings> | undefined): Settings {
     searchStyle: r.searchStyle === 'new' ? 'new' : 'classic',
     wide: r.wide === true,
     playerCorners: r.playerCorners !== false,
+    autoplayExt: r.autoplayExt === true,
     hideAds: r.hideAds !== false,
     sponsorSkip: r.sponsorSkip === true,
     privacyExternal: r.privacyExternal === true,
+    updateInterval: typeof r.updateInterval === 'number' && (UPDATE_INTERVALS as readonly number[]).includes(r.updateInterval) ? r.updateInterval : UPDATE_INTERVAL_DEFAULT,
     searchHistory: r.searchHistory === true,
     danmakuJump: r.danmakuJump === true,
     danmakuAirborne: r.danmakuAirborne === true,
@@ -336,6 +354,7 @@ export function sanitizeSettings(raw: unknown): Settings | null {
   const pageOff = r.pageOff;
   if (Array.isArray(pageOff)) out.pageOff = REDESIGN_PAGES.filter(p => pageOff.includes(p));
   if (typeof r.privacyExternal === 'boolean') out.privacyExternal = r.privacyExternal;
+  if ((UPDATE_INTERVALS as readonly number[]).includes(r.updateInterval as number)) out.updateInterval = r.updateInterval as number;
   if (typeof r.searchHistory === 'boolean') out.searchHistory = r.searchHistory;
   if (r.accent === 'classic' || r.accent === 'blue' || r.accent === 'pink') out.accent = r.accent;
   if (r.glass === 'soft' || r.glass === 'liquid' || r.glass === 'flat') out.glass = r.glass;
@@ -359,8 +378,10 @@ export function sanitizeSettings(raw: unknown): Settings | null {
   if (r.zoom === 100 || r.zoom === 110 || r.zoom === 120) out.zoom = r.zoom;
   if (r.titleFont === 'serif' || r.titleFont === 'sans') out.titleFont = r.titleFont;
   if (r.cols === 0 || r.cols === 4 || r.cols === 5 || r.cols === 6) out.cols = r.cols;
+  if (r.homeDefaultTab === 'rcmd' || r.homeDefaultTab === 'popular' || r.homeDefaultTab === 'following' || r.homeDefaultTab === 'classic') out.homeDefaultTab = r.homeDefaultTab;
   if (r.homeWidth === 'current' || r.homeWidth === 'compact' || r.homeWidth === 'fluid') out.homeWidth = r.homeWidth;
   if (typeof r.playerCorners === 'boolean') out.playerCorners = r.playerCorners;
+  if (typeof r.autoplayExt === 'boolean') out.autoplayExt = r.autoplayExt;
   if (typeof r.feedFollowList === 'boolean') out.feedFollowList = r.feedFollowList;
   if (typeof r.paletteSpeed === 'number') out.paletteSpeed = clampPaletteSpeed(r.paletteSpeed);
   if (r.searchStyle === 'classic' || r.searchStyle === 'new') out.searchStyle = r.searchStyle;

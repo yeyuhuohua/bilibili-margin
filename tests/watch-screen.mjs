@@ -48,6 +48,105 @@ try {
       await page.close();
     }
   };
+  await check('193-autoplay-release', async page => {
+    await seed({ autoplayExt: true });
+    await page.addInitScript(() => {
+      localStorage.setItem('bpx_player_profile', '{"media":{"handoff":0}}');
+      let mode = 0;
+      window.player = { getHandoff: () => mode, setHandoff: v => { mode = v; } };
+    });
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.locator('#margin-watch-top .top').waitFor();
+    await page.evaluate(() => {
+      const menu = document.createElement('div');
+      menu.className = 'bpx-player-ctrl-setting-menu-right bpx-player-ctrl-setting';
+      document.querySelector('.bpx-player-container').append(menu);
+    });
+    await page.locator('.bpx-player-ctrl-setting-menu-right').dispatchEvent('pointerover');
+    await page.locator('.margin-patch-group').waitFor({ state: 'attached' });
+    const ended = () => page.locator('.bpx-player-container video').first().evaluate(v => {
+      v.dispatchEvent(new Event('ended'));
+      return window.player.getHandoff();
+    });
+    await page.evaluate(() => {
+      const list = document.createElement('div');
+      list.className = 'video-pod__list section';
+      list.innerHTML = '<span class="list-count">1/3</span>';
+      document.body.prepend(list);
+    });
+    assert.equal(await ended(), 0, 'middle of collection should advance');
+    await page.locator('.list-count').first().evaluate(node => { node.textContent = '3/3'; });
+    assert.equal(await ended(), 2, 'last item should pause');
+    await seed({ autoplayExt: false });
+    await page.waitForFunction(() => window.player.getHandoff() === 0 && !document.querySelector('.margin-patch-group'));
+    assert.equal(await ended(), 0, 'disabled control must release the player');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.bpx_player_profile).media.handoff), 0);
+  });
+  await check('214-native-paste', async page => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://www.bilibili.com' });
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.locator('#margin-watch-top .top').waitFor();
+    await page.evaluate(async () => {
+      const box = document.createElement('bili-comment-box');
+      const root = box.attachShadow({ mode: 'open' });
+      root.innerHTML = '<div contenteditable="true"></div><button><bili-icon icon="BDC/image_line/3"></bili-icon></button><bili-comment-pictures-upload></bili-comment-pictures-upload>';
+      const input = document.createElement('input');
+      input.type = 'file';
+      root.querySelector('bili-comment-pictures-upload').uploader = { el: input };
+      root.querySelector('button').onclick = () => input.click();
+      input.onchange = () => { window.pastedImageType = input.files[0]?.type; };
+      document.body.append(box);
+      root.querySelector('[contenteditable]').focus();
+      const canvas = document.createElement('canvas');
+      const blob = await new Promise(resolve => canvas.toBlob(resolve));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    });
+    await page.keyboard.press('Control+v');
+    await page.waitForFunction(() => window.pastedImageType === 'image/png', null, { timeout: 3000 });
+  });
+  await check('225-speed-reload', async page => {
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.locator('#margin-watch-top .top').waitFor();
+    const video = page.locator('.bpx-player-video-wrap video').first();
+    const rate = () => video.evaluate(v => v.playbackRate);
+    await video.evaluate(v => new Promise((resolve, reject) => {
+      v.addEventListener('loadedmetadata', () => resolve(), { once: true });
+      v.addEventListener('error', () => reject(Error('fixture media failed to load')), { once: true });
+      v.src = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
+    }));
+    await page.keyboard.press('c');
+    assert.equal(await rate(), 1.1);
+    await video.evaluate(v => new Promise(resolve => {
+      v.addEventListener('loadedmetadata', () => resolve(), { once: true });
+      v.load();
+    }));
+    assert.equal(await rate(), 1.1, 'same media element lost the shortcut rate on load');
+    await page.keyboard.press('z');
+    await video.evaluate(v => v.load());
+    assert.equal(await rate(), 1);
+    await page.keyboard.press('z');
+    assert.equal(await rate(), 1.1);
+    await video.evaluate(v => new Promise(resolve => {
+      v.addEventListener('ratechange', resolve, { once: true });
+      v.playbackRate = 1;
+    }));
+    await video.evaluate(v => v.load());
+    assert.equal(await rate(), 1, 'native speed selection must take precedence');
+    await page.keyboard.press('x');
+    assert.equal(await rate(), 0.9);
+    await video.evaluate(v => new Promise(resolve => {
+      history.replaceState(null, '', '?p=2');
+      v.addEventListener('loadstart', () => resolve(), { once: true });
+      v.load();
+    }));
+    assert.equal(await rate(), 1, 'reusing the element on another part must release the shortcut');
+    await page.keyboard.press('c');
+    await video.evaluate(v => v.replaceWith(document.createElement('video')));
+    assert.equal(await rate(), 1, 'new player keeps its native rate');
+    await page.reload();
+    await page.locator('#margin-watch-top .top').waitFor();
+    assert.equal(await rate(), 1, 'reload keeps the native rate');
+  });
   for (const mode of ['web', 'legacy', 'native']) await check(`76-live-${mode}`, async page => {
     await page.goto('https://live.bilibili.com/12345');
     const top = page.locator('#margin-watch-top');
@@ -100,6 +199,24 @@ try {
     assert(await page.locator('html.margin-live').count(), 'live initialization fell back after a startup error');
     await page.evaluate(() => document.body.classList.remove('player-full-win', 'over-hidden'));
     await top.waitFor({ state: 'visible' });
+  });
+  await check('152-webscreen-late-title-resize', async page => {
+    await seed({webScroll:true});
+    await page.goto('https://www.bilibili.com/video/BV1mdxN68E7F/');
+    await page.locator('#margin-watch-top .top').waitFor();
+    await page.evaluate(() => {
+      const p=document.querySelector('.bpx-player-container'), title=document.querySelector('.video-info-container'), wrap=document.createElement('div');
+      title.style.setProperty('height','30px','important');
+      wrap.className='player-wrap'; wrap.style.position='relative'; p.before(wrap); wrap.append(p);
+      p.classList.add('mode-webscreen'); p.dataset.screen='web';
+    });
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--m-ws-y'));
+    await page.waitForTimeout(150);
+    const offset = () => parseFloat(document.documentElement.style.getPropertyValue('--m-ws-y'));
+    const before = await page.evaluate(offset);
+    await page.evaluate(() => { document.querySelector('.video-info-container').style.setProperty('height','100px','important'); });
+    await page.waitForFunction(prev => parseFloat(document.documentElement.style.getPropertyValue('--m-ws-y')) < prev - 40, before, { timeout: 3000 });
+    await page.waitForFunction(() => Math.abs(document.querySelector('.mode-webscreen').getBoundingClientRect().bottom-innerHeight)<2, null, {timeout:3000});
   });
   await check('76-web-scroll-native-fullscreen', async page => {
     await seed({ webScroll: true });
