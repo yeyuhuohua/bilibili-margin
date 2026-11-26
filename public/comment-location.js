@@ -84,16 +84,72 @@
     try { return Reflect.apply(nativeSend, this, arguments); }
     catch (error) { end(); throw error; }
   };
+  const renderers = new Set(['bili-comment-renderer', 'bili-comment-reply-renderer']);
+  function findRenderer(node) {
+    let cur = node;
+    while (cur) {
+      const root = cur.getRootNode?.();
+      const host = root instanceof ShadowRoot ? root.host : null;
+      if (host instanceof HTMLElement && renderers.has(host.localName)) return host;
+      cur = host;
+    }
+    return null;
+  }
+  function locationText(target, renderer) {
+    const source = renderer?.data !== undefined ? renderer.data : target?.data;
+    const raw = source?.reply_control?.location;
+    return typeof raw === 'string' && raw.length <= 80 ? raw.trim() : '';
+  }
+  function syncTarget(target, rendererHint, notify) {
+    if (!(target instanceof HTMLElement) || target.localName !== 'bili-comment-action-buttons-renderer') return;
+    const renderer = rendererHint ?? findRenderer(target);
+    const text = locationText(target, renderer);
+    if (text) {
+      if (target.getAttribute('data-margin-location') !== text) target.setAttribute('data-margin-location', text);
+    } else if (target.hasAttribute('data-margin-location')) {
+      target.removeAttribute('data-margin-location');
+    }
+    if (!notify || !active() || !target.isConnected) return;
+    const sr = target.shadowRoot;
+    if (!sr) return;
+    const current = sr.querySelector('[data-margin-location-label]')?.textContent || '';
+    const hasPub = !!sr.querySelector('#pubdate');
+    if ((text && hasPub && current !== text) || (!text && current)) {
+      target.dispatchEvent(new Event('margin:comment-location-sync', { bubbles: true, composed: true }));
+    }
+  }
+  function hookUpdated(name, onUpdate) {
+    if (typeof customElements === 'undefined') return;
+    const patch = ctor => {
+      const proto = ctor?.prototype;
+      if (!proto || typeof proto.updated !== 'function' || proto.updated.__marginLocationHook) return;
+      const orig = proto.updated;
+      const wrapped = function() {
+        const result = Reflect.apply(orig, this, arguments);
+        try { if (active()) onUpdate(this); } catch {}
+        return result;
+      };
+      wrapped.__marginLocationHook = true;
+      proto.updated = wrapped;
+    };
+    const existing = customElements.get(name);
+    if (existing) patch(existing);
+    else customElements.whenDefined(name).then(patch, () => {});
+  }
+  hookUpdated('bili-comment-action-buttons-renderer', el => syncTarget(el, null, true));
+  hookUpdated('bili-comment-renderer', el => {
+    const btn = el.actionButtons || el.shadowRoot?.querySelector('bili-comment-action-buttons-renderer');
+    if (btn) syncTarget(btn, el, true);
+  });
+  hookUpdated('bili-comment-reply-renderer', el => {
+    const btn = el.actionButtons || el.shadowRoot?.querySelector('bili-comment-action-buttons-renderer');
+    if (btn) syncTarget(btn, el, true);
+  });
   document.addEventListener('margin:read-comment-location', (event) => {
     const path = event.composedPath();
     const target = path[0];
     if (!(target instanceof HTMLElement) || target.localName !== 'bili-comment-action-buttons-renderer') return;
-    const renderer = path.find(node => node instanceof HTMLElement &&
-      (node.localName === 'bili-comment-renderer' || node.localName === 'bili-comment-reply-renderer'));
-    const value = renderer?.data?.reply_control?.location;
-    const text = typeof value === 'string' && value.length <= 80 ? value.trim() : '';
-    if (text) {
-      if (target.getAttribute('data-margin-location') !== text) target.setAttribute('data-margin-location', text);
-    } else target.removeAttribute('data-margin-location');
+    const renderer = path.find(node => node instanceof HTMLElement && renderers.has(node.localName)) ?? null;
+    syncTarget(target, renderer, false);
   }, true);
 })();

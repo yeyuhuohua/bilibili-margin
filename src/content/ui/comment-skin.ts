@@ -56,6 +56,53 @@ let extra: Record<string, string> = {};
 const sheets = new Map<string, CSSStyleSheet>();
 const detailFrames = new Set<HTMLIFrameElement>();
 const detailBound = new WeakSet<HTMLIFrameElement>();
+const pendingShadow = new Map<Element, { depth: number; tries: number }>();
+let pendingShadowFrame = 0;
+let locationSyncHooked = false;
+
+function flushPendingShadow(): void {
+  pendingShadowFrame = 0;
+  for (const [el, state] of [...pendingShadow]) {
+    if (!el.isConnected) { pendingShadow.delete(el); continue; }
+    if (el.shadowRoot) {
+      pendingShadow.delete(el);
+      skinElement(el, state.depth);
+      continue;
+    }
+    if (++state.tries >= 6) pendingShadow.delete(el);
+  }
+  if (pendingShadow.size && !pendingShadowFrame) pendingShadowFrame = requestAnimationFrame(flushPendingShadow);
+}
+
+function queueShadowRetry(el: Element, depth: number): void {
+  if (!el.localName.includes('-') || pendingShadow.has(el)) return;
+  pendingShadow.set(el, { depth, tries: 0 });
+  if (!pendingShadowFrame) pendingShadowFrame = requestAnimationFrame(flushPendingShadow);
+}
+
+function syncLocation(el: Element, sr: ShadowRoot, pull: boolean): void {
+  if (pull) el.dispatchEvent(new Event('margin:read-comment-location', { bubbles: true, composed: true }));
+  const text = el.getAttribute('data-margin-location') || '';
+  const date = sr.querySelector('#pubdate');
+  let label = sr.querySelector<HTMLElement>('[data-margin-location-label]');
+  if (!text || !date) { label?.remove(); return; }
+  if (!label) { label = document.createElement('span'); label.setAttribute('data-margin-location-label', ''); date.append(label); }
+  else if (label.parentElement !== date) date.append(label);
+  if (label.textContent !== text) label.textContent = text;
+}
+
+function hookLocationSync(): void {
+  if (locationSyncHooked) return;
+  locationSyncHooked = true;
+  document.addEventListener('margin:comment-location-sync', (event) => {
+    const target = event.composedPath()[0];
+    if (!(target instanceof Element) || target.localName !== 'bili-comment-action-buttons-renderer') return;
+    const sr = target.shadowRoot;
+    if (!sr) return;
+    if (!done.has(sr)) skinElement(target, 4, false);
+    else syncLocation(target, sr, false);
+  }, true);
+}
 
 /** Native comment details are a same-origin iframe, outside the comment shadow tree. */
 function syncDetailFrames(): void {
@@ -92,23 +139,14 @@ function bindDetailPopup(el: Element): void {
   }
 }
 
-function skinElement(el: Element, depth: number): void {
+function skinElement(el: Element, depth: number, pullLocation = true): void {
   bindDetailPopup(el);
   const sr = el.shadowRoot;
-  if (!sr) return;
+  if (!sr) { queueShadowRetry(el, depth); return; }
+  pendingShadow.delete(el);
   const tag = el.tagName.toLowerCase();
   if (tag === 'bili-comment-box') sr.querySelectorAll<HTMLButtonElement>('#pub button').forEach(decorateSendButton);
-  if (tag === 'bili-comment-action-buttons-renderer') {
-    el.dispatchEvent(new Event('margin:read-comment-location', { bubbles: true, composed: true }));
-    const text = el.getAttribute('data-margin-location') || '';
-    const date = sr.querySelector('#pubdate');
-    let label = sr.querySelector<HTMLElement>('[data-margin-location-label]');
-    if (!text || !date) label?.remove();
-    else {
-      if (!label) { label = document.createElement('span'); label.setAttribute('data-margin-location-label', ''); date.append(label); }
-      if (label.textContent !== text) label.textContent = text;
-    }
-  }
+  if (tag === 'bili-comment-action-buttons-renderer') syncLocation(el, sr, pullLocation);
   if (tag === 'bili-comment-replies-renderer') watchReplies(sr);
   if (!done.has(sr)) {
     let s = sheets.get(tag);
@@ -123,14 +161,24 @@ function skinElement(el: Element, depth: number): void {
   }
   if (!watched.has(sr)) {
     watched.add(sr);
-    // 只扫描新插入的子树；定时补扫仍负责发现已有节点迟延挂载的 shadow root。
+    // 只扫描新插入的子树；迟延挂载的 shadow root 由 queueShadowRetry 与定时补扫补齐。
     new MutationObserver((records) => {
       if (tag === 'bili-comment-box') sr.querySelectorAll<HTMLButtonElement>('#pub button').forEach(decorateSendButton);
+      let resyncLocation = false;
       for (const record of records) {
+        if (tag === 'bili-comment-action-buttons-renderer' && !resyncLocation) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element && node.hasAttribute('data-margin-location-label'))) { resyncLocation = true; break; }
+          }
+          if (!resyncLocation) for (const node of record.removedNodes) {
+            if (!(node instanceof Element && node.hasAttribute('data-margin-location-label'))) { resyncLocation = true; break; }
+          }
+        }
         for (const node of record.addedNodes) {
           if (node instanceof Element && node.isConnected) skin(node, depth + 1);
         }
       }
+      if (resyncLocation && el.isConnected) syncLocation(el, sr, true);
     }).observe(sr, { childList: true, subtree: true });
   }
   // 评论项也是 Web Component，继续遍历所有 open shadow root，直到找到 tag 所在层级。
@@ -146,6 +194,7 @@ function skin(root: ParentNode, depth = 0): void {
 /** extra：按页面追加到某个组件皮肤后面的样式（详情页隐藏评论区重复的大标题） */
 export function skinComments(more: Record<string, string> = {}): void {
   enterToSend();
+  hookLocationSync();
   extra = more;
   loadSettings().then((st) => { treeOn = st.replyTree; run(); }).catch(() => {});
   onSettingsChange((st) => { if (st.replyTree !== treeOn) { treeOn = st.replyTree; retreeAll(); } });
@@ -177,7 +226,7 @@ export function skinComments(more: Record<string, string> = {}): void {
   let n = 0;
   const stop = every(1000, () => { run(); if (++n > 90) stop(); });
   let pending = 0;
-  addEventListener('scroll', () => { if (pending) return; pending = window.setTimeout(() => { pending = 0; run(); }, 400); }, { passive: true });
+  addEventListener('scroll', () => { if (pending) return; pending = window.setTimeout(() => { pending = 0; run(); }, 250); }, { passive: true });
 }
 
 /**
